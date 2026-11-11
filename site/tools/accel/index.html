@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>가속도 기록</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;height:260px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  button.b.rec{background:#d64541;color:#fff;border-color:#d64541;font-weight:700}
+  button.b:disabled{opacity:.45}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  .warn{background:#fff6e5;border:1px solid #f0d49a;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;margin-bottom:12px}
+  .warn > b{display:block;margin-bottom:4px}
+  .warn ol{margin:6px 0 0;padding-left:20px}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+  label.chk input{width:18px;height:18px}
+  .hide{display:none!important}
+  .axes{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:8px;font-size:13px;color:var(--sub)}
+  .axes svg{flex:none}
+  @media (max-width:420px){ .stats{grid-template-columns:repeat(2,1fr)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../">← 처음으로</a>
+  <h1>가속도 기록</h1>
+  <p class="hint">휴대폰이나 태블릿의 가속도 센서로 x, y, z 방향의 가속도를 측정해 그래프로 보고, 기록한 값을 파일로 저장해요.</p>
+
+  <div class="card" id="startCard">
+    <button class="b primary" id="startB" style="width:100%">센서 사용 허용하고 시작</button>
+    <p class="note">아이폰과 아이패드는 이 버튼을 누른 뒤 나오는 창에서 <b>허용</b>을 눌러야 센서를 쓸 수 있어요.</p>
+  </div>
+
+  <div class="warn hide" id="denied">
+    <b>센서 사용이 허용되지 않았어요.</b>
+    아이폰·아이패드(사파리)에서 다시 허용하는 방법:
+    <ol>
+      <li>이 탭을 닫고, 사파리 앱을 완전히 종료한 뒤 다시 열어 이 페이지에 들어옵니다.</li>
+      <li>‘센서 사용 허용하고 시작’을 누르고, 나오는 창에서 <b>허용</b>을 누릅니다.</li>
+      <li>창이 나오지 않으면 설정 앱 → 앱 → Safari → ‘동작 및 방향 접근’이 켜져 있는지 확인합니다. (iOS 버전에 따라 이 항목이 없을 수 있어요.)</li>
+    </ol>
+    카카오톡 등 다른 앱 안에서 열었다면 사파리나 크롬에서 다시 열어 주세요.
+  </div>
+  <div class="warn hide" id="nosensor">
+    <b>가속도 센서의 값을 받지 못했어요.</b>
+    컴퓨터에는 대부분 가속도 센서가 없어요. 휴대폰이나 태블릿에서 열어 주세요. 휴대폰인데도 이 안내가 보이면 사파리나 크롬에서 다시 열고, 주소가 https로 시작하는지 확인해 주세요.
+  </div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <canvas id="graph"></canvas>
+      <div class="stats">
+        <div class="stat"><div class="k">x</div><div class="val" id="vx" style="color:#d64541">0.00</div></div>
+        <div class="stat"><div class="k">y</div><div class="val" id="vy" style="color:#2e9e6a">0.00</div></div>
+        <div class="stat"><div class="k">z</div><div class="val" id="vz" style="color:#2f6fdf">0.00</div></div>
+        <div class="stat"><div class="k">크기</div><div class="val" id="vm">0.00</div></div>
+      </div>
+      <p class="note" style="text-align:center;margin-top:6px">단위: m/s²</p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-top:0">
+        <button class="b primary" id="recB">기록 시작</button>
+        <button class="b" id="saveB" disabled>CSV 파일로 저장</button>
+        <button class="b" id="clearB" disabled>기록 지우기</button>
+      </div>
+      <p class="note" id="recInfo">‘기록 시작’을 누르면 그때부터의 값을 모아요.</p>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="cGrav" checked> 중력 가속도 포함</label>
+        <label class="chk"><input type="checkbox" id="cMag"> 크기도 그래프에 표시</label>
+      </div>
+      <div class="row">
+        <span style="font-size:15px">그래프에 보이는 시간</span>
+        <select id="winS"><option value="5">5초</option><option value="10" selected>10초</option><option value="30">30초</option></select>
+        <button class="b" id="pauseB">화면 멈춤</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="axes">
+        <svg width="92" height="128" viewBox="0 0 92 128" aria-hidden="true">
+          <rect x="24" y="14" width="44" height="88" rx="7" fill="#fff" stroke="#3a4252" stroke-width="2"/>
+          <line x1="46" y1="58" x2="88" y2="58" stroke="#d64541" stroke-width="2.5"/><polygon points="88,58 81,54 81,62" fill="#d64541"/>
+          <line x1="46" y1="58" x2="46" y2="4" stroke="#2e9e6a" stroke-width="2.5"/><polygon points="46,3 42,10 50,10" fill="#2e9e6a"/>
+          <circle cx="46" cy="58" r="5" fill="#fff" stroke="#2f6fdf" stroke-width="2.5"/><circle cx="46" cy="58" r="1.6" fill="#2f6fdf"/>
+          <text x="84" y="74" font-size="12" fill="#d64541">x</text><text x="52" y="12" font-size="12" fill="#2e9e6a">y</text><text x="28" y="74" font-size="12" fill="#2f6fdf">z</text>
+        </svg>
+        <div>화면을 세로로 들고 볼 때<br><b style="color:#d64541">x</b>: 오른쪽, <b style="color:#2e9e6a">y</b>: 위쪽,<br><b style="color:#2f6fdf">z</b>: 화면에서 나오는 방향</div>
+      </div>
+      <p class="note">‘중력 가속도 포함’을 켜면, 책상 위에 화면이 위를 보게 가만히 놓았을 때 z가 약 +9.8 m/s²로 나와요. 센서는 자유 낙하할 때 0을 가리키도록 만들어져 있어서, 정지해 있을 때에는 받치는 힘 때문에 위쪽으로 9.8 m/s²가 측정됩니다. 끄면 기기가 중력의 효과를 빼고 계산한 값을 보여 주는데, 기기에 따라 지원하지 않거나 조금씩 흔들릴 수 있어요.</p>
+      <p class="note">활용 예: 용수철에 매달아 단진동의 주기 구하기, 엘리베이터가 출발하고 멈출 때의 가속도, 그네나 회전 놀이 기구의 구심 가속도, 수레에 싣고 빗면에서 등가속도 운동 확인하기. 기기를 떨어뜨리지 않도록 단단히 고정하세요.</p>
+      <p class="note" id="rateInfo"></p>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var RED = '#d64541', GREEN = '#2e9e6a', BLUE = '#2f6fdf', INK = '#1d2330', SUB = '#5b6475';
+  var FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  // iOS는 중력 포함 가속도의 부호가 표준(안드로이드)과 반대라서 뒤집어 맞춘다.
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var buf = [], rec = [], recording = false, paused = false, t0 = null, recT0 = 0, got = false, lastT = 0, rate = 0, noLinear = false, lock = null;
+  var cur = { x: 0, y: 0, z: 0 };
+
+  function onMotion(e) {
+    var g = e.accelerationIncludingGravity, a = e.acceleration, useG = $('cGrav').checked, s;
+    if (!useG && a && a.x !== null && a.x !== undefined) s = { x: a.x, y: a.y, z: a.z };
+    else { if (!g || g.x === null || g.x === undefined) return; if (!useG) noLinear = true; var k = isIOS ? -1 : 1; s = { x: g.x * k, y: g.y * k, z: g.z * k }; }
+    var now = performance.now() / 1000; if (t0 === null) t0 = now; var t = now - t0;
+    if (!got) { got = true; $('nosensor').classList.add('hide'); }
+    if (lastT) { var dt = t - lastT; if (dt > 0) rate += (1 / dt - rate) * 0.05; } lastT = t;
+    s.t = t; s.m = Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z); cur = s;
+    buf.push(s); while (buf.length && buf[0].t < t - 35) buf.shift();
+    if (recording) { rec.push(s); if (rec.length >= 60000) stopRec('기록이 너무 길어 자동으로 멈췄어요. '); }
+  }
+
+  function begin() {
+    $('startCard').classList.add('hide'); $('denied').classList.add('hide'); $('main').classList.remove('hide');
+    window.addEventListener('devicemotion', onMotion); fit();
+    setTimeout(function () { if (!got) $('nosensor').classList.remove('hide'); }, 2500);
+    requestAnimationFrame(draw);
+  }
+  $('startB').addEventListener('click', function () {
+    if (typeof DeviceMotionEvent === 'undefined') { $('main').classList.remove('hide'); $('startCard').classList.add('hide'); $('nosensor').classList.remove('hide'); fit(); requestAnimationFrame(draw); return; }
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission().then(function (r) { if (r === 'granted') begin(); else $('denied').classList.remove('hide'); })
+        .catch(function () { $('denied').classList.remove('hide'); });
+    } else begin();
+  });
+
+  // ----- 그래프 -----
+  var G = $('graph'), ctx, W, H;
+  function fit() { var d = window.devicePixelRatio || 1; W = G.clientWidth; H = G.clientHeight; G.width = W * d; G.height = H * d; ctx = G.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); }
+  window.addEventListener('resize', function () { if (!$('main').classList.contains('hide')) fit(); });
+  function nice(v) { var p = Math.pow(10, Math.floor(Math.log10(v))), k = [1, 2, 5, 10]; for (var i = 0; i < 4; i++) if (k[i] * p >= v) return k[i] * p; return 10 * p; }
+  var frozen = null;
+  function draw() {
+    requestAnimationFrame(draw); if (!ctx) return;
+    var data = paused ? frozen : buf, win = +$('winS').value, L = 40, R = 10, top = 22, B = 26, pw = W - L - R, ph = H - top - B;
+    var t1 = data.length ? data[data.length - 1].t : 0, tA = Math.max(0, t1 - win), mag = $('cMag').checked, mx = 2;
+    for (var i = 0; i < data.length; i++) { var p = data[i]; if (p.t < tA) continue; mx = Math.max(mx, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)); }
+    var Y = nice(mx * 1.1), yy = function (v) { return top + ph / 2 - v / Y * ph / 2; }, xx = function (t) { return L + (t - tA) / win * pw; };
+    ctx.clearRect(0, 0, W, H); ctx.font = '11px ' + FONT; ctx.lineWidth = 1;
+    ctx.strokeStyle = '#eef0f4'; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    [-1, -0.5, 0, 0.5, 1].forEach(function (f) { var y = yy(f * Y); ctx.strokeStyle = f === 0 ? '#9aa3b2' : '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillText(String(f * Y).replace('-', '−'), L - 4, y); });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; var st = win > 10 ? 5 : 1;
+    for (var s = Math.ceil(tA / st) * st; s <= tA + win + 1e-9; s += st) { var x = xx(s); ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + ph); ctx.stroke(); ctx.fillText(String(s), x, top + ph + 4); }
+    ctx.strokeStyle = '#d9dde4'; ctx.strokeRect(L, top, pw, ph);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = 'bold 12px ' + FONT; var lx = L;
+    [['x', RED], ['y', GREEN], ['z', BLUE]].concat(mag ? [['크기', INK]] : []).forEach(function (a) { ctx.fillStyle = a[1]; ctx.fillText(a[0], lx, 4); lx += ctx.measureText(a[0]).width + 14; });
+    ctx.fillStyle = SUB; ctx.font = '11px ' + FONT; ctx.textAlign = 'right'; ctx.fillText('세로: 가속도 (m/s²), 가로: 시간 (s)', L + pw, 5);
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, ph); ctx.clip();
+    if (recording || rec.length) {   // 기록한 구간을 옅게 표시
+      var a0 = xx(rec.length ? rec[0].t : t1), a1 = xx(rec.length ? rec[rec.length - 1].t : t1); ctx.fillStyle = 'rgba(214,69,65,0.08)'; ctx.fillRect(a0, top, Math.max(1, a1 - a0), ph); }
+    [['x', RED], ['y', GREEN], ['z', BLUE]].concat(mag ? [['m', INK]] : []).forEach(function (a) {
+      ctx.strokeStyle = a[1]; ctx.lineWidth = a[0] === 'm' ? 1.4 : 1.8; ctx.beginPath(); var on = false;
+      for (var i = 0; i < data.length; i++) { var p = data[i]; if (p.t < tA) continue; var X = xx(p.t), Yv = yy(Math.max(-Y, Math.min(Y, p[a[0]]))); if (on) ctx.lineTo(X, Yv); else { ctx.moveTo(X, Yv); on = true; } }
+      ctx.stroke(); });
+    ctx.restore();
+    if (!paused) { var f = function (v) { var s = v.toFixed(2); return (+s === 0 ? '0.00' : s).replace('-', '−'); };
+      $('vx').textContent = f(cur.x); $('vy').textContent = f(cur.y); $('vz').textContent = f(cur.z); $('vm').textContent = f(cur.m || 0);
+      if (recording) $('recInfo').textContent = '기록 중: ' + (cur.t - recT0).toFixed(1) + '초, ' + rec.length + '개';
+      $('rateInfo').textContent = got ? '이 기기는 1초에 약 ' + Math.round(rate) + '번 측정해요.' + (noLinear && !$('cGrav').checked ? ' 이 기기는 중력을 뺀 값을 지원하지 않아 중력이 포함된 값을 보여 주고 있어요.' : '') : ''; }
+  }
+
+  // ----- 기록 -----
+  function stopRec(msg) {
+    recording = false; $('recB').textContent = '기록 시작'; $('recB').className = 'b primary';
+    $('saveB').disabled = $('clearB').disabled = !rec.length;
+    $('recInfo').textContent = (msg || '') + (rec.length ? '기록 완료: ' + (rec[rec.length - 1].t - rec[0].t).toFixed(1) + '초, ' + rec.length + '개. ‘CSV 파일로 저장’을 누르세요.' : '기록된 값이 없어요.');
+    if (lock) { try { lock.release(); } catch (e) {} lock = null; }
+  }
+  $('recB').addEventListener('click', function () {
+    if (recording) { stopRec(); return; }
+    rec = []; recording = true; recT0 = cur.t || 0; $('recB').textContent = '기록 정지'; $('recB').className = 'b rec'; $('saveB').disabled = $('clearB').disabled = true;
+    if (paused) $('pauseB').click();
+    if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(function (l) { lock = l; }).catch(function () {});   // 기록 중 화면 꺼짐 방지
+  });
+  $('clearB').addEventListener('click', function () { rec = []; $('saveB').disabled = $('clearB').disabled = true; $('recInfo').textContent = '기록을 지웠어요.'; });
+  $('saveB').addEventListener('click', function () {
+    if (!rec.length) return; var s0 = rec[0].t, lines = ['시간(s),x(m/s²),y(m/s²),z(m/s²),크기(m/s²)'];
+    for (var i = 0; i < rec.length; i++) { var p = rec[i]; lines.push((p.t - s0).toFixed(3) + ',' + p.x.toFixed(3) + ',' + p.y.toFixed(3) + ',' + p.z.toFixed(3) + ',' + p.m.toFixed(3)); }
+    var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+    var name = 'accel_' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + '.csv';
+    var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    $('recInfo').textContent = name + ' 파일을 저장했어요. 아이폰은 ‘파일’ 앱의 다운로드 폴더, 안드로이드는 ‘내 파일’의 Download 폴더에 있어요. 엑셀이나 구글 스프레드시트에서 열 수 있어요.';
+  });
+  $('pauseB').addEventListener('click', function () { paused = !paused; frozen = paused ? buf.slice() : null; $('pauseB').textContent = paused ? '화면 다시 움직이기' : '화면 멈춤'; });
+  $('cGrav').addEventListener('change', function () { buf = []; noLinear = false; if (recording) stopRec('설정을 바꿔서 기록을 멈췄어요. '); });
+})();
+</script>
+</body>
+</html>
