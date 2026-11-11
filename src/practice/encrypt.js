@@ -5,7 +5,7 @@
 //   practice-src/<시뮬레이션 이름>/problems.json
 //   practice-src/<시뮬레이션 이름>/<그림 파일>
 // problems.json 예:
-//   [ { "src": "2025학년도 수능 물리학Ⅰ 7번", "img": "2025-sat-07.png", "answer": 3, "exp": "해설(선택)" },
+//   [ { "src": "2025학년도 수능 물리학Ⅰ 7번", "img": "2025-sat-07.png", "answer": 3, "exp": "글로 쓴 해설(선택)", "expImg": "해설 그림(선택).png" },
 //     { "src": "예시", "q": "글로 쓴 문제", "choices": ["가", "나", "다", "라", "마"], "answer": 2 } ]
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const root = path.join(__dirname, '..', '..'), srcDir = path.join(root, 'practice-src'), outDir = path.join(root, 'site', 'practice', 'data');
@@ -23,8 +23,8 @@ for (const sim of fs.readdirSync(srcDir).sort()) {
     if (!(it.answer >= 1 && it.answer <= 5)) throw new Error(`${sim} ${k + 1}번: answer는 1~5여야 합니다.`);
     const o = { src: it.src || '', answer: it.answer };
     if (it.q) o.q = it.q; if (it.choices) o.choices = it.choices; if (it.exp) o.exp = it.exp;
-    if (it.img) { const ip = path.join(srcDir, sim, it.img), mime = MIME[path.extname(ip).toLowerCase()]; if (!mime) throw new Error('지원하지 않는 그림 형식: ' + it.img);
-      o.img = 'data:' + mime + ';base64,' + fs.readFileSync(ip).toString('base64'); }
+    for (const k of ['img', 'expImg']) if (it[k]) { const ip = path.join(srcDir, sim, it[k]), mime = MIME[path.extname(ip).toLowerCase()]; if (!mime) throw new Error('지원하지 않는 그림 형식: ' + it[k]);
+      o[k] = 'data:' + mime + ';base64,' + fs.readFileSync(ip).toString('base64'); }
     return o; });
   if (!items.length) continue;
   const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12), key = crypto.pbkdf2Sync(code, salt, ITER, 32, 'sha256');

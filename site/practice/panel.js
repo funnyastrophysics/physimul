@@ -71,7 +71,7 @@
       ch.dataset.done = '1'; var ok = picked === it.answer;
       btns.forEach(function (x, k) { x.classList.remove('on'); if (k + 1 === it.answer) x.classList.add('ok'); else if (k + 1 === picked) x.classList.add('no'); });
       res.textContent = ok ? '정답입니다.' : '정답은 ' + marks[it.answer - 1] + '입니다.'; res.style.color = ok ? '#2e9e6a' : '#d64541';
-      if (it.exp) { exp.textContent = it.exp; exp.style.display = 'block'; } chk.disabled = true; });
+      if (it.exp || it.expImg) { exp.textContent = ''; exp.appendChild(el('b', '', '해설')); if (it.exp) exp.appendChild(el('div', '', it.exp)); if (it.expImg) { var xi = el('img'); xi.src = it.expImg; xi.alt = '해설'; xi.style.margin = '8px 0 0'; exp.appendChild(xi); } exp.style.display = 'block'; } chk.disabled = true; });
     prev.addEventListener('click', function () { idx--; show(); }); next.addEventListener('click', function () { idx++; show(); });
     out.addEventListener('click', function (e) { e.preventDefault(); setCode(''); items = null; start(items0); });
     row.appendChild(chk); row.appendChild(prev); row.appendChild(next); row.appendChild(out);
