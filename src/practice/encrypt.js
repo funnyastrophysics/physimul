@@ -19,6 +19,7 @@ if (!code) { console.error('PRACTICE_CODE(수업 코드)를 지정하세요.'); 
 if (!fs.existsSync(cutDir)) { console.error('문항 그림 폴더가 없습니다: ' + cutDir); process.exit(1); }
 const map = JSON.parse(fs.readFileSync(path.join(__dirname, 'map.json'), 'utf8'));
 const manual = JSON.parse(fs.readFileSync(path.join(__dirname, 'answers_manual.json'), 'utf8'));
+const U = JSON.parse(fs.readFileSync(path.join(__dirname, 'units.json'), 'utf8'));
 const ITER = 200000;
 
 // salt는 한 번 정하면 그대로 쓴다(바뀌면 모든 파일이 달라져 저장소가 불필요하게 커진다).
@@ -33,7 +34,7 @@ function seal(plain) {   // 내용이 같으면 결과도 같도록 iv를 내용
 }
 const subject = (sub, year) => (year >= 2021 ? '물리학' : '물리') + (sub === 'p1' ? 'Ⅰ' : 'Ⅱ');
 
-const sims = {}, wanted = new Set(); let skipped = 0;
+const sims = {}, units = {}, wanted = new Set(); let skipped = 0;
 for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}$/.test(k)).sort()) {
   const dir = path.join(cutDir, exam); if (!fs.existsSync(dir)) { console.error('없는 회차: ' + exam); process.exit(1); }
   const info = JSON.parse(fs.readFileSync(path.join(dir, 'info.json'), 'utf8'));
@@ -51,17 +52,27 @@ for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}$/.test(k)).sort())
     const file = path.join(outDir, 'q', id + '.bin'), buf = seal(Buffer.concat([head, q, e]));
     if (!fs.existsSync(file) || !fs.readFileSync(file).equals(buf)) fs.writeFileSync(file, buf);
     wanted.add(id + '.bin');
-    (sims[sim] = sims[sim] || []).push({ id, src: `${year}학년도 수능 ${subject(sub, year)} ${n}번`, a, year, sub });
+    const item = { id, src: `${year}학년도 수능 ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
+    (sims[sim] = sims[sim] || []).push(item);
+    const r = U.rules[sim], unit = U.overrides[id] || (Array.isArray(r) ? r[sub === 'p1' ? 0 : 1] : r);
+    if (!U.units[unit]) { console.error('단원 규칙이 없습니다: ' + sim); process.exit(1); }
+    (units[unit] = units[unit] || []).push(item);
   });
 }
 // 쓰지 않는 예전 파일 정리
 for (const f of fs.readdirSync(path.join(outDir, 'q'))) if (!wanted.has(f)) fs.unlinkSync(path.join(outDir, 'q', f));
-for (const f of fs.readdirSync(outDir)) if (/\.(bin|json)$/.test(f) && f !== 'index.json' && !sims[f.replace(/\.(bin|json)$/, '')]) fs.unlinkSync(path.join(outDir, f));
-const index = { v: 2, iter: ITER, salt: salt.toString('base64'), sims: {} };
+for (const f of fs.readdirSync(outDir)) if (/\.(bin|json)$/.test(f) && f !== 'index.json' && !sims[f.replace(/\.(bin|json)$/, '')] && !/^u_/.test(f)) fs.unlinkSync(path.join(outDir, f));
+const index = { v: 2, iter: ITER, salt: salt.toString('base64'), sims: {}, units: {} };
+const order = (x, y) => y.year - x.year || (x.sub < y.sub ? -1 : x.sub > y.sub ? 1 : 0) || (x.id < y.id ? -1 : 1);
 for (const sim of Object.keys(sims).sort()) {
-  const list = sims[sim].sort((x, y) => y.year - x.year || (x.sub < y.sub ? -1 : x.sub > y.sub ? 1 : 0) || (x.id < y.id ? -1 : 1)).map(({ id, src, a }) => ({ id, src, a }));
+  const list = sims[sim].sort(order).map(({ id, src, a }) => ({ id, src, a }));
   fs.writeFileSync(path.join(outDir, sim + '.bin'), seal(Buffer.from(JSON.stringify(list), 'utf8')));
   index.sims[sim] = list.length;
+}
+for (const u of Object.keys(U.units)) {
+  const list = (units[u] || []).sort(order).map(({ id, src, a, s }) => ({ id, src, a, s }));
+  const f = path.join(outDir, 'u_' + u + '.bin');
+  if (list.length) { fs.writeFileSync(f, seal(Buffer.from(JSON.stringify(list), 'utf8'))); index.units[u] = list.length; } else if (fs.existsSync(f)) fs.unlinkSync(f);
 }
 fs.writeFileSync(idxPath, JSON.stringify(index));
 console.log(`완료: 시뮬레이션 ${Object.keys(sims).length}개, 문항 ${wanted.size}개` + (skipped ? ` (정답이 없어 뺀 문항 ${skipped}개)` : ''));

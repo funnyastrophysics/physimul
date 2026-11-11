@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>단원별 기출문제</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 14px;line-height:1.5}
+  .subj{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .subj h2{font-size:18px;margin:0 0 10px;padding-left:10px;border-left:4px solid var(--accent)}
+  .units{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+  .units button{font:inherit;font-size:15px;text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .units button b{font-weight:700}
+  .units button span{font-size:13px;color:var(--sub);white-space:nowrap}
+  .units button.on{border-color:var(--accent);background:#e8eefb}
+  .units button:disabled{opacity:.5;cursor:default}
+  .msg{color:var(--sub);font-size:14px;margin:12px 0}
+  footer{color:var(--sub);font-size:12px;text-align:center;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">← 처음으로</a>
+  <h1>단원별 기출문제</h1>
+  <p class="hint">수능 기출문제를 2022 개정 교육과정의 과목과 단원에 맞추어 모았어요. 단원을 고르면 아래에 문제가 나옵니다. 수업 코드가 필요해요.</p>
+  <div id="subjects"></div>
+  <p class="msg" id="msg">문제 목록을 불러오는 중…</p>
+  <section id="panel" style="display:none"></section>
+  <footer>수업용 비영리 자료입니다.</footer>
+</div>
+<script src="panel.js"></script>
+<script>
+(function(){
+  var UNITS = {"p1": ["물리학", "힘과 에너지"], "p2": ["물리학", "전기와 자기"], "p3": ["물리학", "빛과 물질"], "m1": ["역학과 에너지", "시공간과 운동"], "m2": ["역학과 에너지", "열과 에너지"], "m3": ["역학과 에너지", "탄성파와 소리"], "e1": ["전자기와 양자", "전자기적 상호작용"], "e2": ["전자기와 양자", "빛과 정보 통신"], "e3": ["전자기와 양자", "양자와 미시세계"]}, NAMES = {"accel": "등가속도 운동과 정지 거리", "forces": "힘의 합성과 빗면", "torque": "돌림힘과 평형", "projectile": "포물선 운동", "circular": "등속 원운동", "orbit": "인공위성과 탈출 속도", "collision": "일차원 충돌과 운동량 보존", "energy": "역학적 에너지 보존", "shm": "용수철 진자의 단진동", "heating": "비열과 잠열", "gas": "기체 분자 상자", "engine": "열기관의 순환 과정", "charging": "정전기 유도와 유전 분극", "efield": "전기장과 전기력선", "circuit": "저항의 직렬·병렬 회로", "capacitor": "축전기와 인덕터 회로", "magnet": "자성체와 자기 구역", "bfield": "전류에 의한 자기장", "lorentz": "로런츠 힘", "motor": "전동기와 스피커", "induction": "전자기 유도", "wave": "탄성파의 진행, 반사, 투과", "standing": "현과 관의 정상파", "doppler": "도플러 효과", "soundinterf": "음파의 간섭", "optics": "빛의 굴절과 렌즈·거울", "slit": "이중 슬릿과 회절", "polarization": "빛의 편광", "photoelectric": "광전 효과", "laser": "레이저와 유도 방출", "spectrum": "원자의 에너지 준위와 스펙트럼", "atom": "현대의 원자 모형", "diode": "반도체와 다이오드 회로", "qubit": "큐비트의 중첩과 측정", "tunnel": "터널 효과", "relativity": "빛 시계와 시간 팽창", "equivalence": "등가 원리와 블랙홀"};
+  var msg = document.getElementById('msg'), host = document.getElementById('subjects'), panel = document.getElementById('panel'), btns = {};
+  if (!window.PQ) { msg.textContent = location.protocol.indexOf('http') === 0 ? '이 브라우저에서는 문제를 열 수 없습니다. 크롬이나 사파리에서 열어 주세요.' : '이 화면은 사이트 주소로 열었을 때만 동작합니다.'; return; }
+  PQ.ready('data/').then(function (d) {
+    if (!d || !d.units) { msg.textContent = '아직 준비된 문제가 없습니다.'; return; }
+    msg.style.display = 'none';
+    var subj = {}, order = [];
+    Object.keys(UNITS).forEach(function (k) { var s = UNITS[k][0]; if (!subj[s]) { subj[s] = []; order.push(s); } subj[s].push(k); });
+    order.forEach(function (s) {
+      var card = document.createElement('div'); card.className = 'subj'; var h = document.createElement('h2'); h.textContent = s; card.appendChild(h);
+      var grid = document.createElement('div'); grid.className = 'units';
+      subj[s].forEach(function (k) { var n = d.units[k] || 0, b = document.createElement('button'), t = document.createElement('b'), c = document.createElement('span');
+        t.textContent = UNITS[k][1]; c.textContent = n ? n + '문제' : '준비 중'; b.appendChild(t); b.appendChild(c); b.disabled = !n; b.type = 'button';
+        b.addEventListener('click', function () { open(k, n); }); btns[k] = b; grid.appendChild(b); });
+      card.appendChild(grid); host.appendChild(card); });
+    var first = (location.hash || '').slice(1); if (UNITS[first] && d.units[first]) open(first, d.units[first], true);
+  }).catch(function () { msg.textContent = '문제 목록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로 고침해 주세요.'; });
+  function open(k, n, quiet) {
+    Object.keys(btns).forEach(function (x) { btns[x].classList.toggle('on', x === k); });
+    var box = document.createElement('section'); panel.innerHTML = ''; panel.style.display = 'block'; panel.appendChild(box);
+    PQ.mount(box, { base: 'data/', file: 'u_' + k + '.bin', title: UNITS[k][0] + ' · ' + UNITS[k][1], sub: '수능 기출문제 ' + n + '개. 주제를 골라 볼 수 있어요.', names: NAMES, simBase: '../sim/', auto: true });
+    try { history.replaceState(null, '', '#' + k); } catch (e) {}
+    if (!quiet) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+})();
+</script>
+</body>
+</html>

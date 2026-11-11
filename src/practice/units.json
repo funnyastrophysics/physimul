@@ -1,0 +1,20 @@
+{
+  "_설명": "문항을 2022 개정 교육과정의 과목·영역으로 나누는 규칙. 시뮬레이션 이름 → 단원. 값이 [물리Ⅰ 출처일 때, 물리Ⅱ 출처일 때]이면 출처 과목에 따라 다르게 넣는다. overrides는 문항 하나만 따로 지정(예: \"p2_2008_16\": \"p2\").",
+  "units": {
+    "p1": ["물리학", "힘과 에너지"], "p2": ["물리학", "전기와 자기"], "p3": ["물리학", "빛과 물질"],
+    "m1": ["역학과 에너지", "시공간과 운동"], "m2": ["역학과 에너지", "열과 에너지"], "m3": ["역학과 에너지", "탄성파와 소리"],
+    "e1": ["전자기와 양자", "전자기적 상호작용"], "e2": ["전자기와 양자", "빛과 정보 통신"], "e3": ["전자기와 양자", "양자와 미시세계"]
+  },
+  "rules": {
+    "accel": "p1", "torque": "p1", "collision": "p1", "energy": "p1", "forces": ["p1", "m1"],
+    "circuit": "p2", "magnet": "p2", "motor": "p2", "capacitor": "e1", "induction": ["p2", "e1"],
+    "spectrum": "p3", "relativity": "p3", "optics": ["p3", "e2"], "slit": ["p3", "e2"], "photoelectric": ["p3", "e2"], "diode": ["p3", "e1"],
+    "projectile": "m1", "circular": "m1", "orbit": "m1", "equivalence": "m1",
+    "heating": "m2", "gas": "m2", "engine": "m2",
+    "shm": "m3", "wave": "m3", "standing": "m3", "doppler": "m3", "soundinterf": "m3",
+    "efield": "e1", "charging": "e1", "bfield": "e1", "lorentz": "e1",
+    "polarization": "e2", "laser": "e2",
+    "atom": "e3", "tunnel": "e3", "qubit": "e3"
+  },
+  "overrides": { "p2_2008_16": "p2", "p1_2018_14": "e1", "p1_2019_07": "e1" }
+}
