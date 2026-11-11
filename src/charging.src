@@ -1,0 +1,98 @@
+정전기 유도와 유전 분극
+  <h1>정전기 유도와 유전 분극</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="cond">도체 (검전기)</button>
+      <button data-m="ins">절연체 (유전 분극)</button>
+    </div>
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row">
+      <button class="b" id="signB">대전체: (+)</button>
+      <button class="b m-cond" id="gndB">손가락 대기</button>
+      <button class="b" id="resetB">처음으로</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card"><p class="note" id="noteTxt" style="margin:0"></p></div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, sign = 1, rod = { x: 0.85, y: 0.25 }, grounded = false, extra = 0;   // extra: 검전기에 더해진 전자 수(음수면 전자 부족)
+const NE = 14;   // 검전기에 원래 있는 자유 전자 수 (= 양이온 수)
+function prox(){ // 대전체가 금속판에 가까운 정도 0~1
+  const { W, H } = s, px = W * 0.38, py = H * 0.2, d = Math.hypot(rod.x * W - px, rod.y * H - py); return Math.max(0, Math.min(1, 1 - (d - 40) / 160)); }
+function cond(){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const p = prox(), cx = W * 0.38;
+  // 접지 상태면 전자가 들어오거나 나가 금속판 쪽 끌림을 맞춘다
+  if (grounded) extra += ((sign > 0 ? 1 : -1) * Math.round(6 * p) - extra) * 0.08;
+  const ne = NE + Math.round(extra), q = NE - ne;   // q > 0: 양전하로 대전
+  // 전자 분포: 대전체가 (+)면 위로 끌려 올라가고 (−)면 아래로 밀려 내려간다
+  const up = Math.max(0, Math.min(ne, Math.round(ne * (0.5 + 0.45 * sign * p)))), down = ne - up;
+  // 검전기 그림
+  const topY = H * 0.2, rodY = H * 0.62, plateW = 90;
+  ctx.fillStyle = '#c9a227'; ctx.fillRect(cx - plateW / 2, topY - 6, plateW, 12);
+  ctx.fillRect(cx - 3, topY, 6, rodY - topY);
+  // 유리병
+  ctx.strokeStyle = GRAY; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, rodY + 30, 70, 70, 0, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+  ctx.fillStyle = '#e6e9ef'; ctx.fillRect(cx - 20, topY + 30, 40, 14);
+  // 금속박: 아래쪽 전하가 많을수록 벌어짐
+  const bottomCharge = (NE / 2 - down), spread = Math.min(0.9, Math.abs(bottomCharge) * 0.11);
+  [-1, 1].forEach(sd => { ctx.save(); ctx.translate(cx, rodY); ctx.rotate(sd * spread); ctx.fillStyle = '#d9b43a'; ctx.fillRect(-4, 0, 8, 62); ctx.restore(); });
+  // 양이온 (고정)
+  const plus = (x, y) => T(ctx, '+', x, y, { color: RED, bold: true, size: 14 }), minus = (x, y) => { ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(x, y, 4.2, 0, 7); ctx.fill(); };
+  for (let i = 0; i < NE / 2; i++){ plus(cx - plateW / 2 + 8 + i * (plateW - 16) / (NE / 2 - 1), topY - 16); }
+  for (let i = 0; i < NE / 2; i++){ const sd = i % 2 ? 1 : -1, k = Math.floor(i / 2); plus(cx + sd * (Math.sin(spread) * (20 + k * 12) + 12), rodY + 18 + k * 12); }
+  for (let i = 0; i < up; i++) minus(cx - plateW / 2 + 8 + (i % 7) * (plateW - 16) / 6, topY + 12 + Math.floor(i / 7) * 10);
+  for (let i = 0; i < down; i++){ const sd = i % 2 ? 1 : -1, k = Math.floor(i / 2); minus(cx + sd * (Math.sin(spread) * (20 + k * 9) + 2), rodY + 24 + k * 9); }
+  // 손가락 (접지)
+  if (grounded){ ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.ellipse(cx - plateW / 2 - 24, topY - 2, 26, 10, 0, 0, 7); ctx.fill(); T(ctx, '손가락 (접지)', cx - plateW / 2 - 24, topY - 22, { size: 11, color: INK }); }
+  // 대전체
+  drawRod(ctx, W, H);
+  const msg = grounded ? '접지: 전자가 손가락을 통해 ' + (sign > 0 ? '들어옵니다' : '빠져나갑니다') : q === 0 ? (p > 0.05 ? '정전기 유도: 전하가 한쪽으로 몰렸습니다' : '검전기는 전기적으로 중성입니다') : '검전기가 ' + (q > 0 ? '(+)' : '(−)') + '로 대전되었습니다';
+  T(ctx, msg, W / 2, 14, { bold: true, color: INK, size: 13 });
+  setStats([['금속판 쪽 전자', up + '개', BLUE], ['금속박 쪽 전자', down + '개', BLUE], ['검전기 전체 전하', q === 0 ? '0 (중성)' : (q > 0 ? '+' : '−') + Math.abs(q), q === 0 ? INK : q > 0 ? RED : BLUE]]);
+}
+function drawRod(ctx, W, H){
+  const x = rod.x * W, y = rod.y * H;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-0.5);
+  ctx.fillStyle = sign > 0 ? '#f6d5d3' : '#d5e2f6'; ctx.fillRect(-12, -10, 110, 20); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(-12, -10, 110, 20);
+  for (let i = 0; i < 6; i++) T(ctx, sign > 0 ? '+' : '−', -4 + i * 16, 0, { color: sign > 0 ? RED : BLUE, bold: true, size: 14 });
+  ctx.restore(); T(ctx, '대전체 (끌어서 움직이기)', x + 20, y + 36, { size: 11 });
+}
+function ins(){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const rx = rod.x * W, ry = rod.y * H;
+  // 종잇조각 속 분자들 (전자 구름이 대전체 쪽으로 쏠림)
+  const px0 = W * 0.12, py0 = H * 0.45, pw = W * 0.5, ph = H * 0.4;
+  ctx.fillStyle = '#fbf6e6'; ctx.fillRect(px0, py0, pw, ph); ctx.strokeStyle = GRAY; ctx.strokeRect(px0, py0, pw, ph);
+  T(ctx, '종잇조각 (절연체)', px0 + pw / 2, py0 + ph + 14, { size: 11 });
+  let fsum = 0;
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++){
+    const mx = px0 + pw * (i + 0.5) / 5, my = py0 + ph * (j + 0.5) / 3, dx = rx - mx, dy = ry - my, d = Math.hypot(dx, dy), str = Math.min(1, 9000 / (d * d));
+    const ux = dx / d * sign, uy = dy / d * sign, sh = 9 * str;   // 전자 구름의 이동 (대전체 (+)면 대전체 쪽으로)
+    fsum += str;
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(Math.atan2(uy, ux));
+    ctx.fillStyle = 'rgba(214,69,65,0.85)'; ctx.beginPath(); ctx.arc(-sh * 0.6, 0, 6, 0, 7); ctx.fill(); T(ctx, '+', -sh * 0.6, 0, { color: '#fff', bold: true, size: 10 });
+    ctx.fillStyle = 'rgba(47,111,223,0.45)'; ctx.beginPath(); ctx.ellipse(sh * 0.6, 0, 11 + sh * 0.4, 9, 0, 0, 7); ctx.fill(); T(ctx, '−', sh * 0.6 + 3, 0, { color: BLUE, bold: true, size: 11 });
+    ctx.restore();
+  }
+  // 끌림 화살표
+  const attract = Math.min(1, fsum / 6);
+  if (attract > 0.05){ const cx = px0 + pw / 2, cy = py0 + ph / 2, dx = rx - cx, dy = ry - cy, d = Math.hypot(dx, dy); arrow(ctx, cx, cy, cx + dx / d * 70 * attract, cy + dy / d * 70 * attract, GREEN, 4); T(ctx, '끌려가는 힘', cx + dx / d * 70 * attract, cy + dy / d * 70 * attract + 16, { color: GREEN, bold: true }); }
+  drawRod(ctx, W, H);
+  T(ctx, '분자 속 전자 구름이 한쪽으로 쏠립니다', W / 2, 14, { bold: true, color: INK, size: 13 });
+  setStats([['대전체', sign > 0 ? '(+) 전하' : '(−) 전하', sign > 0 ? RED : BLUE], ['종이가 끌리는 정도', Math.round(attract * 100) + '%', GREEN]]);
+}
+const TEXT = {
+  cond: ['대전체를 검전기의 금속판 가까이 가져가 보세요. 손가락을 대고, 손가락을 떼고, 대전체를 치우는 순서로 검전기를 대전시킬 수도 있습니다.',
+    '금속 같은 도체 속 자유 전자는 대전체에 끌리거나 밀려 한쪽으로 이동합니다(정전기 유도). 그래서 대전체에 가까운 쪽에는 대전체와 반대 종류의 전하가, 먼 쪽에는 같은 종류의 전하가 모이고, 금속박이 같은 전하끼리 밀어내 벌어집니다. 접지한 상태에서 손가락을 떼면 검전기는 대전체와 반대 전하로 대전됩니다.'],
+  ins: ['대전체를 종잇조각 가까이 가져가 보세요. 전자가 자유롭게 움직이지 못하는 절연체도 대전체에 끌립니다.',
+    '절연체의 분자 속 전자는 분자를 벗어나지는 못하지만, 대전체 쪽으로 조금 쏠리거나 밀립니다(유전 분극). 그 결과 대전체 가까운 쪽 표면에 반대 전하가 나타나 대전체에 끌립니다. 플라스틱 빗에 종이가 붙는 현상, 축전기 속 유전체, 전자레인지가 물 분자를 데우는 원리와 관련이 있습니다.'] };
+let mode0;
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('signB').addEventListener('click', () => { sign = -sign; $('signB').textContent = '대전체: ' + (sign > 0 ? '(+)' : '(−)'); });
+$('gndB').addEventListener('click', () => { grounded = !grounded; $('gndB').textContent = grounded ? '손가락 떼기' : '손가락 대기'; $('gndB').classList.toggle('on', grounded); });
+$('resetB').addEventListener('click', () => { grounded = false; extra = 0; rod = { x: 0.85, y: 0.25 }; $('gndB').textContent = '손가락 대기'; $('gndB').classList.remove('on'); });
+pointer(S, (x, y) => { const { W, H } = s; if (Math.hypot(x - rod.x * W - 30, y - rod.y * H + 15) > 80) return false; }, (x, y) => { const { W, H } = s; rod.x = Math.max(0.1, Math.min(0.95, x / W)); rod.y = Math.max(0.08, Math.min(0.92, y / H)); });
+loop(() => mode === 'cond' ? cond() : ins());

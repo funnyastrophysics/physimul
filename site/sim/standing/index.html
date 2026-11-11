@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>현과 관의 정상파</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>현과 관의 정상파</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="str">줄 (현악기)</button>
+      <button data-m="pipe">관 (관악기)</button>
+    </div>
+    <canvas id="sim" style="height:280px;background:#fbfcfd;border-radius:8px"></canvas>
+    <div class="row">
+      <button class="b" id="dnB">− 배수</button><button class="b" id="upB">+ 배수</button>
+      <select id="pipeS" class="m-pipe"><option value="open">열린 관 (양쪽 열림)</option><option value="closed">닫힌 관 (한쪽 막힘)</option></select>
+      <button class="b primary" id="sndB">소리 듣기</button>
+      <label class="chk m-str"><input type="checkbox" id="cTrav"> 두 진행파 보기</label>
+      <label class="chk"><input type="checkbox" id="cSlow"> 느리게</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>길이 L</span><b id="LV"></b></div>
+        <input type="range" id="LS" min="0.3" max="1" step="0.01" value="0.65"><div class="range"><span>0.3 m</span><span>1 m</span></div></div>
+      <div class="sl m-str"><div class="top"><span>줄에서 파동의 속력 v</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="100" max="400" step="10" value="200"><div class="range"><span>100 m/s (느슨함)</span><span>400 m/s (팽팽함)</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, n = 1, t = 0, snd = null;
+bindLabels({ LS: ['LV', v => v.toFixed(2) + ' m'], vS: ['vV', v => v + ' m/s'] });
+const closed = () => mode === 'pipe' && $('pipeS').value === 'closed';
+// 몇 번째 정상파인지에 따라 파장 결정
+function info(){ const L = +$('LS').value; if (mode === 'str'){ const v = +$('vS').value, lam = 2 * L / n; return { v, lam, f: v / lam, h: n }; }
+  const v = 340; if (closed()){ const h = 2 * n - 1, lam = 4 * L / h; return { v, lam, f: v / lam, h }; } const lam = 2 * L / n; return { v, lam, f: v / lam, h: n }; }
+// 변위 모양 (0 ≤ u ≤ 1, u는 길이에 대한 비율)
+function shape(u){ const I = info(), L = +$('LS').value, K = 2 * Math.PI * L / I.lam;
+  if (mode === 'str') return Math.sin(K * u); if (closed()) return Math.cos(K * u); return Math.cos(K * u); }
+function draw(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt * ($('cSlow').checked ? 0.25 : 1);
+  const I = info(), L = +$('LS').value, x0 = 24, x1 = x0 + (W - 48) * (L / 1), cy = H * 0.5, A = H * 0.26, w = 2 * Math.PI * 0.9 * Math.sqrt(I.h), cs = Math.cos(w * t);
+  const X = u => x0 + (x1 - x0) * u, N = 160;
+  if (mode === 'str'){
+    ctx.fillStyle = '#8a8f99'; ctx.fillRect(x0 - 8, cy - 30, 8, 60); ctx.fillRect(x1, cy - 30, 8, 60);
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), cy - A * shape(i / N)]), 'rgba(142,68,173,0.35)', 1.2, [4, 4]);
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), cy + A * shape(i / N)]), 'rgba(142,68,173,0.35)', 1.2, [4, 4]);
+    if ($('cTrav').checked){ const K = 2 * Math.PI * L / I.lam;
+      line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), cy - A / 2 * Math.sin(K * i / N - w * t)]), ORANGE, 1.6);
+      line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), cy - A / 2 * Math.sin(K * i / N + w * t)]), BLUE, 1.6);
+      T(ctx, '오른쪽으로 진행', 8, 16, { color: ORANGE, bold: true, size: 11, align: 'left' }); T(ctx, '왼쪽으로 진행', 8, 32, { color: BLUE, bold: true, size: 11, align: 'left' }); }
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), cy - A * shape(i / N) * cs]), INK, 3);
+  } else {
+    const ph = H * 0.3, top = cy - ph / 2;
+    ctx.fillStyle = 'rgba(201,162,39,0.12)'; ctx.fillRect(x0, top, x1 - x0, ph);
+    line(ctx, [[x0, top], [x1, top]], '#a98a2a', 3); line(ctx, [[x0, top + ph], [x1, top + ph]], '#a98a2a', 3);
+    if (closed()){ ctx.fillStyle = '#a98a2a'; ctx.fillRect(x1, top - 2, 7, ph + 4); }
+    // 공기 입자 (종파: 가로 방향 변위)
+    const cols = Math.round((x1 - x0) / 9), rows = 5, dmax = Math.min(10, (x1 - x0) / I.h * 0.12);
+    ctx.fillStyle = BLUE;
+    for (let j = 0; j < rows; j++) for (let i = 0; i <= cols; i++){ const u = i / cols, px = X(u) + dmax * shape(u) * cs; if (closed() && px > x1 - 2) continue;
+      ctx.beginPath(); ctx.arc(px, top + ph * (j + 0.5) / rows, 2.2, 0, 7); ctx.fill(); }
+    // 변위 그래프 (관 위·아래)
+    const ga = H * 0.14;
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), top - 14 - ga / 2 - ga / 2 * shape(i / N) * cs]), INK, 2);
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), top - 14 - ga / 2 - ga / 2 * shape(i / N)]), 'rgba(142,68,173,0.35)', 1, [4, 4]);
+    line(ctx, Array.from({ length: N + 1 }, (_, i) => [X(i / N), top - 14 - ga / 2 + ga / 2 * shape(i / N)]), 'rgba(142,68,173,0.35)', 1, [4, 4]);
+    T(ctx, '공기의 변위', x0, 12, { size: 11, bold: true, align: 'left', color: SUB });
+  }
+  // 마디(N)와 배(A) 표시
+  const ny = mode === 'str' ? cy + A + 18 : cy + H * 0.15 + 16;
+  for (let i = 0; i <= 400; i++){ const u = i / 400, a = shape(u), b = shape(Math.min(1, u + 1 / 400));
+    if (i < 400 && (a === 0 || a * b < 0)) T(ctx, '마디', X(u), ny, { size: 10, color: RED, bold: true });
+    const prev = shape(Math.max(0, u - 1 / 400)); if ((Math.abs(a) >= Math.abs(prev) && Math.abs(a) >= Math.abs(b) && Math.abs(a) > 0.995)) T(ctx, '배', X(u), ny + 14, { size: 10, color: GREEN, bold: true }); }
+  if (Math.abs(shape(0)) < 1e-9) T(ctx, '마디', X(0), ny, { size: 10, color: RED, bold: true });
+  if (Math.abs(shape(1)) < 1e-6) T(ctx, '마디', X(1), ny, { size: 10, color: RED, bold: true });
+  if (snd) snd.set(I.f, 0.15);
+  const ord = closed() ? `기본 진동의 ${I.h}배` : (I.h === 1 ? '기본 진동' : `${I.h}배 진동`);
+  setStats([['진동 모드', ord, PURPLE], ['파장 λ', I.lam.toFixed(3) + ' m'], ['진동수 f = v/λ', I.f.toFixed(0) + ' Hz', ORANGE], ['파동의 속력 v', I.v + ' m/s']]);
+  $('dnB').disabled = n <= 1; $('upB').disabled = n >= 6;
+}
+const TEXT = {
+  str: ['양 끝이 고정된 줄에 생기는 정상파입니다. 배수를 바꾸고 줄의 길이와 파동의 속력을 조절하며 진동수의 변화를 확인하세요.',
+    '양 끝이 고정된 줄에서는 양 끝이 항상 마디가 되므로 줄의 길이가 반파장의 정수배일 때만 정상파가 생깁니다(L = nλ/2, f = nv/2L). 반대 방향으로 진행하는 두 파동이 중첩되어 정상파가 만들어집니다. 기타 줄을 짧게 누르거나 팽팽하게 조이면 높은 소리가 납니다.'],
+  pipe: ['관 속 공기 기둥에 생기는 정상파입니다. 파란 점은 공기 입자의 움직임(종파)이고, 위의 그래프는 공기의 변위입니다. 열린 관과 닫힌 관을 비교하세요.',
+    '관의 열린 끝은 공기가 자유롭게 움직이므로 변위의 배, 막힌 끝은 공기가 움직일 수 없으므로 변위의 마디가 됩니다. 열린 관에서는 L = nλ/2로 모든 정수배 진동이 생기고, 닫힌 관에서는 L = (2n−1)λ/4로 홀수배 진동만 생깁니다. 같은 길이라면 닫힌 관의 기본 진동수가 열린 관의 절반입니다. 리코더, 팬플루트 등에 이용됩니다.'] };
+setupTabs(m => { mode = m; n = 1; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('dnB').addEventListener('click', () => { n = Math.max(1, n - 1); }); $('upB').addEventListener('click', () => { n = Math.min(6, n + 1); });
+$('pipeS').addEventListener('change', () => { n = 1; });
+$('sndB').addEventListener('click', () => { if (snd){ snd.stop(); snd = null; $('sndB').textContent = '소리 듣기'; } else { snd = tone(); $('sndB').textContent = '소리 끄기'; } });
+loop(draw);
+})();
+</script>
+</body>
+</html>

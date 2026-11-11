@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>축전기와 인덕터 회로</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --q:#2f6fdf; --i:#e0782f; --ue:#2f6fdf; --ub:#8e44ad; --heat:#c0392b; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:15px;padding:10px 4px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%}
+  #sim{height:270px}
+  #graph{height:250px}
+  #bars{height:150px;margin-top:6px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.b.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+  label.chk input{width:18px;height:18px}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>축전기와 인덕터 회로</h1>
+  <p class="hint" id="hintTxt">스위치를 a에 연결하면 축전기가 충전되고, b에 연결하면 축전기에 저장된 전기 에너지가 전구에서 빛과 열로 바뀝니다.</p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="rc" class="on">충전과 방전</button>
+      <button data-m="lc">LC 진동</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <div class="row rcOnly">
+      <div class="seg">
+        <button class="b" id="swA">a에 연결 (충전)</button>
+        <button class="b" id="swB">b에 연결 (방전)</button>
+        <button class="b on" id="swO">스위치 열기</button>
+      </div>
+    </div>
+    <div class="row rcOnly">
+      <label style="font-size:15px">저항의 크기
+        <select id="rS"><option value="0.5">작게</option><option value="1" selected>보통</option><option value="2">크게</option></select>
+      </label>
+    </div>
+    <div class="row lcOnly hide">
+      <button class="b on" id="lcGo">스위치 닫기</button>
+      <button class="b" id="lcReset">다시 충전</button>
+      <label class="chk"><input type="checkbox" id="lcR"> 회로에 저항 넣기</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="graph"></canvas>
+    <canvas id="bars"></canvas>
+    <p class="note" id="noteTxt">값은 모두 가장 클 때를 100 %로 한 비율로 나타냈습니다. 화살표와 움직이는 점은 전류의 방향을 나타냅니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const CQ = '#2f6fdf', CI = '#e0782f', CUE = '#2f6fdf', CUB = '#8e44ad', CH = '#c0392b', INK = '#1d2330', WIRE = '#3a4252';
+  const simC = $('sim'), sctx = simC.getContext('2d'), gC = $('graph'), gctx = gC.getContext('2d'), bC = $('bars'), bctx = bC.getContext('2d');
+
+  let mode = 'rc';
+  // RC: q = 축전기 전하 (완전 충전 = 1), sw = 'a' | 'b' | 'open'
+  let q = 0, sw = 'open', tau = 1, heat = 0, light = 0;
+  // LC: q, i (최대 = 1), 닫힘 여부
+  const OMEGA = Math.PI;              // 주기 2 s
+  let lq = 1, li = 0, lcOn = false, lcHeat = 0;
+  let t = 0, buf = [], flow = 0;
+  const WINDOW = 10;
+
+  function current(){
+    if (mode === 'rc'){ if (sw === 'a') return (1 - q); if (sw === 'b') return -q; return 0; }
+    return lcOn ? li : 0;
+  }
+  function step(dt){
+    if (mode === 'rc'){
+      if (sw === 'a'){ const dq = (1 - q) / tau * dt; heat += (1 - q) ** 2 / tau * dt; q += dq; }
+      else if (sw === 'b'){ const dq = -q / tau * dt; light += q * q / tau * dt * 2; q += dq; }
+      // 에너지는 q² 비율(완전 충전 = 1). 방전 때 줄어든 q²만큼 전구로 간다.
+    } else if (lcOn){
+      const gam = $('lcR').checked ? 0.35 : 0;
+      // q' = ω i (정규화), i' = -ω q - γ i
+      const a = -OMEGA * lq - gam * li;
+      li += a * dt; lq += OMEGA * li * dt;   // 반암시적 오일러 (에너지가 잘 보존됨)
+    }
+    flow += current() * dt * 2.2;
+    t += dt;
+  }
+
+  // ---------- 크기 ----------
+  let W, H, GW, GH, BW, BH;
+  function fit(c, ctx){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * d; c.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(simC, sctx); [GW, GH] = fit(gC, gctx); [BW, BH] = fit(bC, bctx); }
+  window.addEventListener('resize', resize);
+
+  // ---------- 회로 그리기 도구 ----------
+  function line(pts, color, lw){ sctx.strokeStyle = color || WIRE; sctx.lineWidth = lw || 2; sctx.beginPath();
+    pts.forEach((p, i) => i ? sctx.lineTo(p[0], p[1]) : sctx.moveTo(p[0], p[1])); sctx.stroke(); }
+  function txt(s, x, y, color, align, size, bold){ sctx.fillStyle = color || '#5b6475'; sctx.font = (bold ? 'bold ' : '') + (size || 12) + 'px ' + FONT;
+    sctx.textAlign = align || 'center'; sctx.textBaseline = 'middle'; sctx.fillText(s, x, y); }
+  // 경로 위를 움직이는 점 (전류 방향). gaps: 점을 숨길 구간 [x1,y1,x2,y2]
+  function flowDots(path, amount, gaps){
+    if (Math.abs(amount) < 0.002) return;
+    let total = 0; const segs = [];
+    for (let i = 0; i < path.length - 1; i++){ const [x1, y1] = path[i], [x2, y2] = path[i + 1], L = Math.hypot(x2 - x1, y2 - y1); segs.push([x1, y1, x2, y2, L, total]); total += L; }
+    const gap = 22, off = ((flow * 40) % gap + gap) % gap;
+    sctx.fillStyle = CI;
+    for (let d = off; d < total; d += gap){
+      const s = segs.find(sg => d >= sg[5] && d < sg[5] + sg[4]); if (!s) continue;
+      const f = (d - s[5]) / s[4], x = s[0] + (s[2] - s[0]) * f, y = s[1] + (s[3] - s[1]) * f;
+      if (gaps && gaps.some(gp => x >= gp[0] && x <= gp[2] && y >= gp[1] && y <= gp[3])) continue;
+      sctx.globalAlpha = Math.min(1, 0.35 + Math.abs(amount));
+      sctx.beginPath(); sctx.arc(x, y, 3.2, 0, 7); sctx.fill();
+    }
+    sctx.globalAlpha = 1;
+  }
+  function capacitor(x, y, w, qq, vertical){
+    // 두 극판(가로 방향)과 전하 표시. y는 가운데.
+    const gap = 16;
+    sctx.strokeStyle = INK; sctx.lineWidth = 3;
+    sctx.beginPath(); sctx.moveTo(x - w / 2, y - gap / 2); sctx.lineTo(x + w / 2, y - gap / 2); sctx.stroke();
+    sctx.beginPath(); sctx.moveTo(x - w / 2, y + gap / 2); sctx.lineTo(x + w / 2, y + gap / 2); sctx.stroke();
+    const n = Math.round(Math.abs(qq) * 7), top = qq >= 0 ? '+' : '−', bot = qq >= 0 ? '−' : '+';
+    for (let i = 0; i < n; i++){ const xx = x - w / 2 + w * (i + 0.5) / 7;
+      txt(top, xx, y - gap / 2 - 9, top === '+' ? '#c0392b' : CQ, 'center', 13, true);
+      txt(bot, xx, y + gap / 2 + 9, bot === '+' ? '#c0392b' : CQ, 'center', 13, true); }
+    // 전기장 (극판 사이 화살표)
+    if (Math.abs(qq) > 0.05){
+      sctx.globalAlpha = Math.min(1, Math.abs(qq)); sctx.strokeStyle = CUE; sctx.lineWidth = 1.2;
+      for (let i = 0; i < 4; i++){ const xx = x - w / 2 + w * (i + 0.5) / 4, d = qq > 0 ? 1 : -1;
+        sctx.beginPath(); sctx.moveTo(xx, y - d * 6); sctx.lineTo(xx, y + d * 6); sctx.stroke();
+        sctx.beginPath(); sctx.moveTo(xx, y + d * 7); sctx.lineTo(xx - 3, y + d * 3); sctx.lineTo(xx + 3, y + d * 3); sctx.closePath(); sctx.fillStyle = CUE; sctx.fill(); }
+      sctx.globalAlpha = 1;
+    }
+  }
+  function resistor(x, y1, y2){
+    const n = 6, w = 7; sctx.strokeStyle = WIRE; sctx.lineWidth = 2; sctx.beginPath(); sctx.moveTo(x, y1);
+    for (let i = 0; i < n; i++){ sctx.lineTo(x + (i % 2 ? -w : w), y1 + (y2 - y1) * (i + 0.5) / n); }
+    sctx.lineTo(x, y2); sctx.stroke();
+  }
+  function battery(x, y){
+    sctx.strokeStyle = INK; sctx.lineWidth = 3; sctx.beginPath(); sctx.moveTo(x - 14, y - 4); sctx.lineTo(x + 14, y - 4); sctx.stroke();
+    sctx.lineWidth = 5; sctx.beginPath(); sctx.moveTo(x - 7, y + 4); sctx.lineTo(x + 7, y + 4); sctx.stroke();
+    txt('+', x + 20, y - 8, '#c0392b', 'left', 12, true); txt('전원', x - 20, y, '#5b6475', 'right');
+  }
+  function bulb(x, y, glow){
+    if (glow > 0.01){ const gr = sctx.createRadialGradient(x, y, 2, x, y, 40);
+      gr.addColorStop(0, 'rgba(255,200,40,' + Math.min(0.9, glow) + ')'); gr.addColorStop(1, 'rgba(255,200,40,0)');
+      sctx.fillStyle = gr; sctx.beginPath(); sctx.arc(x, y, 40, 0, 7); sctx.fill(); }
+    sctx.fillStyle = glow > 0.01 ? 'rgba(255,230,120,' + (0.3 + 0.7 * Math.min(1, glow)) + ')' : '#fff';
+    sctx.strokeStyle = INK; sctx.lineWidth = 1.8; sctx.beginPath(); sctx.arc(x, y, 13, 0, 7); sctx.fill(); sctx.stroke();
+    sctx.beginPath(); sctx.moveTo(x - 9, y + 9); sctx.lineTo(x + 9, y - 9); sctx.moveTo(x - 9, y - 9); sctx.lineTo(x + 9, y + 9); sctx.lineWidth = 1.2; sctx.stroke();
+    txt('전구', x + 18, y, '#5b6475', 'left');
+  }
+  function coil(x, y1, y2, strength){
+    // 인덕터: 세로 방향 코일. 자기장이 셀수록 옆에 자기력선이 진하게
+    const n = 7, r = 13;
+    if (Math.abs(strength) > 0.03){
+      sctx.globalAlpha = Math.min(0.9, Math.abs(strength)); sctx.strokeStyle = CUB; sctx.lineWidth = 1.5;
+      [1.9, 2.8].forEach(k => { sctx.beginPath(); sctx.ellipse(x, (y1 + y2) / 2, r * k, (y2 - y1) / 2 + 10 * k, 0, 0, 7); sctx.stroke(); });
+      const d = strength > 0 ? -1 : 1, ay = (y1 + y2) / 2;
+      sctx.fillStyle = CUB; sctx.beginPath(); sctx.moveTo(x, ay + d * 8); sctx.lineTo(x - 5, ay - d * 2); sctx.lineTo(x + 5, ay - d * 2); sctx.closePath(); sctx.fill();
+      sctx.globalAlpha = 1;
+    }
+    sctx.strokeStyle = INK; sctx.lineWidth = 2;
+    for (let i = 0; i < n; i++){ const yy = y1 + (y2 - y1) * (i + 0.5) / n, h = (y2 - y1) / n;
+      sctx.beginPath(); sctx.ellipse(x, yy, r, h * 0.62, 0, -Math.PI / 2, Math.PI / 2); sctx.stroke();
+      sctx.strokeStyle = '#9aa3b2'; sctx.beginPath(); sctx.ellipse(x, yy, r, h * 0.62, 0, Math.PI / 2, Math.PI * 1.5); sctx.stroke(); sctx.strokeStyle = INK; }
+    line([[x, y1 - 8], [x, y1 - 2]], WIRE); line([[x, y2 + 2], [x, y2 + 8]], WIRE);
+    txt('인덕터', x + r * 2.8 + 6, (y1 + y2) / 2, '#5b6475', 'left');
+  }
+  function arrowOn(x, y, dir, color){ // dir: 'r','l','u','d'
+    const d = { r:[1,0], l:[-1,0], u:[0,-1], d:[0,1] }[dir]; sctx.fillStyle = color;
+    sctx.beginPath(); sctx.moveTo(x + d[0] * 8, y + d[1] * 8); sctx.lineTo(x - d[0] * 4 - d[1] * 6, y - d[1] * 4 + d[0] * 6); sctx.lineTo(x - d[0] * 4 + d[1] * 6, y - d[1] * 4 - d[0] * 6); sctx.closePath(); sctx.fill();
+  }
+
+  function drawRC(){
+    const xL = Math.max(54, W * 0.14), xR = W - Math.max(70, W * 0.16), xC = W / 2, yT = 36, yB = H - 26;
+    const piv = [xC, yT + 26], ca = [xC - 36, yT], cb = [xC + 36, yT], ry1 = yT + 46, ry2 = yT + 96, cy = (ry2 + yB) / 2 + 4;
+    // 도선
+    line([ca, [xL, yT], [xL, yB], [xR, yB], [xR, yT], cb]);
+    line([piv, [xC, ry1]]); line([[xC, ry2], [xC, cy - 8]]); line([[xC, cy + 8], [xC, yB]]);
+    sctx.fillStyle = WIRE; [ca, cb, piv].forEach(p => { sctx.beginPath(); sctx.arc(p[0], p[1], 3.5, 0, 7); sctx.fill(); });
+    txt('a', ca[0], ca[1] - 12, INK, 'center', 13, true); txt('b', cb[0], cb[1] - 12, INK, 'center', 13, true);
+    // 스위치 날
+    const tip = sw === 'a' ? ca : sw === 'b' ? cb : [xC + 2, yT - 8];
+    line([piv, tip], INK, 3);
+    resistor(xC, ry1, ry2); txt('저항', xC + 14, (ry1 + ry2) / 2, '#5b6475', 'left');
+    capacitor(xC, cy, 50, q); txt('축전기', xC + 32, cy, '#5b6475', 'left');
+    // 전원과 전구
+    sctx.fillStyle = '#fff'; sctx.fillRect(xL - 16, (yT + yB) / 2 - 10, 32, 20); battery(xL, (yT + yB) / 2);
+    sctx.fillStyle = '#fff'; sctx.fillRect(xR - 14, (yT + yB) / 2 - 14, 28, 28);
+    const I = current(); bulb(xR, (yT + yB) / 2, sw === 'b' ? Math.abs(I) * 1.2 : 0);
+    // 전류 점: 충전 → 전원(+)에서 a로, 축전기 위 극판으로 / 방전 → 위 극판에서 b로, 전구를 지나 아래 극판으로
+    const gapBox = [[xC - 30, cy - 9, xC + 30, cy + 9]];
+    if (sw === 'a') flowDots([[xL, (yT + yB) / 2 - 6], [xL, yT], ca, piv, [xC, cy - 8], [xC, cy + 8], [xC, yB], [xL, yB], [xL, (yT + yB) / 2 + 8]], I, gapBox);
+    if (sw === 'b') flowDots([[xC, cy - 8], piv, cb, [xR, yT], [xR, yB], [xC, yB], [xC, cy + 8]], -I, gapBox);
+    // 전류 화살표
+    if (Math.abs(I) > 0.01){
+      if (sw === 'a') arrowOn(xC, ry2 + 14, 'd', CI);
+      if (sw === 'b') arrowOn(xC, ry2 + 14, 'u', CI);
+    }
+    const msg = sw === 'a' ? (q > 0.99 ? '충전 완료: 전류가 흐르지 않습니다' : '충전 중') : sw === 'b' ? (q < 0.01 ? '방전 완료' : '방전 중: 전구에 불이 켜집니다') : '스위치가 열려 있습니다';
+    txt(msg, W / 2, 12, sw === 'open' ? '#5b6475' : CI, 'center', 13, true);
+  }
+
+  function drawLC(){
+    const xC = W * 0.3, xL = W * 0.68, yT = 48, yB = H - 26, my = (yT + yB) / 2;
+    const swX = W / 2;
+    line([[xC, my - 8], [xC, yT], [swX - 16, yT]]); line([[swX + 16, yT], [xL, yT], [xL, my - 46]]);
+    line([[xL, my + 46], [xL, yB], [xC, yB], [xC, my + 8]]);
+    sctx.fillStyle = WIRE; [[swX - 16, yT], [swX + 16, yT]].forEach(p => { sctx.beginPath(); sctx.arc(p[0], p[1], 3.5, 0, 7); sctx.fill(); });
+    line([[swX - 16, yT], lcOn ? [swX + 16, yT] : [swX + 12, yT - 16]], INK, 3);
+    txt('스위치', swX, yT + 14, '#5b6475');
+    capacitor(xC, my, 56, lq); txt('축전기', xC - 34, my, '#5b6475', 'right');
+    coil(xL, my - 38, my + 38, li);
+    if ($('lcR').checked){ sctx.fillStyle = '#fff'; sctx.fillRect(W / 2 - 18, yB - 10, 36, 20);
+      sctx.save(); sctx.translate(W / 2, yB); sctx.rotate(-Math.PI / 2); resistor(0, -16, 16); sctx.restore(); txt('저항', W / 2, yB - 18, '#5b6475'); }
+    if (lcOn) flowDots([[xC, my - 8], [xC, yT], [xL, yT], [xL, yB], [xC, yB], [xC, my + 8]], -li, [[xC - 34, my - 9, xC + 34, my + 9]]);
+    if (Math.abs(li) > 0.05) arrowOn(W / 2 + 40, yT, li > 0 ? 'l' : 'r', CI);
+    txt(lcOn ? '전기 에너지와 자기 에너지가 번갈아 바뀝니다' : '축전기가 충전된 상태입니다. [스위치 닫기]를 누르세요', W / 2, 12, lcOn ? CI : '#5b6475', 'center', 13, true);
+  }
+
+  // ---------- 그래프 ----------
+  function drawGraph(){
+    gctx.clearRect(0, 0, GW, GH);
+    const panels = mode === 'rc'
+      ? [{ key:'q', name:'축전기의 전하량 (전압)', color:CQ, min:0 }, { key:'i', name:'전류의 세기', color:CI, min:-1 }]
+      : [{ key:'q', name:'축전기의 전하량', color:CQ, min:-1 }, { key:'i', name:'전류', color:CI, min:-1 }];
+    const ph = GH / 2, L = 46, R = 40, pw = GW - L - R, t1 = Math.max(t, WINDOW), t0 = t1 - WINDOW;
+    panels.forEach((p, k) => {
+      const top = k * ph + 18, h = ph - 40, y = v => top + h * (1 - (v - p.min) / (1 - p.min));
+      gctx.font = 'bold 12px ' + FONT; gctx.fillStyle = p.color; gctx.textAlign = 'left'; gctx.textBaseline = 'bottom'; gctx.fillText(p.name, L, top - 3);
+      gctx.strokeStyle = '#d9dde4'; gctx.lineWidth = 1; gctx.strokeRect(L, top, pw, h);
+      gctx.strokeStyle = '#9aa3b2'; gctx.beginPath(); gctx.moveTo(L, y(0)); gctx.lineTo(L + pw, y(0)); gctx.stroke();
+      gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'right'; gctx.textBaseline = 'middle';
+      gctx.fillText('100%', L - 4, y(1)); gctx.fillText('0', L - 4, y(0)); if (p.min < 0) gctx.fillText('−100%', L - 4, y(-1));
+      gctx.textAlign = 'center'; gctx.textBaseline = 'top';
+      for (let s = Math.ceil(t0); s <= t1 + 1e-9; s++){ const X = L + (s - t0) / WINDOW * pw; gctx.fillText(String(s), X, top + h + 3); }
+      gctx.textAlign = 'right'; gctx.textBaseline = 'middle'; gctx.fillText('t (s)', GW - 2, y(0));
+      gctx.save(); gctx.beginPath(); gctx.rect(L, top - 1, pw, h + 2); gctx.clip();
+      gctx.strokeStyle = p.color; gctx.lineWidth = 2.2; gctx.beginPath(); let st = false;
+      for (const b of buf){ if (b.t < t0) continue; const X = L + (b.t - t0) / WINDOW * pw, Y = y(b[p.key]); st ? gctx.lineTo(X, Y) : (gctx.moveTo(X, Y), st = true); }
+      gctx.stroke(); gctx.restore();
+    });
+  }
+  function drawBars(){
+    bctx.clearRect(0, 0, BW, BH);
+    let items;
+    if (mode === 'rc') items = [['축전기에 저장된 전기 에너지', q * q, CUE], ['전구에서 빛과 열로 바뀐 에너지', Math.min(light, 1), '#e8a400']];
+    else { const Ue = lq * lq, Ub = li * li; items = [['축전기의 전기 에너지', Ue, CUE], ['인덕터의 자기 에너지', Ub, CUB]];
+      if ($('lcR').checked) items.push(['저항에서 열로', Math.max(0, 1 - Ue - Ub), CH]); }
+    const L = Math.min(190, BW * 0.5), R = 50, top = 8, rowH = (BH - top) / 3;
+    items.forEach(([n, v, c], i) => {
+      const y = top + rowH * i + rowH * 0.2, h = rowH * 0.6, w = Math.max(0, Math.min(1, v)) * (BW - L - R);
+      bctx.fillStyle = '#eef0f4'; bctx.fillRect(L, y, BW - L - R, h); bctx.fillStyle = c; bctx.fillRect(L, y, w, h);
+      bctx.font = '12px ' + FONT; bctx.textAlign = 'right'; bctx.textBaseline = 'middle'; bctx.fillStyle = c; bctx.fillText(n, L - 8, y + h / 2);
+      bctx.textAlign = 'left'; bctx.fillStyle = INK; bctx.font = 'bold 12px ' + FONT; bctx.fillText(Math.round(v * 100) + '%', L + w + 5, y + h / 2);
+    });
+  }
+
+  // ---------- 조작 ----------
+  function setSw(s){ sw = s; if (s === 'b') light = 0; ['swA', 'swB', 'swO'].forEach(id => $(id).classList.remove('on'));
+    $({ a:'swA', b:'swB', open:'swO' }[s]).classList.add('on'); }
+  $('swA').addEventListener('click', () => setSw('a'));
+  $('swB').addEventListener('click', () => setSw('b'));
+  $('swO').addEventListener('click', () => setSw('open'));
+  $('rS').addEventListener('change', () => { tau = +$('rS').value; });
+  $('lcGo').addEventListener('click', () => { lcOn = !lcOn; $('lcGo').textContent = lcOn ? '스위치 열기' : '스위치 닫기'; $('lcGo').classList.toggle('on', !lcOn); });
+  $('lcReset').addEventListener('click', () => { lq = 1; li = 0; lcOn = false; $('lcGo').textContent = '스위치 닫기'; $('lcGo').classList.add('on'); t = 0; buf = []; });
+  function setMode(m){
+    mode = m; t = 0; buf = [];
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('.rcOnly').forEach(e => e.classList.toggle('hide', m !== 'rc'));
+    document.querySelectorAll('.lcOnly').forEach(e => e.classList.toggle('hide', m !== 'lc'));
+    $('hintTxt').textContent = m === 'rc'
+      ? '스위치를 a에 연결하면 축전기가 충전되고, b에 연결하면 축전기에 저장된 전기 에너지가 전구에서 빛과 열로 바뀝니다.'
+      : '충전된 축전기를 인덕터에 연결하면, 축전기의 전기 에너지와 인덕터의 자기 에너지가 번갈아 바뀌며 전류의 방향이 계속 바뀝니다.';
+    $('noteTxt').textContent = m === 'rc'
+      ? '값은 모두 가장 클 때를 100 %로 한 비율입니다. 주황색 점은 전류의 방향을 나타냅니다. 저항이 클수록 충전과 방전이 천천히 일어납니다. 터치스크린, 키보드, 압력 센서 등은 축전기에 저장되는 전하의 변화를 이용합니다.'
+      : '값은 모두 가장 클 때를 100 %로 한 비율입니다. 저항을 넣으면 에너지의 일부가 열로 바뀌어 진동이 점점 작아집니다.';
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
+    const n = Math.ceil(dt / 0.002); for (let i = 0; i < n; i++) step(dt / n);
+    buf.push(mode === 'rc' ? { t, q, i: current() } : { t, q: lq, i: lcOn ? li : 0 });
+    while (buf.length && buf[0].t < t - WINDOW - 0.5) buf.shift();
+    sctx.clearRect(0, 0, W, H);
+    mode === 'rc' ? drawRC() : drawLC();
+    drawGraph(); drawBars();
+    requestAnimationFrame(frame);
+  }
+  resize(); setMode('rc'); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

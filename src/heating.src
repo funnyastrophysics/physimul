@@ -1,0 +1,70 @@
+비열과 잠열 (가열 곡선)
+  <h1>비열과 잠열: 얼음에서 수증기까지</h1>
+  <p class="hint">−20 °C의 얼음에 일정한 비율로 열을 가하며 온도가 어떻게 변하는지 관찰하세요. 온도가 그대로인 구간에서 가한 열은 어디에 쓰일까요?</p>
+  <div class="card">
+    <canvas id="sim" style="height:230px"></canvas>
+    <div class="row">
+      <button class="b primary" id="goB">가열 시작</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label style="font-size:15px">재생 빠르기 <select id="spdS"><option value="20">20배</option><option value="60" selected>60배</option><option value="200">200배</option></select></label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card"><canvas id="graph" style="height:280px"></canvas></div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>얼음의 질량</span><b id="mV"></b></div>
+        <input type="range" id="mS" min="0.1" max="1" step="0.05" value="0.2"><div class="range"><span>0.1 kg</span><span>1 kg</span></div></div>
+      <div class="sl"><div class="top"><span>가열기의 일률</span><b id="pV"></b></div>
+        <input type="range" id="pS" min="500" max="2000" step="100" value="1000"><div class="range"><span>500 W</span><span>2000 W</span></div></div>
+    </div>
+    <p class="note">비열: 얼음 2100, 물 4200, 수증기 2000 J/(kg·°C). 잠열: 녹음열 3.34 × 10⁵ J/kg, 기화열 2.26 × 10⁶ J/kg. 열이 모두 물질에 흡수된다고 가정합니다. 상태가 변하는 동안에는 가한 열이 분자 사이의 결합을 끊는 데 쓰이므로 온도가 일정합니다. 그래프의 기울기가 완만할수록 비열이 큰 상태입니다.</p>
+  </div>
+---SCRIPT---
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+const cI = 2100, cW = 4200, cS = 2000, Lf = 3.34e5, Lv = 2.26e6, T0 = -20, T1 = 120;
+let Q = 0, run = false, buf = [];
+bindLabels({ mS: ['mV', v => v.toFixed(2) + ' kg'], pS: ['pV', v => v + ' W'] });
+function stages(m){ return [['얼음의 온도 상승', m * cI * 20, '#7fb8ff'], ['녹는 중 (0 °C)', m * Lf, '#5dade2'], ['물의 온도 상승', m * cW * 100, '#3c7fd1'], ['끓는 중 (100 °C)', m * Lv, '#e0782f'], ['수증기의 온도 상승', m * cS * 20, '#c0392b']]; }
+function state(m, q){
+  const st = stages(m); let acc = 0;
+  for (let i = 0; i < st.length; i++){ const e = st[i][1]; if (q <= acc + e || i === 4){ const f = Math.min(1, (q - acc) / e);
+    const temp = i === 0 ? T0 + 20 * f : i === 1 ? 0 : i === 2 ? 100 * f : i === 3 ? 100 : 100 + 20 * f; return { i, f, temp }; } acc += e; }
+}
+function reset(){ Q = 0; run = false; buf = []; $('goB').textContent = '가열 시작'; }
+$('goB').addEventListener('click', () => { run = !run; $('goB').textContent = run ? '멈춤' : '계속'; });
+$('resetB').addEventListener('click', reset);
+['mS', 'pS'].forEach(id => $(id).addEventListener('input', reset));
+loop(dt => {
+  const m = +$('mS').value, P = +$('pS').value, st = stages(m), total = st.reduce((a, b) => a + b[1], 0);
+  if (run && Q < total){ Q = Math.min(total, Q + P * dt * +$('spdS').value); const z = state(m, Q); buf.push({ q: Q, T: z.temp }); if (Q >= total){ run = false; $('goB').textContent = '끝'; } }
+  const z = state(m, Q);
+  // 비커 그림
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const bx = W * 0.12, bw = Math.min(160, W * 0.36), by = 24, bh = H - 70;
+  ctx.fillStyle = 'rgba(160,200,235,0.15)'; ctx.fillRect(bx, by, bw, bh);
+  const ice = z.i === 0 ? 1 : z.i === 1 ? 1 - z.f : 0, water = z.i === 1 ? z.f : z.i === 2 ? 1 : z.i === 3 ? 1 - z.f : 0, steam = z.i >= 3 ? (z.i === 3 ? z.f : 1) : 0;
+  const lvl = bh * 0.55;
+  if (water > 0){ ctx.fillStyle = 'rgba(60,127,209,0.55)'; ctx.fillRect(bx, by + bh - lvl * water, bw, lvl * water); }
+  for (let i = 0; i < Math.round(ice * 7); i++){ const cx = bx + 12 + (i % 4) * (bw - 24) / 3.4, cy = by + bh - 16 - Math.floor(i / 4) * 26; ctx.fillStyle = 'rgba(210,235,255,0.95)'; ctx.strokeStyle = '#7fb8ff'; ctx.fillRect(cx, cy - 10, 22, 20); ctx.strokeRect(cx, cy - 10, 22, 20); }
+  if (z.i === 3 && run) for (let i = 0; i < 10; i++){ ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(bx + Math.random() * bw, by + bh - Math.random() * lvl * water, 3, 0, 7); ctx.fill(); }
+  if (steam > 0){ ctx.fillStyle = 'rgba(180,180,190,' + 0.35 * steam + ')'; for (let i = 0; i < 8; i++){ ctx.beginPath(); ctx.arc(bx + bw * (0.15 + 0.1 * i), by + 10 + 12 * Math.sin(performance.now() / 400 + i), 14, 0, 7); ctx.fill(); } }
+  ctx.strokeStyle = INK; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by); ctx.stroke();
+  if (run){ ctx.fillStyle = '#ff8c1a'; for (let i = 0; i < 5; i++){ const fx = bx + bw * (0.2 + 0.15 * i), hh = 10 + 6 * Math.random(); ctx.beginPath(); ctx.moveTo(fx - 5, H - 8); ctx.quadraticCurveTo(fx, H - 8 - hh * 1.6, fx + 5, H - 8); ctx.fill(); } }
+  // 온도계
+  const tx = bx + bw + 30, ty = by, th = bh, tf = (z.temp - T0) / (T1 - T0);
+  ctx.fillStyle = '#eef0f4'; ctx.fillRect(tx - 5, ty, 10, th); ctx.fillStyle = RED; ctx.fillRect(tx - 5, ty + th * (1 - tf), 10, th * tf);
+  ctx.beginPath(); ctx.arc(tx, ty + th + 6, 9, 0, 7); ctx.fill();
+  [-20, 0, 50, 100, 120].forEach(v => { const y = ty + th * (1 - (v - T0) / (T1 - T0)); line(ctx, [[tx + 6, y], [tx + 11, y]], INK, 1); T(ctx, v + ' °C', tx + 14, y, { align: 'left', size: 10 }); });
+  T(ctx, ['얼음', '얼음 + 물', '물', '물 + 수증기', '수증기'][z.i], tx + 60, ty + 10, { align: 'left', bold: true, color: INK, size: 14 });
+  // 가열 곡선
+  const { ctx: c2, W: GW, H: GH } = gr; c2.clearRect(0, 0, GW, GH);
+  const qMax = niceMax(total / 1000), A = axes(c2, GW, GH, { x0: 0, x1: qMax, y0: -40, y1: 140, xt: [0, qMax / 4, qMax / 2, qMax * 3 / 4, qMax].map(v => +v.toFixed(0)), yt: [-40, 0, 40, 80, 120], xl: '가한 열량 (kJ)', yl: '온도 (°C)', top: 18 });
+  // 구간 색 띠
+  let acc = 0; st.forEach(([n, e, col]) => { c2.fillStyle = col; c2.globalAlpha = 0.12; c2.fillRect(A.X(acc / 1000), A.top, A.X((acc + e) / 1000) - A.X(acc / 1000), A.h); c2.globalAlpha = 1; acc += e; });
+  c2.strokeStyle = INK; c2.lineWidth = 2.5; c2.beginPath(); buf.forEach((b, i) => i ? c2.lineTo(A.X(b.q / 1000), A.Y(b.T)) : c2.moveTo(A.X(b.q / 1000), A.Y(b.T))); c2.stroke();
+  T(c2, '녹는 동안', A.X((st[0][1] + st[1][1] / 2) / 1000), A.Y(0) - 10, { size: 10, color: '#2a6aa8' });
+  T(c2, '끓는 동안', A.X((st[0][1] + st[1][1] + st[2][1] + st[3][1] / 2) / 1000), A.Y(100) - 10, { size: 10, color: ORANGE });
+  setStats([['온도', z.temp.toFixed(1) + ' °C', RED], ['가한 열량', (Q / 1000).toFixed(1) + ' kJ'], ['녹이는 데 필요한 열', (st[1][1] / 1000).toFixed(0) + ' kJ'], ['끓이는 데 필요한 열', (st[3][1] / 1000).toFixed(0) + ' kJ'], ['전체', (total / 1000).toFixed(0) + ' kJ']]);
+});
+rs();

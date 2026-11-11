@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>전자기 유도</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --phi:#8e44ad; --emf:#e0782f; --n:#d64541; --s:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+  #sim{height:300px}
+  #graph{height:230px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums;color:var(--accent)}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.b.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+  label.chk input{width:18px;height:18px}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>전자기 유도</h1>
+  <p class="hint" id="hintTxt"></p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="coil" class="on">자석과 코일</button>
+      <button data-m="tf">변압기·무선 충전</button>
+      <button data-m="brake">자기 브레이크</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <div class="row m-coil">
+      <button class="b" id="autoB">자동으로 왕복</button>
+      <button class="b" id="flipB">자석 뒤집기</button>
+    </div>
+    <div class="row m-brake hide">
+      <span style="font-size:15px">자석 아래에 놓을 판</span>
+      <select id="plateS">
+        <option value="0">판 없음</option>
+        <option value="0.01">플라스틱 판</option>
+        <option value="3" selected>알루미늄 판</option>
+        <option value="0.9">홈을 판 알루미늄 판</option>
+      </select>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <canvas id="graph"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="controls m-coil">
+      <div class="sl"><div class="top"><span>코일의 감은 수 N</span><b id="nV"></b></div>
+        <input type="range" id="nS" min="50" max="400" step="50" value="200"><div class="range"><span>50회</span><span>400회</span></div></div>
+      <div class="sl"><div class="top"><span>자석의 세기</span><b id="bV"></b></div>
+        <input type="range" id="bS" min="1" max="3" step="0.5" value="1"><div class="range"><span>1배</span><span>3배</span></div></div>
+      <div class="sl"><div class="top"><span>자동 왕복 주기</span><b id="tV"></b></div>
+        <input type="range" id="tS" min="0.5" max="4" step="0.5" value="2"><div class="range"><span>0.5 s (빠르게)</span><span>4 s (느리게)</span></div></div>
+    </div>
+    <div class="controls m-tf hide">
+      <div class="sl"><div class="top"><span>1차 코일 감은 수 N<sub>1</sub></span><b id="n1V"></b></div>
+        <input type="range" id="n1S" min="100" max="400" step="50" value="200"><div class="range"><span>100회</span><span>400회</span></div></div>
+      <div class="sl"><div class="top"><span>2차 코일 감은 수 N<sub>2</sub></span><b id="n2V"></b></div>
+        <input type="range" id="n2S" min="100" max="800" step="50" value="400"><div class="range"><span>100회</span><span>800회</span></div></div>
+      <div class="sl"><div class="top"><span>두 코일 사이 거리</span><b id="dV"></b></div>
+        <input type="range" id="dS" min="0" max="10" step="0.5" value="0"><div class="range"><span>0 cm (붙임)</span><span>10 cm</span></div></div>
+      <div class="sl" style="display:flex;align-items:center"><label class="chk"><input type="checkbox" id="coreC" checked> 두 코일을 잇는 철심 넣기</label></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const INK = '#1d2330', GRAY = '#9aa3b2', WIRE = '#3a4252', CN = '#d64541', CS = '#2f6fdf', CPHI = '#8e44ad', CEMF = '#e0782f';
+  const simC = $('sim'), ctx = simC.getContext('2d'), gC = $('graph'), gctx = gC.getContext('2d');
+
+  let mode = 'coil', W, H, GW, GH, t = 0, buf = [];
+  const WINDOW = 6;
+
+  // ================= 자석과 코일 =================
+  const LM = 6, AM = 1.4, LC = 6, RC = 2.4;    // 자석 길이·반지름, 코일 길이·반지름 (cm)
+  let mx = -9, mDir = 1, auto = false, autoPh = 0, dragging = false;
+  let phiPrev = null, emf = 0;
+  // 막대자석(균일하게 자화된 원기둥) 축 위의 자기장, 거리 z(cm) 에서. 자석 끝면에서 약 0.1 T가 되도록
+  function Baxis(z){
+    const a = (z + LM / 2) / Math.hypot(z + LM / 2, AM), b = (z - LM / 2) / Math.hypot(z - LM / 2, AM);
+    return 0.1 * (a - b);
+  }
+  // 코일 한 번 감은 것을 지나는 평균 자기 선속 (Wb). 코일 길이를 따라 평균
+  function phi1(x){
+    let s = 0; const n = 12, A = Math.PI * (RC * 0.01) ** 2, k = +$('bS').value;
+    for (let i = 0; i < n; i++){ const zc = -LC / 2 + LC * (i + 0.5) / n; s += Baxis(zc - x); }
+    return mDir * k * s / n * A * 0.8;   // 0.8: 코일 단면 전체의 평균은 축 위보다 조금 작다
+  }
+
+  // ================= 변압기·무선 충전 =================
+  const F_AC = 1;   // 화면에서 보이도록 1 Hz로 느리게
+  const V1 = 10;
+  function coupling(){ const d = +$('dS').value, core = $('coreC').checked; return (core ? 0.98 : 0.55) / (1 + Math.pow(d / (core ? 6 : 2.5), 2)); }
+
+  // ================= 자기 브레이크 =================
+  let bth = 0.9, bom = 0, bDrag = false, eddy = 0;
+  const BL = 1.0;   // 진자 길이 (m)
+
+  // ---------- 크기 ----------
+  function fit(c, x){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; x.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(simC, ctx); [GW, GH] = fit(gC, gctx); }
+  window.addEventListener('resize', resize);
+
+  function txt(s, x, y, color, align, size, bold){ ctx.fillStyle = color || '#5b6475'; ctx.font = (bold ? 'bold ' : '') + (size || 12) + 'px ' + FONT;
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); }
+  function line(pts, color, lw){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); }
+  function arrowHead(x, y, ux, uy, color, s){ s = s || 7; ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x + ux * s, y + uy * s);
+    ctx.lineTo(x - ux * s * 0.6 - uy * s * 0.7, y - uy * s * 0.6 + ux * s * 0.7); ctx.lineTo(x - ux * s * 0.6 + uy * s * 0.7, y - uy * s * 0.6 - ux * s * 0.7); ctx.closePath(); ctx.fill(); }
+
+  // 솔레노이드: 축이 가로. 앞쪽 호는 검정, 뒤쪽 호는 회색, 양끝은 가장 바깥(아래)에서 곧게 아래로
+  function solenoid(cx, cy, len, rad, turns, leadLen, between){
+    const pitch = len / turns, e = pitch * 0.42, x0 = cx - len / 2, N = turns * 40;
+    const P = k => { const tt = Math.PI + 2 * Math.PI * turns * k / N; return [x0 + pitch * (tt - Math.PI) / (2 * Math.PI) + e * Math.sin(tt), cy - rad * Math.cos(tt), Math.sin(tt)]; };
+    ctx.lineWidth = 2;
+    for (const front of [false, true]){
+      ctx.strokeStyle = front ? INK : GRAY; ctx.beginPath(); let pen = false;
+      for (let k = 0; k <= N; k++){ const [x, y, z] = P(k); if ((z >= 0) === front){ pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; } else pen = false; }
+      ctx.stroke();
+      if (!front && between) between();
+    }
+    const [lx, ly] = P(0), [rx, ry] = P(N);
+    line([[lx, ly], [lx, ly + leadLen]], INK); line([[rx, ry], [rx, ry + leadLen]], GRAY);
+    return { lx, rx, by: ly + leadLen };
+  }
+  function magnet(x, y, len, h, dir, label){
+    const nLeft = dir < 0;
+    ctx.fillStyle = nLeft ? CN : CS; ctx.fillRect(x - len / 2, y - h / 2, len / 2, h);
+    ctx.fillStyle = nLeft ? CS : CN; ctx.fillRect(x, y - h / 2, len / 2, h);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.strokeRect(x - len / 2, y - h / 2, len, h);
+    txt(nLeft ? 'N' : 'S', x - len / 4, y, '#fff', 'center', 14, true); txt(nLeft ? 'S' : 'N', x + len / 4, y, '#fff', 'center', 14, true);
+    if (label) txt(label, x, y - h / 2 - 10, '#5b6475');
+  }
+  function meter(cx, cy, r, val, label){   // 검류계: val -1..1
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = GRAY; ctx.lineWidth = 1;
+    for (let i = -4; i <= 4; i++){ const a = -Math.PI / 2 + i * 0.25; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.75, cy + Math.sin(a) * r * 0.75); ctx.lineTo(cx + Math.cos(a) * r * 0.88, cy + Math.sin(a) * r * 0.88); ctx.stroke(); }
+    const a = -Math.PI / 2 + Math.max(-1, Math.min(1, val)) * 1.0;
+    ctx.strokeStyle = CN; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, cy + r * 0.25); ctx.lineTo(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.82); ctx.stroke();
+    txt(label || 'G', cx, cy + r * 0.5, INK, 'center', 11, true);
+  }
+
+  function drawCoil(){
+    const ppc = Math.min(W / 27, H / 13), X = x => W / 2 + x * ppc, cy = H * 0.36;
+    // 코일
+    const turns = Math.round(4 + +$('nS').value / 50);
+    const s = solenoid(X(0), cy, LC * ppc, RC * ppc, Math.min(10, turns), H * 0.36, () => magnet(X(mx), cy, LM * ppc, AM * 2 * ppc, mDir));
+    // 검류계와 도선
+    const gy = s.by + 6, gx = W / 2;
+    line([[s.lx, s.by], [s.lx, gy], [gx - 22, gy]]); line([[s.rx, s.by], [s.rx, gy], [gx + 22, gy]]);
+    meter(gx, gy - 4, 22, emf / 0.25);
+    // 유도 전류 방향과 코일의 자극
+    const I = emf;   // I > 0: 코일이 +x 방향 자기장을 만든다
+    if (Math.abs(I) > 0.004){
+      const al = Math.min(1, Math.abs(I) / 0.05);
+      ctx.globalAlpha = 0.35 + 0.65 * al;
+      const ax = X(0.6), ay = cy, down = I > 0;
+      ctx.strokeStyle = CEMF; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ax, ay - (down ? 14 : -14)); ctx.lineTo(ax, ay + (down ? 10 : -10)); ctx.stroke();
+      arrowHead(ax, ay + (down ? 14 : -14), 0, down ? 1 : -1, CEMF, 8);
+      { const lab = '유도 전류 ' + (down ? '(앞쪽 도선에서 아래로)' : '(앞쪽 도선에서 위로)'); ctx.font = 'bold 12px ' + FONT; const tw = ctx.measureText(lab).width;
+        ctx.fillStyle = '#fff'; ctx.fillRect(X(0) - tw / 2 - 4, cy + RC * ppc + 8, tw + 8, 17); txt(lab, X(0), cy + RC * ppc + 16, CEMF, 'center', 12, true); }
+      txt(I > 0 ? 'S' : 'N', X(-LC / 2) - 8, cy - RC * ppc - 10, I > 0 ? CS : CN, 'center', 15, true);
+      txt(I > 0 ? 'N' : 'S', X(LC / 2) + 8, cy - RC * ppc - 10, I > 0 ? CN : CS, 'center', 15, true);
+      ctx.globalAlpha = 1;
+    }
+    if (!auto && Math.abs(emf) < 0.002 && !dragging) txt('← 자석을 끌어 코일에 넣었다 빼 보세요 →', W / 2, 14, CS, 'center', 13, true);
+  }
+
+  function drawTF(){
+    const ppc = Math.min(W / 32, H / 14), cy = H * 0.38, d = +$('dS').value, L1 = 7, R = 2.4;
+    const x1 = W / 2 - (L1 / 2 + d / 2) * ppc, x2 = W / 2 + (L1 / 2 + d / 2) * ppc;
+    const ph = 2 * Math.PI * F_AC * t, k = coupling(), N1 = +$('n1S').value, N2 = +$('n2S').value;
+    const v1 = V1 * Math.sin(ph), v2 = V1 * N2 / N1 * k * Math.sin(ph);
+    // 철심
+    if ($('coreC').checked){ ctx.fillStyle = '#c9ced8'; ctx.fillRect(x1 - L1 / 2 * ppc - 6, cy - 7, (x2 - x1) + L1 * ppc + 12, 14); }
+    // 자기장 (1차 코일이 만드는 자기력선)
+    const strength = Math.sin(ph);
+    if (Math.abs(strength) > 0.05){
+      ctx.globalAlpha = Math.abs(strength) * 0.8; ctx.strokeStyle = CPHI; ctx.lineWidth = 1.4;
+      const reach = $('coreC').checked ? (x2 - x1) / 2 + L1 * ppc * 0.6 : L1 * ppc * 0.9;
+      [0.5, 0.8].forEach(f => { ctx.beginPath(); ctx.ellipse($('coreC').checked ? W / 2 : x1, cy, reach * (0.7 + f * 0.5), R * ppc * (1.3 + f * 1.4), 0, 0, 7); ctx.stroke(); });
+      arrowHead($('coreC').checked ? W / 2 : x1, cy, strength > 0 ? 1 : -1, 0, CPHI, 8);
+      ctx.globalAlpha = 1;
+    }
+    const n1 = Math.max(5, Math.min(10, Math.round(N1 / 40))), n2 = Math.max(5, Math.min(12, Math.round(N2 / 60)));
+    const s1 = solenoid(x1, cy, L1 * ppc * 0.86, R * ppc, n1, H * 0.3), s2 = solenoid(x2, cy, L1 * ppc * 0.86, R * ppc, n2, H * 0.3);
+    // 교류 전원
+    const by = s1.by + 4, sx = (s1.lx + s1.rx) / 2;
+    line([[s1.lx, s1.by], [s1.lx, by], [sx - 16, by]]); line([[s1.rx, s1.by], [s1.rx, by], [sx + 16, by]]);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, by, 16, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); for (let i = 0; i <= 20; i++){ const xx = sx - 9 + 18 * i / 20, yy = by - 5 * Math.sin(Math.PI * 2 * i / 20); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
+    txt('교류 전원', sx, by + 26, '#5b6475');
+    // 전구
+    const bx = (s2.lx + s2.rx) / 2, rms = Math.abs(V1 * N2 / N1 * k) / Math.SQRT2, glow = Math.min(1, rms / 12);
+    line([[s2.lx, s2.by], [s2.lx, by], [bx - 14, by]]); line([[s2.rx, s2.by], [s2.rx, by], [bx + 14, by]]);
+    if (glow > 0.03){ const gr = ctx.createRadialGradient(bx, by, 2, bx, by, 44); gr.addColorStop(0, 'rgba(255,200,40,' + 0.85 * glow + ')'); gr.addColorStop(1, 'rgba(255,200,40,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(bx, by, 44, 0, 7); ctx.fill(); }
+    ctx.fillStyle = glow > 0.03 ? 'rgba(255,225,110,' + (0.35 + 0.65 * glow) + ')' : '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(bx, by, 14, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(bx - 10, by + 10); ctx.lineTo(bx + 10, by - 10); ctx.moveTo(bx - 10, by - 10); ctx.lineTo(bx + 10, by + 10); ctx.stroke();
+    txt('전구', bx, by + 26, '#5b6475');
+    txt('1차 코일', x1, cy - R * ppc - 16, INK, 'center', 12, true); txt('2차 코일', x2, cy - R * ppc - 16, INK, 'center', 12, true);
+    return { v1, v2, k };
+  }
+
+  function drawBrake(){
+    const pivX = W / 2, pivY = 18, Lp = Math.min(H - 90, W * 0.6), bx = pivX + Lp * Math.sin(bth), by = pivY + Lp * Math.cos(bth);
+    const plateY = pivY + Lp + 26, b0 = +$('plateS').value;
+    // 판
+    if (b0 > 0){
+      const pw = Math.min(W * 0.8, 320);
+      ctx.fillStyle = b0 < 0.05 ? '#f1e6c8' : '#cfd5de'; ctx.fillRect(pivX - pw / 2, plateY, pw, 14);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(pivX - pw / 2, plateY, pw, 14);
+      if (b0 > 0.05 && b0 < 2){ ctx.fillStyle = '#fff'; for (let i = -6; i <= 6; i++) ctx.fillRect(pivX + i * pw / 14 - 2, plateY, 4, 10); }
+      txt($('plateS').selectedOptions[0].text, pivX, plateY + 26, '#5b6475');
+      // 맴돌이 전류
+      if (eddy > 0.02){
+        ctx.globalAlpha = Math.min(1, eddy); ctx.strokeStyle = CEMF; ctx.lineWidth = 2;
+        [-1, 1].forEach(sd => { const ex = bx + sd * 16; ctx.beginPath(); ctx.ellipse(ex, plateY + 7, 14, 5, 0, 0, 7); ctx.stroke(); arrowHead(ex, plateY + 2, sd * (bom > 0 ? 1 : -1), 0, CEMF, 6); });
+        txt('맴돌이 전류', bx + 38, plateY - 12, CEMF, 'left', 12, true); ctx.globalAlpha = 1;
+      }
+    } else txt('판 없음', pivX, plateY + 10, '#9aa3b2');
+    // 진자
+    ctx.fillStyle = '#e6e9ef'; ctx.fillRect(pivX - 40, pivY - 10, 80, 10); line([[pivX - 40, pivY], [pivX + 40, pivY]], INK, 1.5);
+    line([[pivX, pivY], [bx, by]], INK, 1.5);
+    ctx.save(); ctx.translate(bx, by); ctx.rotate(-bth);
+    ctx.fillStyle = CS; ctx.fillRect(-11, 0, 22, 14); ctx.fillStyle = CN; ctx.fillRect(-11, 14, 22, 14); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(-11, 0, 22, 28);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('S', 0, 7); ctx.fillText('N', 0, 21);
+    ctx.restore();
+    if (Math.abs(bom) < 0.01 && Math.abs(bth) < 0.01 && !bDrag) txt('자석을 끌어 옆으로 당겼다 놓으세요', W / 2, H - 10, CS, 'center', 13, true);
+  }
+
+  // ---------- 그래프 ----------
+  function drawGraph(panels){
+    gctx.clearRect(0, 0, GW, GH);
+    const ph = GH / panels.length, L = 52, R = 34, pw = GW - L - R, t1 = Math.max(t, WINDOW), t0 = t1 - WINDOW;
+    panels.forEach((p, k) => {
+      const top = k * ph + 20, h = ph - 42;
+      let mx = p.min; for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+      const Y = [1, 2, 5].flatMap(a => [a, a * 10, a * 100, a * 0.1, a * 0.01]).sort((a, b) => a - b).find(v => v >= mx * 1.05) || mx;
+      const yy = v => top + h / 2 - v / Y * h / 2;
+      gctx.font = 'bold 12px ' + FONT; gctx.textAlign = 'left'; gctx.textBaseline = 'bottom';
+      let lx = L; p.keys.forEach((key, i) => { gctx.fillStyle = p.colors[i]; gctx.fillText(p.names[i], lx, top - 3); lx += gctx.measureText(p.names[i]).width + 14; });
+      gctx.strokeStyle = '#d9dde4'; gctx.lineWidth = 1; gctx.strokeRect(L, top, pw, h);
+      gctx.strokeStyle = GRAY; gctx.beginPath(); gctx.moveTo(L, yy(0)); gctx.lineTo(L + pw, yy(0)); gctx.stroke();
+      gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'right'; gctx.textBaseline = 'middle';
+      gctx.fillText(String(+Y.toPrecision(2)), L - 4, top + 4); gctx.fillText('0', L - 4, yy(0)); gctx.fillText('−' + (+Y.toPrecision(2)), L - 4, top + h - 4);
+      gctx.textAlign = 'center'; gctx.textBaseline = 'top';
+      for (let s = Math.ceil(t0); s <= t1 + 1e-9; s++) gctx.fillText(String(s), L + (s - t0) / WINDOW * pw, top + h + 3);
+      gctx.textAlign = 'right'; gctx.textBaseline = 'middle'; gctx.fillText('t (s)', GW - 2, top + h / 2);
+      gctx.save(); gctx.beginPath(); gctx.rect(L, top, pw, h); gctx.clip();
+      p.keys.forEach((key, i) => { gctx.strokeStyle = p.colors[i]; gctx.lineWidth = 2.2; gctx.beginPath(); let st = false;
+        for (const b of buf){ if (b.t < t0) continue; const X = L + (b.t - t0) / WINDOW * pw, Yp = yy(b[key]); st ? gctx.lineTo(X, Yp) : (gctx.moveTo(X, Yp), st = true); }
+        gctx.stroke(); });
+      gctx.restore();
+    });
+  }
+
+  function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+  const sg = (v, d) => { const s = v.toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+
+  // ---------- 끌기 ----------
+  function local(e){ const r = simC.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  simC.addEventListener('pointerdown', e => {
+    const [x, y] = local(e);
+    if (mode === 'coil'){ const ppc = Math.min(W / 27, H / 13);
+      if (Math.abs(x - (W / 2 + mx * ppc)) < LM * ppc / 2 + 20 && Math.abs(y - H * 0.36) < 40){ dragging = true; auto = false; $('autoB').classList.remove('on'); grab = x - (W / 2 + mx * ppc); } }
+    if (mode === 'brake'){ bDrag = true; }
+    if (dragging || bDrag){ simC.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  let grab = 0;
+  simC.addEventListener('pointermove', e => {
+    const [x, y] = local(e);
+    if (dragging){ const ppc = Math.min(W / 27, H / 13); mx = Math.max(-13, Math.min(13, (x - grab - W / 2) / ppc)); }
+    if (bDrag){ const a = Math.atan2(x - W / 2, y - 18); bth = Math.max(-1.2, Math.min(1.2, a)); bom = 0; }
+  });
+  const up = () => { dragging = false; bDrag = false; };
+  simC.addEventListener('pointerup', up); simC.addEventListener('pointercancel', up);
+
+  // ---------- 조작 ----------
+  const TEXT = {
+    coil: ['자석을 코일에 넣거나 뺄 때 코일을 지나는 자기 선속이 변하면서 유도 전류가 흐릅니다. 자석을 빠르게 움직일수록, 코일을 많이 감을수록 유도 기전력이 큽니다.',
+      '유도 기전력 V = −N ΔΦ/Δt (패러데이 법칙). 유도 전류는 자기 선속의 변화를 방해하는 방향으로 흐르며(렌츠 법칙), 코일 양 끝의 N, S는 유도 전류가 만드는 자기장의 극입니다. 검류계 바늘은 유도 전류의 방향과 세기를 나타냅니다.'],
+    tf: ['1차 코일에 교류가 흐르면 변하는 자기장이 2차 코일을 지나면서 2차 코일에 유도 전류가 흐릅니다. 철심을 넣으면 변압기, 철심 없이 떨어뜨리면 무선 충전과 같은 원리입니다.',
+      '이상적인 변압기에서는 V₂/V₁ = N₂/N₁입니다. 철심이 없거나 두 코일이 멀어지면 1차 코일의 자기 선속 중 일부만 2차 코일을 지나므로 2차 전압이 작아집니다. 무선 충전기에 휴대폰을 정확히 올려야 하는 까닭입니다. (화면에서 보이도록 교류의 진동수를 1 Hz로 느리게 나타냈습니다.)'],
+    brake: ['자석이 금속판 위를 지나가면 판에 맴돌이 전류가 생기고, 이 전류가 자석의 운동을 방해하는 힘을 만들어 자석이 빨리 멈춥니다.',
+      '맴돌이 전류는 자석의 운동을 방해하는 방향으로 흐릅니다(렌츠 법칙). 플라스틱처럼 전류가 흐르지 않는 판에서는 브레이크 효과가 없고, 홈을 판 금속판은 맴돌이 전류가 작게 흘러 효과가 줄어듭니다. 고속 열차와 놀이기구의 자기 브레이크에 쓰입니다.'] };
+  function setMode(m){
+    mode = m; t = 0; buf = [];
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    ['coil', 'tf', 'brake'].forEach(k => document.querySelectorAll('.m-' + k).forEach(e => e.classList.toggle('hide', k !== m)));
+    $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1];
+    if (m === 'brake'){ bth = 0.9; bom = 0; }
+    phiPrev = null;
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  $('autoB').addEventListener('click', () => { auto = !auto; $('autoB').classList.toggle('on', auto); if (auto) autoPh = Math.asin(Math.max(-1, Math.min(1, mx / 11))); });
+  $('flipB').addEventListener('click', () => { mDir = -mDir; phiPrev = null; });
+  function labels(){ $('nV').textContent = $('nS').value + '회'; $('bV').textContent = $('bS').value + '배'; $('tV').textContent = $('tS').value + ' s';
+    $('n1V').textContent = $('n1S').value + '회'; $('n2V').textContent = $('n2S').value + '회'; $('dV').textContent = $('dS').value + ' cm'; }
+  document.querySelectorAll('input[type=range]').forEach(r => r.addEventListener('input', labels));
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; t += dt;
+    ctx.clearRect(0, 0, W, H);
+    if (mode === 'coil'){
+      if (auto){ autoPh += 2 * Math.PI * dt / +$('tS').value; mx = 11 * Math.sin(autoPh); }
+      const N = +$('nS').value, p = phi1(mx);
+      const raw = phiPrev === null ? 0 : -N * (p - phiPrev) / dt;
+      emf += (raw - emf) * Math.min(1, dt * 25); phiPrev = p;
+      drawCoil();
+      buf.push({ t, phi: p * 1e4, emf: emf * 1000 });
+      drawGraph([{ keys:['phi'], names:['코일 한 번 감은 것을 지나는 자기 선속 Φ (×10⁻⁴ Wb)'], colors:[CPHI], min:0.2 }, { keys:['emf'], names:['유도 기전력 (mV)'], colors:[CEMF], min:5 }]);
+      setStats([['자기 선속 Φ', sg(p * 1e4, 2) + ' ×10⁻⁴ Wb', CPHI], ['유도 기전력', sg(emf * 1000, 0) + ' mV', CEMF], ['감은 수', N + '회']]);
+    } else if (mode === 'tf'){
+      const r = drawTF(), N1 = +$('n1S').value, N2 = +$('n2S').value;
+      buf.push({ t, v1: r.v1, v2: r.v2 });
+      drawGraph([{ keys:['v1', 'v2'], names:['1차 전압 (V)', '2차 전압 (V)'], colors:[CS, CEMF], min:2 }]);
+      setStats([['1차 전압 (최댓값)', V1.toFixed(1) + ' V', CS], ['2차 전압 (최댓값)', (V1 * N2 / N1 * r.k).toFixed(1) + ' V', CEMF],
+        ['이상적인 경우 V₁ × N₂/N₁', (V1 * N2 / N1).toFixed(1) + ' V'], ['자기 선속이 전달되는 비율', Math.round(r.k * 100) + '%']]);
+    } else {
+      const b0 = +$('plateS').value;
+      if (!bDrag){
+        const n = 10; for (let i = 0; i < n; i++){ const h = dt / n, damp = b0 * Math.exp(-((bth / 0.35) ** 2));
+          const a = -(9.8 / BL) * Math.sin(bth) - damp * bom; bom += a * h; bth += bom * h; }
+      }
+      eddy = b0 > 0.05 ? Math.min(1, Math.abs(bom) * Math.exp(-((bth / 0.35) ** 2)) * b0 / 2) : 0;
+      drawBrake();
+      buf.push({ t, th: bth * 180 / Math.PI });
+      drawGraph([{ keys:['th'], names:['진자의 각도 (°)'], colors:[CS], min:10 }]);
+      setStats([['진자의 각도', sg(bth * 180 / Math.PI, 0) + '°', CS], ['판', $('plateS').selectedOptions[0].text]]);
+    }
+    while (buf.length && buf[0].t < t - WINDOW - 0.5) buf.shift();
+    requestAnimationFrame(frame);
+  }
+  labels(); resize(); setMode('coil'); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

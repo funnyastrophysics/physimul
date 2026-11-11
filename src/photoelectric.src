@@ -1,0 +1,70 @@
+광전 효과
+  <h1>광전 효과</h1>
+  <p class="hint">금속판에 빛을 비추어 전자가 튀어나오는지 관찰하세요. 빛의 파장(진동수)과 세기를 바꾸고, 금속의 종류를 바꾸어 보세요.</p>
+  <div class="card">
+    <canvas id="sim" style="height:250px;background:#fbfcfd;border-radius:8px"></canvas>
+    <div class="row"><select id="metS"></select></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>빛의 파장 λ</span><b id="lV"></b></div>
+        <input type="range" id="lS" min="150" max="700" step="5" value="400"><div class="range"><span>150 nm (자외선)</span><span>700 nm (빨강)</span></div></div>
+      <div class="sl"><div class="top"><span>빛의 세기</span><b id="iV"></b></div>
+        <input type="range" id="iS" min="0" max="100" step="5" value="50"><div class="range"><span>0</span><span>100 %</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="gr" style="height:230px"></canvas>
+    <p class="note">빛의 진동수가 금속의 문턱 진동수 f₀보다 작으면 빛을 아무리 세게 비추어도 전자가 튀어나오지 않고, f₀보다 크면 빛이 약해도 즉시 튀어나옵니다. 튀어나온 전자의 최대 운동 에너지는 E<sub>k</sub> = hf − W로 진동수에 따라 달라지고 빛의 세기와는 관계없으며, 빛의 세기는 튀어나오는 전자의 수(광전류)를 결정합니다. 이는 빛이 에너지 hf를 가진 입자(광자)처럼 행동한다는 증거입니다. 그래프의 기울기는 플랑크 상수 h이고, 가로축 절편은 문턱 진동수입니다. 광전 효과는 디지털카메라의 이미지 센서, 태양 전지 등에 이용됩니다.</p>
+  </div>
+---SCRIPT---
+const HC = 1240, H_ = 4.136e-15;   // eV·nm, eV·s
+const METALS = [['세슘', 2.14], ['칼륨', 2.30], ['나트륨', 2.36], ['칼슘', 2.87], ['아연', 4.33]];
+$('metS').innerHTML = METALS.map((m, i) => `<option value="${i}" ${i === 2 ? 'selected' : ''}>${m[0]} (일함수 ${m[1]} eV)</option>`).join('');
+const S = $('sim'), G = $('gr'); let s, g; const rs = () => { s = fitCanvas(S); g = fitCanvas(G); }; window.addEventListener('resize', rs); rs();
+const band = l => l < 380 ? '자외선' : l < 450 ? '보라' : l < 495 ? '파랑' : l < 570 ? '초록' : l < 590 ? '노랑' : l < 620 ? '주황' : '빨강';
+bindLabels({ lS: ['lV', v => v + ' nm (' + band(v) + ')'], iS: ['iV', v => v + ' %'] });
+let els = [], acc = 0, cnt = [], tt = 0;
+function draw(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); tt += dt;
+  const lam = +$('lS').value, I = +$('iS').value / 100, Wf = METALS[+$('metS').value][1], E = HC / lam, Ek = E - Wf, on = Ek > 0;
+  const cx = W * 0.3, ax = W * 0.8, top = H * 0.2, bot = H * 0.78;
+  // 진공관
+  ctx.strokeStyle = '#b8c0cc'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W * 0.18, H * 0.1, W * 0.72, H * 0.78, 40) : ctx.rect(W * 0.18, H * 0.1, W * 0.72, H * 0.78); ctx.stroke();
+  T(ctx, '진공', W * 0.55, H * 0.1 + 14, { color: SUB, size: 11 });
+  // 빛
+  const col = lam < 380 ? [0.55, 0.35, 0.85] : lamRGB(lam);
+  const lx = 22, ly = 22; ctx.fillStyle = '#4a5260'; ctx.beginPath(); ctx.arc(lx, ly, 13, 0, 7); ctx.fill(); ctx.fillStyle = rgbCss(col, 1, 0.5 + 0.5 * I); ctx.beginPath(); ctx.arc(lx, ly, 8, 0, 7); ctx.fill();
+  if (I > 0){ ctx.fillStyle = rgbCss(col, 1, 0.1 + 0.4 * I); ctx.beginPath(); ctx.moveTo(lx + 6, ly - 6); ctx.lineTo(cx - 8, top + 10); ctx.lineTo(cx - 8, bot - 10); ctx.lineTo(lx - 6, ly + 6); ctx.closePath(); ctx.fill();
+    const n = 2 + Math.round(6 * I); for (let k = 0; k < n; k++){ const u = (tt * 0.7 + k / n) % 1, v = ((k * 0.618) % 1), tx = cx - 8, ty = top + 10 + (bot - top - 20) * v, x = lx + (tx - lx) * u, y = ly + (ty - ly) * u;
+      ctx.fillStyle = rgbCss(col, 1.1, 0.95); ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill(); } }
+  T(ctx, lam < 380 ? '자외선 (보이지 않음)' : '광자', 8, H - 8, { align: 'left', color: lam < 380 ? PURPLE : SUB, size: 11, bold: true });
+  // 금속판과 양극
+  ctx.fillStyle = '#9aa3b2'; ctx.fillRect(cx - 8, top, 8, bot - top); T(ctx, METALS[+$('metS').value][0], cx - 4, bot + 14, { size: 11, bold: true });
+  ctx.fillStyle = '#c9a227'; ctx.fillRect(ax, top, 6, bot - top); T(ctx, '양극', ax + 3, bot + 14, { size: 11, bold: true });
+  // 회로·전류계
+  const cur = on ? I : 0, mx = (cx + ax) / 2, my = H - 14;
+  line(ctx, [[cx - 4, bot], [cx - 4, my], [mx - 16, my]], WIRE, 1.6); line(ctx, [[mx + 16, my], [ax + 3, my], [ax + 3, bot]], WIRE, 1.6);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(mx, my, 12, 0, 7); ctx.fill(); ctx.stroke(); T(ctx, 'A', mx, my, { bold: true, size: 12 });
+  // 광전자 생성
+  if (on){ acc += dt * 26 * I; while (acc >= 1){ acc -= 1; els.push({ x: cx + 2, y: top + 8 + Math.random() * (bot - top - 16), v: (0.35 + 0.65 * Math.random()) * Math.sqrt(Ek) }); } }
+  const sp = (ax - cx) * 0.55;
+  els.forEach(e => { e.x += e.v * sp * dt; }); els = els.filter(e => e.x < ax);
+  ctx.fillStyle = BLUE; els.forEach(e => { ctx.beginPath(); ctx.arc(e.x, e.y, 3.2, 0, 7); ctx.fill(); });
+  if (!on && I > 0) T(ctx, '전자가 튀어나오지 않음', mx + 6, H * 0.5, { color: RED, bold: true, size: 12 });
+  const f = 3e8 / (lam * 1e-9), f0 = Wf / H_;
+  setStats([['광자 1개의 에너지 hf', E.toFixed(2) + ' eV'], ['일함수 W', Wf.toFixed(2) + ' eV'], ['광전자 최대 운동 에너지', on ? Ek.toFixed(2) + ' eV' : '없음', on ? ORANGE : RED], ['광전류', on && I > 0 ? (I * 100).toFixed(0) + ' (상대값)' : '0', GREEN], ['진동수 f', (f / 1e14).toFixed(2) + '×10¹⁴ Hz'], ['문턱 진동수 f₀', (f0 / 1e14).toFixed(2) + '×10¹⁴ Hz']]);
+  drawGraph(f / 1e14, on ? Ek : 0, +$('metS').value);
+}
+function drawGraph(fx, ek, mi){
+  const { ctx, W, H } = g; ctx.clearRect(0, 0, W, H);
+  const a = axes(ctx, W, H, { x0: 0, x1: 20, y0: 0, y1: 4, xt: [0, 5, 10, 15, 20], yt: [0, 1, 2, 3, 4], xl: '빛의 진동수 (×10¹⁴ Hz)', yl: '최대 운동 에너지 (eV)', L: 40 });
+  METALS.forEach((m, i) => { const f0 = m[1] / H_ / 1e14, fEnd = Math.min(20, (4 + m[1]) / H_ / 1e14); line(ctx, [[a.X(f0), a.Y(0)], [a.X(fEnd), a.Y((fEnd * 1e14 * H_) - m[1])]], i === mi ? ORANGE : '#c9ced8', i === mi ? 2.5 : 1.2);
+    T(ctx, m[0], a.X(f0), a.Y(0) - 8 - (i % 2) * 12, { size: 10, color: i === mi ? ORANGE : SUB, bold: i === mi }); });
+  ctx.fillStyle = ek > 0 ? ORANGE : RED; ctx.beginPath(); ctx.arc(a.X(Math.min(20, fx)), a.Y(Math.min(4, ek)), 5.5, 0, 7); ctx.fill();
+  // 가시광선 영역 표시
+  const v0 = 3e8 / 700e-9 / 1e14, v1 = 3e8 / 380e-9 / 1e14; ctx.fillStyle = 'rgba(255,200,80,0.12)'; ctx.fillRect(a.X(v0), a.top, a.X(v1) - a.X(v0), a.h); T(ctx, '가시광선', (a.X(v0) + a.X(v1)) / 2, a.top + 10, { size: 10, color: SUB });
+}
+$('metS').addEventListener('change', () => { els = []; });
+loop(draw);

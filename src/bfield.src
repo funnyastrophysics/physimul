@@ -1,0 +1,98 @@
+전류에 의한 자기장
+  <h1>전류에 의한 자기장</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="wire">직선 도선</button>
+      <button data-m="loop">원형 도선</button>
+      <button data-m="sol">솔레노이드</button>
+    </div>
+    <canvas id="sim" style="height:340px;background:#fbfcfd;border-radius:8px"></canvas>
+    <div class="row">
+      <button class="b" id="dirB">전류 방향 바꾸기</button>
+      <label class="chk"><input type="checkbox" id="cLines" checked> 자기력선</label>
+      <label class="chk"><input type="checkbox" id="cComp" checked> 나침반</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>전류의 세기 I</span><b id="iV"></b></div>
+        <input type="range" id="iS" min="1" max="10" step="0.5" value="5"><div class="range"><span>1 A</span><span>10 A</span></div></div>
+      <div class="sl m-sol"><div class="top"><span>1 m당 감은 수 n</span><b id="nV"></b></div>
+        <input type="range" id="nS" min="200" max="2000" step="100" value="1000"><div class="range"><span>200회</span><span>2000회</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const MU = 4 * Math.PI * 1e-7, S = $('sim'); let s; const rs = () => { s = fitCanvas(S); cache = null; }; window.addEventListener('resize', rs);
+let mode, dir = 1, probe = { x: 0.06, y: 0.0 }, cache = null;
+bindLabels({ iS: ['iV', v => v.toFixed(1) + ' A'], nS: ['nV', v => v + '회'] });
+// 단면도: 종이면에 수직인 직선 전류들 {x, y (m), I (+: 나오는 방향 ⊙)}
+function wires(){
+  const I = +$('iS').value * dir;
+  if (mode === 'wire') return [{ x: 0, y: 0, I }];
+  if (mode === 'loop') return [{ x: 0, y: 0.05, I }, { x: 0, y: -0.05, I: -I }];
+  const n = 12, L = 0.16, arr = [], Ie = I * +$('nS').value * L / n;   // 그림의 도선 하나가 여러 번 감은 도선을 나타냄
+  for (let i = 0; i < n; i++){ const x = -L / 2 + L * (i + 0.5) / n; arr.push({ x, y: 0.04, I: Ie }); arr.push({ x, y: -0.04, I: -Ie }); } return arr;
+}
+function B(x, y){ let bx = 0, by = 0; for (const w of wires()){ const dx = x - w.x, dy = y - w.y, r2 = dx * dx + dy * dy + 1e-6, k = MU * w.I / (2 * Math.PI * r2); bx += -k * dy; by += k * dx; } return [bx, by]; }
+const span = () => 0.26;   // 화면의 짧은 변이 0.26 m
+function view(){ const { W, H } = s, k = Math.min(W, H) / span(); return { k, X: x => W / 2 + x * k, Y: y => H / 2 - y * k, iX: px => (px - W / 2) / k, iY: py => (H / 2 - py) / k }; }
+function buildLines(){
+  const v = view(), { W, H } = s, lines = [];
+  const seeds = [];
+  if (mode === 'wire') for (let r = 0.02; r < 0.2; r += 0.025) seeds.push([r, 0]);
+  else if (mode === 'loop') for (let y = -0.04; y <= 0.041; y += 0.013) seeds.push([0, y]);
+  else for (let y = -0.034; y <= 0.035; y += 0.0085) seeds.push([0, y]);
+  const trace = (sx, sy, sg) => { const pts = []; let x = sx, y = sy;
+    for (let n = 0; n < 2500; n++){ const [bx, by] = B(x, y), m = Math.hypot(bx, by) || 1, h = 0.0012 * sg; const [bx2, by2] = B(x + bx / m * h / 2, y + by / m * h / 2), m2 = Math.hypot(bx2, by2) || 1;
+      x += bx2 / m2 * h; y += by2 / m2 * h; pts.push([v.X(x), v.Y(y)]); if (n > 20 && Math.hypot(x - sx, y - sy) < Math.abs(h) * 1.5) return { pts, closed: true }; if (Math.abs(v.X(x) - W / 2) > W || Math.abs(v.Y(y) - H / 2) > H) break; }
+    return { pts, closed: false }; };
+  for (const [sx, sy] of seeds){
+    const f = trace(sx, sy, 1); if (f.closed){ lines.push(f.pts); continue; }
+    const b = trace(sx, sy, -1); lines.push(b.pts.reverse().concat([[v.X(sx), v.Y(sy)]], f.pts));
+  }
+  cache = { lines, key: mode + dir };
+}
+function draw(){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); const v = view();
+  if (!cache || cache.key !== mode + dir) buildLines();
+  if ($('cLines').checked) cache.lines.forEach(pts => { ctx.strokeStyle = 'rgba(142,68,173,0.75)'; ctx.lineWidth = 1.4; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+    const q = pts[Math.floor(pts.length * 0.25)], q2 = pts[Math.floor(pts.length * 0.25) + 2]; if (q && q2) arrow(ctx, q[0], q[1], q2[0], q2[1], PURPLE, 1.4, 8); });
+  // 솔레노이드·원형 도선 몸체 (단면)
+  if (mode === 'sol'){ const L = 0.16; ctx.fillStyle = 'rgba(201,162,39,0.18)'; ctx.fillRect(v.X(-L / 2), v.Y(0.045), L * v.k, 0.09 * v.k); }
+  if (mode === 'loop'){ ctx.strokeStyle = 'rgba(201,162,39,0.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(v.X(0), v.Y(0), 10, 0.05 * v.k, 0, 0, 7); ctx.stroke(); }
+  for (const w of wires()){ const x = v.X(w.x), y = v.Y(w.y); ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, mode === 'sol' ? 5.5 : 9, 0, 7); ctx.fill(); ctx.stroke();
+    if (w.I > 0){ ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill(); } else { const r = mode === 'sol' ? 3.5 : 6; line(ctx, [[x - r, y - r], [x + r, y + r]], INK, 1.5); line(ctx, [[x - r, y + r], [x + r, y - r]], INK, 1.5); } }
+  // 나침반
+  if ($('cComp').checked){ const sp = 44; for (let py = sp / 2; py < H; py += sp) for (let px = sp / 2; px < W; px += sp){
+    const x = v.iX(px), y = v.iY(py); if (wires().some(w => Math.hypot(w.x - x, w.y - y) < 0.012)) continue;
+    const [bx, by] = B(x, y), a = Math.atan2(-by, bx); compass(ctx, px, py, a, 9); } }
+  // 측정점
+  const [bx, by] = B(probe.x, probe.y), Bm = Math.hypot(bx, by), qx = v.X(probe.x), qy = v.Y(probe.y);
+  ctx.fillStyle = 'rgba(46,158,106,0.15)'; ctx.beginPath(); ctx.arc(qx, qy, 18, 0, 7); ctx.fill(); compass(ctx, qx, qy, Math.atan2(-by, bx), 15);
+  T(ctx, '측정점 (끌기)', qx + 22, qy - 16, { color: GREEN, bold: true, size: 11, align: 'left' });
+  T(ctx, '⊙ 종이면에서 나오는 전류   ⊗ 들어가는 전류', 8, H - 10, { align: 'left', size: 11 });
+  const fB = b => b >= 1e-3 ? (b * 1e3).toFixed(2) + ' mT' : (b * 1e6).toFixed(1) + ' μT';
+  const items = mode === 'loop' ? [['원의 반지름', '5 cm']] : [['측정점의 자기장 세기', fB(Bm), GREEN]];
+  if (mode === 'wire') items.push(['도선까지 거리 r', (Math.hypot(probe.x, probe.y) * 100).toFixed(1) + ' cm'], ['계산값 μ₀I/(2πr)', (MU * +$('iS').value / (2 * Math.PI * Math.hypot(probe.x, probe.y)) * 1e6).toFixed(1) + ' μT']);
+  if (mode === 'sol') items.push(['긴 솔레노이드 내부 μ₀nI', (MU * +$('nS').value * +$('iS').value * 1000).toFixed(2) + ' mT']);
+  if (mode === 'loop') items.push(['원의 중심에서 자기장 μ₀I/(2r)', fB(MU * +$('iS').value / (2 * 0.05)), GREEN]);
+  setStats(items);
+}
+function compass(ctx, x, y, a, r){ ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = RED; ctx.beginPath(); ctx.moveTo(r, 0); ctx.lineTo(0, -r * 0.28); ctx.lineTo(0, r * 0.28); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#c8ccd4'; ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(0, -r * 0.28); ctx.lineTo(0, r * 0.28); ctx.closePath(); ctx.fill(); ctx.restore(); }
+const TEXT = {
+  wire: ['종이면에 수직으로 놓인 직선 도선 주위의 자기장입니다. 나침반 바늘의 빨간 쪽(N극)이 자기장의 방향을 가리킵니다. 측정점을 끌어 거리에 따른 자기장의 세기를 확인하세요.',
+    '직선 도선 주위에는 도선을 중심으로 하는 동심원 모양의 자기장이 생기고, 방향은 오른손 엄지를 전류 방향으로 할 때 나머지 네 손가락이 감아쥐는 방향입니다. 자기장의 세기는 전류에 비례하고 도선으로부터의 거리에 반비례합니다(B = μ₀I/2πr).'],
+  loop: ['원형 도선을 지름 방향으로 자른 단면입니다. 위쪽 도선과 아래쪽 도선의 전류 방향이 반대입니다. 원의 중심에서 자기장의 방향과 세기를 확인하세요.',
+    '원형 도선의 각 부분이 만드는 자기장이 원의 안쪽에서 같은 방향으로 더해지므로, 중심의 자기장은 원형 도선의 면에 수직이고 세기가 큽니다. 원형 도선의 중심에서 자기장의 세기는 전류에 비례하고 반지름에 반비례합니다.'],
+  sol: ['솔레노이드(코일)를 축을 따라 자른 단면입니다. 위쪽 도선과 아래쪽 도선의 전류 방향이 반대입니다. 내부와 외부의 자기력선을 비교하세요.',
+    '솔레노이드 내부에는 축에 나란하고 거의 균일한 자기장이 생기며, 세기는 단위 길이당 감은 수와 전류에 비례합니다(B = μ₀nI). 외부의 자기장은 막대자석의 자기장과 비슷하며, 오른손 네 손가락을 전류 방향으로 감아쥘 때 엄지가 가리키는 쪽이 N극입니다. 전자석, 자기 공명 영상(MRI) 장치에 쓰입니다.'] };
+setupTabs(m => { mode = m; probe = m === 'wire' ? { x: 0.06, y: 0 } : { x: 0, y: 0 }; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('dirB').addEventListener('click', () => { dir = -dir; });
+$('iS').addEventListener('input', () => { cache = null; }); $('nS').addEventListener('input', () => { cache = null; });
+pointer(S, (x, y) => { const v = view(); if (Math.hypot(x - v.X(probe.x), y - v.Y(probe.y)) > 34) return false; }, (x, y) => { const v = view(); probe.x = v.iX(x); probe.y = v.iY(y); });
+loop(draw);

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>등속 원운동</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>등속 원운동</h1>
+  <p class="hint">줄에 매단 공이 수평면에서 원운동을 합니다. 속도의 방향과 줄이 당기는 힘(구심력)의 방향을 비교하고, [줄 끊기]를 눌러 공이 어느 방향으로 날아가는지 확인하세요.</p>
+  <div class="card">
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row">
+      <button class="b primary" id="cutB">줄 끊기</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label class="chk"><input type="checkbox" id="cV" checked> 속도</label>
+      <label class="chk"><input type="checkbox" id="cF" checked> 구심력</label>
+      <label class="chk"><input type="checkbox" id="cTrail" checked> 지나간 자리</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>속력 v</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0.5" max="4" step="0.1" value="2"><div class="range"><span>0.5 m/s</span><span>4 m/s</span></div></div>
+      <div class="sl"><div class="top"><span>반지름 r</span><b id="rV"></b></div>
+        <input type="range" id="rS" min="0.3" max="1.2" step="0.05" value="0.8"><div class="range"><span>0.3 m</span><span>1.2 m</span></div></div>
+      <div class="sl"><div class="top"><span>공의 질량 m</span><b id="mV"></b></div>
+        <input type="range" id="mS" min="0.1" max="1" step="0.05" value="0.2"><div class="range"><span>0.1 kg</span><span>1 kg</span></div></div>
+    </div>
+    <p class="note">물체의 속력이 일정해도 운동 방향이 계속 바뀌므로 가속도가 있습니다. 이 가속도(구심 가속도 v²/r)는 원의 중심을 향하고, 이를 만드는 힘이 구심력(mv²/r)입니다. 힘의 방향이 속도와 수직이면 속력은 그대로이고 방향만 바뀝니다. 줄이 끊기면 구심력이 사라져 공은 그 순간의 속도 방향(접선 방향)으로 등속 직선 운동을 합니다. 화면은 위에서 내려다본 모습입니다.</p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let ang = 0, free = null, trail = [];
+bindLabels({ vS: ['vV', v => v.toFixed(1) + ' m/s'], rS: ['rV', v => v.toFixed(2) + ' m'], mS: ['mV', v => v.toFixed(2) + ' kg'] });
+function reset(){ free = null; trail = []; }
+$('cutB').addEventListener('click', () => { if (free) return; const v = +$('vS').value, r = +$('rS').value;
+  free = { x: r * Math.cos(ang), y: r * Math.sin(ang), vx: -v * Math.sin(ang), vy: v * Math.cos(ang) }; });
+$('resetB').addEventListener('click', reset);
+['vS', 'rS'].forEach(id => $(id).addEventListener('input', () => { trail = []; }));
+loop(dt => {
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const v = +$('vS').value, r = +$('rS').value, m = +$('mS').value, w = v / r, k = Math.min(W, H) / 3.2, cx = W / 2, cy = H / 2;
+  const X = x => cx + x * k, Y = y => cy - y * k;
+  let bx, by, vx, vy;
+  if (!free){ ang += w * dt; bx = r * Math.cos(ang); by = r * Math.sin(ang); vx = -v * Math.sin(ang); vy = v * Math.cos(ang); }
+  else { free.x += free.vx * dt; free.y += free.vy * dt; bx = free.x; by = free.y; vx = free.vx; vy = free.vy; if (Math.hypot(bx, by) > 2.2) reset(); }
+  trail.push([bx, by]); if (trail.length > 400) trail.shift();
+  // 원 궤도
+  ctx.setLineDash([4, 5]); ctx.strokeStyle = GRAY; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  if ($('cTrail').checked){ ctx.strokeStyle = 'rgba(47,111,223,0.35)'; ctx.lineWidth = 3; ctx.beginPath(); trail.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke(); }
+  // 중심과 줄
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 7); ctx.fill(); T(ctx, '중심', cx + 8, cy + 12, { align: 'left', size: 11 });
+  if (!free) line(ctx, [[cx, cy], [X(bx), Y(by)]], WIRE, 1.5);
+  const br = 8 + m * 10;
+  ctx.fillStyle = '#5a6478'; ctx.beginPath(); ctx.arc(X(bx), Y(by), br, 0, 7); ctx.fill();
+  const vk = 22;   // 1 m/s = 22 px
+  if ($('cV').checked){ arrow(ctx, X(bx), Y(by), X(bx) + vx * vk, Y(by) - vy * vk, BLUE, 3); T(ctx, '속도', X(bx) + vx * vk * 1.15, Y(by) - vy * vk * 1.15 - 8, { color: BLUE, bold: true }); }
+  if ($('cF').checked && !free){ const F = m * v * v / r, fk = Math.min(90, 12 + F * 6), ux = -bx / r, uy = -by / r;
+    arrow(ctx, X(bx), Y(by), X(bx) + ux * fk, Y(by) - uy * fk, RED, 3); T(ctx, '구심력', X(bx) + ux * fk * 1.25, Y(by) - uy * fk * 1.25, { color: RED, bold: true }); }
+  if (free) T(ctx, '줄이 끊겨 접선 방향으로 날아갑니다', W / 2, 16, { bold: true, color: ORANGE, size: 14 });
+  setStats([['주기', (2 * Math.PI * r / v).toFixed(2) + ' s'], ['구심 가속도', (v * v / r).toFixed(2) + ' m/s²'], ['구심력', free ? '0 N' : (m * v * v / r).toFixed(2) + ' N', RED], ['속력', v.toFixed(1) + ' m/s', BLUE]]);
+});
+rs();
+})();
+</script>
+</body>
+</html>

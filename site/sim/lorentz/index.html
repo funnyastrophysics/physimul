@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>로런츠 힘</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>로런츠 힘</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="particle">자기장 속 하전 입자</button>
+      <button data-m="wire">자기장 속 도선</button>
+    </div>
+    <canvas id="sim" style="height:330px;border-radius:8px"></canvas>
+    <div class="row m-particle">
+      <button class="b primary" id="fireB">입자 쏘기</button>
+      <select id="pS"><option value="p">양성자 (+)</option><option value="e">전자 (−)</option><option value="a">알파 입자 (+2, 질량 4배)</option></select>
+      <button class="b" id="bdirB">자기장 방향 바꾸기</button>
+      <button class="b" id="clrB">궤적 지우기</button>
+    </div>
+    <div class="row m-wire">
+      <button class="b" id="idirB">전류 방향 바꾸기</button>
+      <button class="b" id="mflipB">자석 뒤집기</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-particle"><div class="top"><span>입자의 속력</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="1" max="5" step="0.5" value="3"><div class="range"><span>1 × 10⁶ m/s</span><span>5 × 10⁶ m/s</span></div></div>
+      <div class="sl"><div class="top"><span>자기장의 세기 B</span><b id="bV"></b></div>
+        <input type="range" id="bS" min="0.1" max="1" step="0.05" value="0.5"><div class="range"><span>0.1 T</span><span>1 T</span></div></div>
+      <div class="sl m-wire"><div class="top"><span>전류의 세기 I</span><b id="iV"></b></div>
+        <input type="range" id="iS" min="0" max="5" step="0.5" value="3"><div class="range"><span>0 A</span><span>5 A</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, bdir = 1, trails = [], cur = null, idir = 1, mflip = 1, swing = 0;
+bindLabels({ vS: ['vV', v => v.toFixed(1) + ' × 10⁶ m/s'], bS: ['bV', v => v.toFixed(2) + ' T'], iS: ['iV', v => v.toFixed(1) + ' A'] });
+const P = { p: { q: 1.6e-19, m: 1.67e-27, c: RED, n: '양성자' }, e: { q: -1.6e-19, m: 9.11e-31, c: BLUE, n: '전자' }, a: { q: 3.2e-19, m: 6.64e-27, c: ORANGE, n: '알파 입자' } };
+function particle(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const B = +$('bS').value * bdir, sp = 22;
+  // 자기장 기호
+  for (let y = sp / 2; y < H; y += sp) for (let x = sp / 2; x < W; x += sp){
+    if (bdir > 0){ line(ctx, [[x - 3, y - 3], [x + 3, y + 3]], GRAY, 1); line(ctx, [[x - 3, y + 3], [x + 3, y - 3]], GRAY, 1); } else { ctx.fillStyle = GRAY; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 7); ctx.fill(); } }
+  T(ctx, bdir > 0 ? '⊗ 자기장: 종이면에 들어가는 방향' : '⊙ 자기장: 종이면에서 나오는 방향', W - 8, H - 10, { align: 'right', size: 11, color: INK, bold: true });
+  // 화면 스케일: 양성자 3×10⁶ m/s, 0.5 T일 때 반지름이 약 W/4 되도록
+  const k = (Math.min(W, H) * 0.32) / (1.67e-27 * 3e6 / (1.6e-19 * 0.5));
+  trails.forEach(tr => { ctx.strokeStyle = tr.c; ctx.lineWidth = 2; ctx.globalAlpha = 0.55; ctx.beginPath(); tr.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.globalAlpha = 1; });
+  // 발사 장치
+  const gx = 18, gy = H * 0.6; ctx.fillStyle = WIRE; ctx.fillRect(0, gy - 10, gx + 6, 20);
+  if (cur){
+    const pt = P[cur.k], visualR = (pt.m * cur.v / (Math.abs(pt.q) * Math.abs(B))) * k;
+    // 화면 속력 일정 (보기 좋게), 방향은 F = qv×B
+    const vs = 160, w = vs / visualR * Math.sign(-pt.q * B);   // 시계/반시계
+    const n = 8; for (let i = 0; i < n; i++){ const h = dt / n, a = Math.atan2(cur.vy, cur.vx) + w * h; cur.vx = Math.cos(a); cur.vy = Math.sin(a); cur.x += cur.vx * vs * h; cur.y += cur.vy * vs * h; cur.tr.pts.push([cur.x, cur.y]); }
+    ctx.fillStyle = pt.c; ctx.beginPath(); ctx.arc(cur.x, cur.y, 6, 0, 7); ctx.fill();
+    // 속도와 힘 화살표
+    arrow(ctx, cur.x, cur.y, cur.x + cur.vx * 40, cur.y + cur.vy * 40, GREEN, 2.5); T(ctx, 'v', cur.x + cur.vx * 48, cur.y + cur.vy * 48, { color: GREEN, bold: true });
+    const fx = -cur.vy * Math.sign(w), fy = cur.vx * Math.sign(w);
+    arrow(ctx, cur.x, cur.y, cur.x + fx * 34, cur.y + fy * 34, PURPLE, 2.5); T(ctx, 'F', cur.x + fx * 42, cur.y + fy * 42, { color: PURPLE, bold: true });
+    cur.t += dt; if (cur.x < -20 || cur.x > W + 20 || cur.y < -20 || cur.y > H + 20 || cur.t > 12) cur = null;
+  } else T(ctx, '[입자 쏘기]를 누르세요', W / 2, 16, { bold: true, color: BLUE, size: 13 });
+  const pt = P[$('pS').value], v = +$('vS').value * 1e6, r = pt.m * v / (Math.abs(pt.q) * Math.abs(B));
+  setStats([['원운동 반지름 r = mv/(|q|B)', r >= 0.01 ? (r * 100).toFixed(2) + ' cm' : (r * 1000).toFixed(3) + ' mm'], ['주기 2πm/(|q|B)', (2 * Math.PI * pt.m / (Math.abs(pt.q) * Math.abs(B)) * 1e9).toFixed(3) + ' ns'], ['로런츠 힘 |q|vB', (Math.abs(pt.q) * v * Math.abs(B)).toExponential(2).replace('e-', ' × 10^-') + ' N', PURPLE]]);
+  if (pt === P.e) T(ctx, '전자는 질량이 매우 작아 반지름이 아주 작습니다 (화면에서는 크게 확대)', W / 2, 34, { size: 11 });
+}
+function wire(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const I = +$('iS').value * idir, B = +$('bS').value * mflip, L = 0.05, F = B * I * L;   // F > 0: 바깥(화면 아래쪽으로 표시)
+  swing += ((F * 300) - swing) * Math.min(1, dt * 3);
+  const cx = W / 2, top = 30, mag = Math.min(W * 0.6, 260), my = H * 0.62;
+  // 말굽자석 (윗면 N, 아랫면 S 또는 반대) - 옆에서 본 모습
+  const nTop = mflip > 0;
+  ctx.fillStyle = nTop ? RED : BLUE; ctx.fillRect(cx - mag / 2, my - 70, mag, 34); T(ctx, nTop ? 'N' : 'S', cx - mag / 2 + 18, my - 53, { color: '#fff', bold: true, size: 15 });
+  ctx.fillStyle = nTop ? BLUE : RED; ctx.fillRect(cx - mag / 2, my + 36, mag, 34); T(ctx, nTop ? 'S' : 'N', cx - mag / 2 + 18, my + 53, { color: '#fff', bold: true, size: 15 });
+  ctx.fillStyle = '#9aa3b2'; ctx.fillRect(cx + mag / 2, my - 70, 24, 140);
+  for (let i = 0; i < 5; i++){ const x = cx - mag / 2 + 50 + i * (mag - 70) / 4; arrow(ctx, x, nTop ? my - 34 : my + 34, x, nTop ? my - 6 : my + 6, 'rgba(142,68,173,0.6)', 1.5, 7); arrow(ctx, x, nTop ? my + 6 : my - 6, x, nTop ? my + 34 : my - 34, 'rgba(142,68,173,0.6)', 1.5, 7); }
+  T(ctx, '자기장 B', cx + mag / 2 - 10, my - 80, { color: PURPLE, bold: true, size: 11, align: 'right' });
+  // 그네 도선 (종이면에 수직: 단면을 원으로) - 힘에 따라 화면 왼쪽/오른쪽으로 흔들림
+  const wx = cx + swing;
+  line(ctx, [[cx - 40, top], [wx - 8, my], [wx + 8, my], [cx + 40, top]], WIRE, 1.5);
+  ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.arc(wx, my, 10, 0, 7); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+  if (I > 0){ ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(wx, my, 2.5, 0, 7); ctx.fill(); } else if (I < 0){ line(ctx, [[wx - 6, my - 6], [wx + 6, my + 6]], INK, 1.5); line(ctx, [[wx - 6, my + 6], [wx + 6, my - 6]], INK, 1.5); }
+  if (Math.abs(F) > 1e-6) arrow(ctx, wx, my, wx + Math.sign(F) * (20 + Math.abs(F) * 120), my, ORANGE, 3.5);
+  T(ctx, I === 0 ? '전류가 흐르지 않습니다' : (I > 0 ? '⊙ 전류: 종이면에서 나오는 방향' : '⊗ 전류: 종이면에 들어가는 방향'), 8, 14, { align: 'left', bold: true, color: INK });
+  if (Math.abs(F) > 1e-6) T(ctx, '힘 F', wx + Math.sign(F) * (30 + Math.abs(F) * 120), my - 16, { color: ORANGE, bold: true });
+  setStats([['도선이 받는 힘 F = BIL', Math.abs(F).toFixed(3) + ' N', ORANGE], ['자기장 속 도선의 길이', (L * 100) + ' cm'], ['힘의 방향', Math.abs(F) < 1e-6 ? '-' : F > 0 ? '오른쪽' : '왼쪽']]);
+}
+const TEXT = {
+  particle: ['균일한 자기장 속으로 하전 입자를 쏘아 보세요. 입자의 종류, 속력, 자기장의 세기와 방향을 바꾸며 궤적을 비교합니다.',
+    '자기장 속에서 움직이는 하전 입자는 속도와 자기장에 모두 수직인 로런츠 힘(F = qvB)을 받습니다. 힘이 속도에 수직이므로 속력은 변하지 않고 방향만 바뀌어 등속 원운동을 합니다. 전하의 부호가 반대면 반대 방향으로 휘어집니다. 입자 가속기, 질량 분석기, 핵융합 장치(토카막), 지구 주위의 밴앨런대가 이 원리와 관련 있습니다.'],
+  wire: ['말굽자석 사이에 매단 도선을 옆에서 본 모습입니다. 전류의 세기와 방향, 자석의 방향을 바꾸며 도선이 움직이는 방향을 확인하세요.',
+    '자기장 속에서 전류가 흐르는 도선은 전류와 자기장에 모두 수직인 힘을 받고, 크기는 F = BIL입니다. 전류의 방향이나 자기장의 방향 중 하나를 바꾸면 힘의 방향이 반대가 됩니다. 이 힘이 전동기와 스피커를 움직입니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('fireB').addEventListener('click', () => { const k = $('pS').value, tr = { c: P[k].c, pts: [] }; trails.push(tr); if (trails.length > 6) trails.shift();
+  cur = { k, v: +$('vS').value * 1e6, x: 24, y: s.H * 0.6, vx: 1, vy: 0, tr, t: 0 }; });
+$('clrB').addEventListener('click', () => { trails = []; });
+$('bdirB').addEventListener('click', () => { bdir = -bdir; });
+$('idirB').addEventListener('click', () => { idir = -idir; });
+$('mflipB').addEventListener('click', () => { mflip = -mflip; });
+loop(dt => mode === 'particle' ? particle(dt) : wire(dt));
+})();
+</script>
+</body>
+</html>

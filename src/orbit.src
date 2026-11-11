@@ -1,0 +1,106 @@
+인공위성과 탈출 속도
+  <h1>인공위성과 탈출 속도</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="orbit">원궤도 위성 (케플러 법칙)</button>
+      <button data-m="esc">탈출 속도</button>
+    </div>
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row m-orbit">
+      <button class="b primary" id="addB">비교할 위성으로 남기기</button>
+      <button class="b" id="clrB">비교 위성 지우기</button>
+      <select id="preS"><option value="">예시 궤도 고르기</option><option value="1.06">국제 우주 정거장 (약 400 km)</option><option value="4.17">GPS 위성 (약 20 200 km)</option><option value="6.62">정지 궤도 위성 (약 35 800 km)</option><option value="60.3">달</option></select>
+    </div>
+    <div class="row m-esc">
+      <button class="b primary" id="fireB">발사</button>
+      <select id="planetS"><option value="earth">지구</option><option value="moon">달</option><option value="mars">화성</option><option value="jupiter">목성</option></select>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-orbit"><table id="tbl" style="width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums"></table></div>
+  <div class="card">
+    <div class="controls m-orbit">
+      <div class="sl"><div class="top"><span>궤도 반지름 r (지구 반지름 R의 배수)</span><b id="rV"></b></div>
+        <input type="range" id="rS" min="1.05" max="10" step="0.05" value="2"><div class="range"><span>1.05 R</span><span>10 R</span></div></div>
+    </div>
+    <div class="controls m-esc">
+      <div class="sl"><div class="top"><span>연직 위로 발사하는 속력</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0.3" max="1.3" step="0.01" value="0.8"><div class="range"><span>탈출 속도의 30%</span><span>130%</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---CSS---
+#tbl th,#tbl td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:right} #tbl th:first-child,#tbl td:first-child{text-align:left}
+---SCRIPT---
+const GM = 3.986e14, RE = 6.371e6, S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+const PL = { earth: { n: '지구', GM: 3.986e14, R: 6.371e6, c: '#3c7fd1' }, moon: { n: '달', GM: 4.905e12, R: 1.737e6, c: '#b9b9b9' }, mars: { n: '화성', GM: 4.283e13, R: 3.390e6, c: '#c8643c' }, jupiter: { n: '목성', GM: 1.267e17, R: 6.991e7, c: '#d4a373' } };
+let mode, sats = [], th = 0, simT = 0, rocket = null;
+const lab = bindLabels({ rS: ['rV', v => v.toFixed(2) + ' R (고도 ' + Math.round((v - 1) * 6371).toLocaleString('ko-KR') + ' km)'], vS: ['vV', v => (v * Math.sqrt(2 * PL[$('planetS').value].GM / PL[$('planetS').value].R) / 1000).toFixed(1) + ' km/s (' + Math.round(v * 100) + '%)'] });
+const period = r => 2 * Math.PI * Math.sqrt(Math.pow(r * RE, 3) / GM);
+const fmtT = T => T < 7200 ? (T / 60).toFixed(0) + '분' : T < 172800 ? (T / 3600).toFixed(1) + '시간' : (T / 86400).toFixed(1) + '일';
+function table(){
+  const rows = sats.concat([{ r: +$('rS').value, now: true }]);
+  $('tbl').innerHTML = '<tr><th>위성</th><th>반지름 r (R)</th><th>속력 (km/s)</th><th>주기 T</th><th>T²/r³ (일²/R³)</th></tr>' +
+    rows.map((x, i) => { const T = period(x.r), v = Math.sqrt(GM / (x.r * RE)) / 1000; return `<tr><td>${x.now ? '<b>지금</b>' : '위성 ' + (i + 1)}</td><td>${x.r.toFixed(2)}</td><td>${v.toFixed(2)}</td><td>${fmtT(T)}</td><td>${((T / 86400) ** 2 / x.r ** 3).toFixed(5)}</td></tr>`; }).join('');
+}
+function drawOrbit(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  const r = +$('rS').value, maxR = Math.max(r, ...sats.map(x => x.r), 2.5), k = (Math.min(W, H) / 2 - 18) / maxR, cx = W / 2, cy = H / 2;
+  // 시간 배율: 지금 위성이 약 6초에 한 바퀴
+  const scale = period(r) / 6; simT += dt * scale;
+  ctx.fillStyle = '#3c7fd1'; ctx.beginPath(); ctx.arc(cx, cy, k, 0, 7); ctx.fill(); T(ctx, '지구', cx, cy, { color: '#fff', bold: true });
+  const all = sats.map((x, i) => ({ ...x, c: ['#9aa3b2', '#b7a0d8', '#8cc0a8', '#d8b08c'][i % 4] })).concat([{ r, c: '#ffd34d', now: true }]);
+  all.forEach(x => {
+    ctx.setLineDash([3, 4]); ctx.strokeStyle = x.c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, x.r * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    const a = 2 * Math.PI * simT / period(x.r), px = cx + x.r * k * Math.cos(a), py = cy - x.r * k * Math.sin(a);
+    ctx.fillStyle = x.c; ctx.beginPath(); ctx.arc(px, py, x.now ? 6 : 4.5, 0, 7); ctx.fill();
+    if (x.now){ const v = 26; arrow(ctx, px, py, px - v * Math.sin(a), py - v * Math.cos(a), '#7fd3ff', 2.5); arrow(ctx, px, py, px - 22 * Math.cos(a), py + 22 * Math.sin(a), '#ff8a80', 2.5); }
+  });
+  T(ctx, '화면 1초 = 실제 ' + fmtT(scale), 8, H - 12, { align: 'left', color: '#c9d1d9', size: 11 });
+  T(ctx, '하늘색: 속도, 빨강: 중력(구심력)', W - 8, H - 12, { align: 'right', color: '#c9d1d9', size: 11 });
+  const T0 = period(r), v = Math.sqrt(GM / (r * RE));
+  setStats([['속력', (v / 1000).toFixed(2) + ' km/s'], ['주기', fmtT(T0)], ['구심 가속도 (중력 가속도)', (GM / (r * RE) ** 2).toFixed(2) + ' m/s²']]);
+}
+function drawEsc(dt){
+  const P = PL[$('planetS').value], vesc = Math.sqrt(2 * P.GM / P.R);
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  const maxH = 8;   // 화면에 보이는 높이 (행성 반지름의 8배)
+  const cx = W * 0.22, base = H - 20, k = (H - 40) / (maxH + 1);
+  ctx.fillStyle = P.c; ctx.beginPath(); ctx.arc(cx, base + 0, k, Math.PI, 2 * Math.PI); ctx.fill();
+  T(ctx, P.n, cx, base - k / 2, { color: '#fff', bold: true });
+  if (rocket){
+    const n = 40; for (let i = 0; i < n; i++){ const h = dt * rocket.sc / n; const a = -P.GM / (rocket.r * rocket.r); rocket.v += a * h; rocket.r += rocket.v * h; rocket.t += h;
+      if (rocket.r < P.R){ rocket.r = P.R; rocket.v = 0; rocket.done = '다시 떨어졌습니다'; } }
+    rocket.maxr = Math.max(rocket.maxr, rocket.r);
+    if (rocket.r / P.R - 1 > maxH && rocket.v > 0) rocket.done = rocket.v >= 0 && 0.5 * rocket.v * rocket.v - P.GM / rocket.r >= 0 ? '탈출합니다 (다시 돌아오지 않음)' : '아주 높이 올라갔다가 언젠가 돌아옵니다';
+    const y = base - k - (rocket.r / P.R - 1) * k;
+    if (y > 10){ ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx, y - 10); ctx.lineTo(cx - 5, y + 4); ctx.lineTo(cx + 5, y + 4); ctx.closePath(); ctx.fill(); }
+    if (!rocket.done || rocket.sc) rocket.trace.push([rocket.t, rocket.r / P.R - 1]);
+    if (rocket.done){ T(ctx, rocket.done, W / 2 + 40, 18, { color: '#ffd34d', bold: true, size: 14 }); rocket.sc = 0; }
+  } else T(ctx, '[발사]를 누르세요', W / 2 + 40, 18, { color: '#7fd3ff', bold: true, size: 14 });
+  // 높이–시간 그래프
+  const gx = W * 0.42, gw = W - gx - 12, gy = 40, gh = H - 70;
+  ctx.strokeStyle = '#3a4252'; ctx.strokeRect(gx, gy, gw, gh); T(ctx, '높이 (행성 반지름의 배수)', gx, gy - 10, { color: '#c9d1d9', align: 'left', size: 11 });
+  for (let i = 0; i <= maxH; i += 2) T(ctx, String(i), gx - 4, gy + gh - i / maxH * gh, { color: '#c9d1d9', align: 'right', size: 10 });
+  if (rocket && rocket.trace.length > 1){ const tmax = Math.max(rocket.trace[rocket.trace.length - 1][0], 1);
+    ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2; ctx.beginPath(); rocket.trace.forEach(([tt, h], i) => { const X = gx + tt / tmax * gw, Y = gy + gh - Math.min(maxH, h) / maxH * gh; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke();
+    T(ctx, '시간 →', gx + gw, gy + gh + 12, { color: '#c9d1d9', align: 'right', size: 10 }); }
+  const v0 = +$('vS').value * vesc;
+  setStats([[P.n + '의 탈출 속도', (vesc / 1000).toFixed(1) + ' km/s'], ['발사 속력', (v0 / 1000).toFixed(1) + ' km/s'], ['최고 높이', rocket ? (rocket.v > 0 && 0.5 * v0 * v0 >= P.GM / P.R ? '무한히 멀리' : ((1 / (1 / P.R - v0 * v0 / (2 * P.GM)) / P.R - 1).toFixed(2) + ' R')) : '-']]);
+}
+const TEXT = {
+  orbit: ['궤도 반지름을 바꾸며 위성의 속력과 주기가 어떻게 달라지는지 보세요. 여러 위성을 남겨 두고 비교할 수 있습니다.',
+    '지구의 중력이 위성의 구심력 역할을 하므로 GMm/r² = mv²/r, 즉 v = √(GM/r)입니다. 멀리 있는 위성일수록 느리고 주기가 깁니다. 표에서 T²/r³의 값이 모든 위성에서 같은 것을 확인하세요(케플러 제3법칙). 정지 궤도 위성은 주기가 하루라서 지구에서 보면 멈춰 있는 것처럼 보입니다.'],
+  esc: ['행성을 고르고 발사 속력을 바꾸며 물체가 다시 떨어지는지, 중력을 벗어나는지 확인하세요. (공기 저항과 행성의 자전은 무시)',
+    '물체의 역학적 에너지 ½mv² − GMm/r가 0 이상이면 다시 돌아오지 않습니다. 따라서 탈출 속도는 √(2GM/R)이고 행성마다 다릅니다. 기체 분자는 가벼울수록 빠르게 움직이므로, 탈출 속도가 작은 달은 대기를 붙잡아 두지 못하고, 탈출 속도가 큰 목성은 가벼운 수소와 헬륨까지 붙잡고 있습니다. 실제 로켓은 연료를 뒤로 내뿜는 반작용(운동량 보존)으로 조금씩 속력을 높이며 궤도에 오릅니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); table(); });
+$('addB').addEventListener('click', () => { if (sats.length < 4) sats.push({ r: +$('rS').value }); table(); });
+$('clrB').addEventListener('click', () => { sats = []; table(); });
+$('rS').addEventListener('input', table);
+$('preS').addEventListener('change', () => { const v = +$('preS').value; if (!v) return; if (v > 10){ $('rS').max = 61; } $('rS').value = v; $('rS').dispatchEvent(new Event('input')); $('preS').value = ''; });
+$('fireB').addEventListener('click', () => { const P = PL[$('planetS').value], vesc = Math.sqrt(2 * P.GM / P.R), v0 = +$('vS').value * vesc;
+  rocket = { r: P.R, v: v0, t: 0, maxr: P.R, trace: [], sc: (P.R / vesc) * 1.2, done: null }; });
+$('planetS').addEventListener('change', () => { rocket = null; lab(); });
+$('vS').addEventListener('input', () => { rocket = null; });
+loop(dt => mode === 'orbit' ? drawOrbit(dt) : drawEsc(dt));

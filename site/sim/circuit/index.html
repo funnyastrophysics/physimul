@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>저항의 직렬·병렬 회로</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --i:#e0782f; --warn:#c0392b; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:15px;padding:10px 4px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%}
+  #sim{height:270px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px;margin-top:8px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:right}
+  th:first-child,td:first-child{text-align:left;color:var(--sub);font-weight:400}
+  thead th{font-size:13px;color:var(--sub);font-weight:700}
+  td.tot{font-weight:700}
+  .controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums;color:var(--accent)}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+  button.b{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .apps label{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px;cursor:pointer;font-size:15px}
+  .apps label.on{border-color:var(--accent);background:#eef3fd}
+  .apps input{width:18px;height:18px}
+  .apps small{display:block;color:var(--sub);font-size:12px}
+  .gauge{height:26px;background:#eef0f4;border-radius:8px;overflow:hidden;position:relative;margin-top:8px}
+  .gauge .fill{height:100%;background:var(--accent);transition:width .2s}
+  .gauge .limit{position:absolute;top:0;bottom:0;width:2px;background:var(--warn)}
+  .big{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  .msg{margin-top:10px;padding:10px;border-radius:8px;font-size:15px}
+  .msg.ok{background:#e9f6ef;color:#1e7a4a}
+  .msg.bad{background:#fdecea;color:var(--warn);font-weight:700}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} th,td{padding:7px 3px;font-size:14px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>저항의 직렬·병렬 회로</h1>
+  <p class="hint" id="hintTxt">전구 두 개를 직렬 또는 병렬로 연결하고 밝기, 전류, 전압, 소비 전력을 비교하세요. 전구를 하나 빼 보면 연결 방법의 차이가 드러납니다.</p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="series" class="on">직렬연결</button>
+      <button data-m="parallel">병렬연결</button>
+      <button data-m="tap">멀티탭</button>
+    </div>
+
+    <div class="circOnly">
+      <canvas id="sim"></canvas>
+      <div class="row">
+        <button class="b" id="out1">전구 1 빼기</button>
+        <button class="b" id="out2">전구 2 빼기</button>
+      </div>
+      <table>
+        <thead><tr><th></th><th>전구 1</th><th>전구 2</th><th>전체</th></tr></thead>
+        <tbody>
+          <tr><td>저항 (Ω)</td><td id="r1c"></td><td id="r2c"></td><td id="rtc" class="tot"></td></tr>
+          <tr><td>전압 (V)</td><td id="v1c"></td><td id="v2c"></td><td id="vtc" class="tot"></td></tr>
+          <tr><td>전류 (A)</td><td id="i1c"></td><td id="i2c"></td><td id="itc" class="tot"></td></tr>
+          <tr><td>소비 전력 (W)</td><td id="p1c"></td><td id="p2c"></td><td id="ptc" class="tot"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tapOnly hide">
+      <canvas id="tapC" style="height:150px"></canvas>
+      <p style="font-size:14px;color:var(--sub);margin:8px 0">멀티탭에 꽂아서 켤 전기 기구를 고르세요. (전압 220 V, 멀티탭 허용 전류 16 A)</p>
+      <div class="apps" id="apps"></div>
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+        <span>멀티탭 전선에 흐르는 전체 전류</span><span class="big" id="tapI">0.0 A</span>
+      </div>
+      <div class="gauge"><div class="fill" id="tapFill" style="width:0"></div><div class="limit" id="tapLimit"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-top:3px"><span>0 A</span><span>허용 전류 16 A</span><span>25 A</span></div>
+      <div class="msg ok" id="tapMsg">안전한 범위입니다.</div>
+    </div>
+  </div>
+
+  <div class="card circOnly">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>전원 전압 V</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="1.5" max="12" step="0.5" value="6"><div class="range"><span>1.5 V</span><span>12 V</span></div></div>
+      <div class="sl"><div class="top"><span>전구 1의 저항 R<sub>1</sub></span><b id="r1V"></b></div>
+        <input type="range" id="r1S" min="5" max="40" step="1" value="10"><div class="range"><span>5 Ω</span><span>40 Ω</span></div></div>
+      <div class="sl"><div class="top"><span>전구 2의 저항 R<sub>2</sub></span><b id="r2V"></b></div>
+        <input type="range" id="r2S" min="5" max="40" step="1" value="10"><div class="range"><span>5 Ω</span><span>40 Ω</span></div></div>
+    </div>
+    <p class="note" id="noteTxt">전구의 저항은 일정하다고 가정합니다. 소비 전력 P = VI = I²R = V²/R. 전구는 소비 전력이 클수록 밝습니다. 주황색 점은 전류의 방향을 나타내며, 전류가 셀수록 빨리 움직입니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const CI = '#e0782f', INK = '#1d2330', WIRE = '#3a4252';
+  const simC = $('sim'), sctx = simC.getContext('2d'), tC = $('tapC'), tctx = tC.getContext('2d');
+
+  let mode = 'series', V = 6, R1 = 10, R2 = 10, in1 = true, in2 = true;
+  const phase = {};      // 경로마다 점의 위치
+  function solve(){
+    let I1 = 0, I2 = 0, V1 = 0, V2 = 0, It = 0, Rt = Infinity;
+    if (mode === 'series'){
+      if (in1 && in2){ Rt = R1 + R2; It = V / Rt; I1 = I2 = It; V1 = It * R1; V2 = It * R2; }
+    } else {
+      if (in1){ I1 = V / R1; V1 = V; } if (in2){ I2 = V / R2; V2 = V; }
+      It = I1 + I2; Rt = It > 0 ? V / It : Infinity;
+    }
+    return { I1, I2, V1, V2, It, Rt, P1: V1 * I1, P2: V2 * I2 };
+  }
+
+  let W, H, TW, TH;
+  function fit(c, ctx){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * d; c.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(simC, sctx); if (tC.clientWidth) [TW, TH] = fit(tC, tctx); }
+  window.addEventListener('resize', resize);
+
+  function line(pts, color, lw){ sctx.strokeStyle = color || WIRE; sctx.lineWidth = lw || 2; sctx.beginPath();
+    pts.forEach((p, i) => i ? sctx.lineTo(p[0], p[1]) : sctx.moveTo(p[0], p[1])); sctx.stroke(); }
+  function txt(s, x, y, color, align, size, bold){ sctx.fillStyle = color || '#5b6475'; sctx.font = (bold ? 'bold ' : '') + (size || 12) + 'px ' + FONT;
+    sctx.textAlign = align || 'center'; sctx.textBaseline = 'middle'; sctx.fillText(s, x, y); }
+  function dots(key, path, amount){
+    if (amount < 0.001) return;
+    let total = 0; const segs = [];
+    for (let i = 0; i < path.length - 1; i++){ const [x1, y1] = path[i], [x2, y2] = path[i + 1], L = Math.hypot(x2 - x1, y2 - y1); segs.push([x1, y1, x2, y2, L, total]); total += L; }
+    const gap = 20, off = ((phase[key] || 0) % gap + gap) % gap;
+    sctx.fillStyle = CI;
+    for (let d = off; d < total; d += gap){
+      const s = segs.find(sg => d >= sg[5] && d < sg[5] + sg[4]); if (!s) continue;
+      const f = (d - s[5]) / s[4]; sctx.beginPath(); sctx.arc(s[0] + (s[2] - s[0]) * f, s[1] + (s[3] - s[1]) * f, 3, 0, 7); sctx.fill();
+    }
+  }
+  // 전구: 세로 또는 가로 도선 위 (x, y)에. P에 따라 밝기
+  function bulb(x, y, P, present, name, side){
+    const glow = present ? Math.min(1, Math.sqrt(P / 4)) : 0;
+    if (glow > 0.02){ const gr = sctx.createRadialGradient(x, y, 3, x, y, 46);
+      gr.addColorStop(0, 'rgba(255,200,40,' + 0.85 * glow + ')'); gr.addColorStop(1, 'rgba(255,200,40,0)');
+      sctx.fillStyle = gr; sctx.beginPath(); sctx.arc(x, y, 46, 0, 7); sctx.fill(); }
+    if (present){
+      sctx.fillStyle = glow > 0.02 ? 'rgba(255,225,110,' + (0.35 + 0.65 * glow) + ')' : '#fff';
+      sctx.strokeStyle = INK; sctx.lineWidth = 1.8; sctx.beginPath(); sctx.arc(x, y, 14, 0, 7); sctx.fill(); sctx.stroke();
+      sctx.lineWidth = 1.2; sctx.beginPath(); sctx.moveTo(x - 10, y + 10); sctx.lineTo(x + 10, y - 10); sctx.moveTo(x - 10, y - 10); sctx.lineTo(x + 10, y + 10); sctx.stroke();
+    } else {
+      sctx.fillStyle = '#fff'; sctx.fillRect(x - 15, y - 15, 30, 30);
+      sctx.setLineDash([3, 3]); sctx.strokeStyle = '#9aa3b2'; sctx.lineWidth = 1.2; sctx.beginPath(); sctx.arc(x, y, 14, 0, 7); sctx.stroke(); sctx.setLineDash([]);
+    }
+    if (side === 'left') txt(name, x - 20, y, present ? INK : '#9aa3b2', 'right', 12, true); else txt(name, x, y + 26, present ? INK : '#9aa3b2', 'center', 12, true);
+  }
+  function battery(x, y){
+    sctx.fillStyle = '#fff'; sctx.fillRect(x - 18, y - 12, 36, 24);
+    sctx.strokeStyle = INK; sctx.lineWidth = 3; sctx.beginPath(); sctx.moveTo(x - 15, y - 4); sctx.lineTo(x + 15, y - 4); sctx.stroke();
+    sctx.lineWidth = 5; sctx.beginPath(); sctx.moveTo(x - 8, y + 4); sctx.lineTo(x + 8, y + 4); sctx.stroke();
+    txt('+', x + 20, y - 9, '#c0392b', 'left', 12, true); txt(V.toFixed(1) + ' V', x - 22, y, INK, 'right', 12, true);
+  }
+
+  function draw(){
+    sctx.clearRect(0, 0, W, H);
+    const S = solve();
+    const xL = Math.max(60, W * 0.16), xR = W - 34, yT = 34, yB = H - 30, my = (yT + yB) / 2;
+    if (mode === 'series'){
+      const bx = (xL + xR) / 2;
+      line([[xL, my - 12], [xL, yT], [xR, yT], [xR, yB], [xL, yB], [xL, my + 12]]);
+      battery(xL, my);
+      // 전류: (+)에서 나와 위 도선 → 오른쪽 → 아래로 돌아옴
+      dots('s', [[xL, my - 8], [xL, yT], [xR, yT], [xR, yB], [xL, yB], [xL, my + 8]], S.It);
+      bulb(bx, yT, S.P1, in1, '전구 1'); bulb(xR, my, S.P2, in2, '전구 2', 'left');
+      txt('전구가 하나라도 빠지면 회로가 끊어집니다', W / 2, H - 10, (in1 && in2) ? '#9aa3b2' : '#c0392b', 'center', 12, !(in1 && in2));
+    } else {
+      const x1 = xL + (xR - xL) * 0.45, x2 = xR;
+      line([[xL, my - 12], [xL, yT], [x2, yT], [x2, yB], [xL, yB], [xL, my + 12]]);
+      line([[x1, yT], [x1, yB]]);
+      sctx.fillStyle = WIRE; [[x1, yT], [x1, yB]].forEach(p => { sctx.beginPath(); sctx.arc(p[0], p[1], 3.5, 0, 7); sctx.fill(); });
+      battery(xL, my);
+      dots('p1', [[xL, my - 8], [xL, yT], [x1, yT], [x1, yB], [xL, yB], [xL, my + 8]], S.I1);
+      dots('p2', [[xL, my - 8], [xL, yT], [x2, yT], [x2, yB], [xL, yB], [xL, my + 8]], S.I2);
+      bulb(x1, my, S.P1, in1, '전구 1', 'left'); bulb(x2, my, S.P2, in2, '전구 2', 'left');
+      txt('전구 하나를 빼도 다른 전구에는 전류가 흐릅니다', W / 2, H - 10, '#9aa3b2', 'center', 12);
+    }
+    // 전체 전류 표시
+    txt('전체 전류 ' + S.It.toFixed(2) + ' A', xL + 8, yT - 16, CI, 'left', 13, true);
+    return S;
+  }
+
+  function table(S){
+    const f = (v, d) => isFinite(v) ? v.toFixed(d) : '∞';
+    $('r1c').textContent = in1 ? R1 : '–'; $('r2c').textContent = in2 ? R2 : '–';
+    $('rtc').textContent = isFinite(S.Rt) ? S.Rt.toFixed(1) : '끊김';
+    $('v1c').textContent = f(S.V1, 2); $('v2c').textContent = f(S.V2, 2); $('vtc').textContent = V.toFixed(2);
+    $('i1c').textContent = f(S.I1, 2); $('i2c').textContent = f(S.I2, 2); $('itc').textContent = f(S.It, 2);
+    $('p1c').textContent = f(S.P1, 2); $('p2c').textContent = f(S.P2, 2); $('ptc').textContent = f(S.P1 + S.P2, 2);
+  }
+
+  // ---------- 멀티탭 ----------
+  const APPS = [['전기 주전자', 1500], ['헤어드라이어', 1200], ['전자레인지', 1000], ['전기난로', 2000], ['텔레비전', 150], ['노트북 충전기', 65], ['휴대폰 충전기', 20], ['전기밥솥', 900]];
+  const on = new Set();
+  $('apps').innerHTML = APPS.map(([n, p], i) => `<label data-i="${i}"><input type="checkbox" data-i="${i}"><span>${n}<small>${p} W · ${(p / 220).toFixed(2)} A</small></span></label>`).join('');
+  $('apps').querySelectorAll('input').forEach(c => c.addEventListener('change', () => {
+    const i = +c.dataset.i; c.checked ? on.add(i) : on.delete(i); c.parentElement.classList.toggle('on', c.checked); tapUpdate(); }));
+  function tapUpdate(){
+    let P = 0; on.forEach(i => P += APPS[i][1]); const I = P / 220;
+    $('tapI').textContent = I.toFixed(1) + ' A';
+    $('tapFill').style.width = Math.min(100, I / 25 * 100) + '%';
+    $('tapFill').style.background = I > 16 ? '#c0392b' : I > 12 ? '#e0a400' : '#2f6fdf';
+    $('tapLimit').style.left = (16 / 25 * 100) + '%';
+    const m = $('tapMsg');
+    if (I > 16){ m.className = 'msg bad'; m.textContent = '허용 전류를 넘었습니다! 전선이 과열되어 화재가 날 수 있습니다. 소비 전력이 큰 기구를 한 멀티탭에 함께 꽂지 마세요.'; }
+    else if (I > 12){ m.className = 'msg ok'; m.style.background = '#fff6e0'; m.style.color = '#8a6100'; m.textContent = '허용 전류에 가까워지고 있습니다. 기구를 더 꽂지 않는 것이 좋습니다.'; }
+    else { m.className = 'msg ok'; m.style.background = ''; m.style.color = ''; m.textContent = '안전한 범위입니다. 병렬로 연결된 기구가 늘어날수록 전체 전류는 커집니다.'; }
+  }
+  function drawTap(){
+    if (!TW) return; tctx.clearRect(0, 0, TW, TH);
+    let P = 0; on.forEach(i => P += APPS[i][1]); const I = P / 220, hot = Math.min(1, Math.max(0, (I - 8) / 10));
+    const y = TH / 2, x0 = 10, bx = TW * 0.28, bw = TW - bx - 10;
+    // 전선 (전류가 크면 붉게)
+    tctx.strokeStyle = `rgb(${58 + 170 * hot},${66 - 20 * hot},${82 - 40 * hot})`; tctx.lineWidth = 6 + 4 * hot;
+    tctx.beginPath(); tctx.moveTo(x0, y); tctx.lineTo(bx, y); tctx.stroke();
+    tctx.fillStyle = '#5b6475'; tctx.font = '12px ' + FONT; tctx.textAlign = 'left'; tctx.textBaseline = 'bottom'; tctx.fillText('전원 220 V', x0, y - 10);
+    // 멀티탭 본체
+    tctx.fillStyle = '#f7f8fa'; tctx.strokeStyle = INK; tctx.lineWidth = 1.5;
+    tctx.beginPath(); tctx.roundRect ? tctx.roundRect(bx, y - 28, bw, 56, 10) : tctx.rect(bx, y - 28, bw, 56); tctx.fill(); tctx.stroke();
+    const n = APPS.length, sw = bw / n;
+    for (let i = 0; i < n; i++){ const cx = bx + sw * (i + 0.5);
+      tctx.fillStyle = on.has(i) ? '#2f6fdf' : '#d9dde4'; tctx.beginPath(); tctx.arc(cx, y, Math.min(12, sw * 0.35), 0, 7); tctx.fill();
+      tctx.fillStyle = '#fff'; tctx.fillRect(cx - 3, y - 2, 2, 5); tctx.fillRect(cx + 1, y - 2, 2, 5); }
+    tctx.fillStyle = I > 16 ? '#c0392b' : '#5b6475'; tctx.textAlign = 'center'; tctx.textBaseline = 'top'; tctx.font = (I > 16 ? 'bold ' : '') + '12px ' + FONT;
+    tctx.fillText(I > 16 ? '과열 위험' : '각 콘센트는 병렬로 연결되어 있습니다', bx + bw / 2, y + 34);
+  }
+
+  // ---------- 조작 ----------
+  function labels(){ $('vV').textContent = V.toFixed(1) + ' V'; $('r1V').textContent = R1 + ' Ω'; $('r2V').textContent = R2 + ' Ω';
+    $('out1').textContent = in1 ? '전구 1 빼기' : '전구 1 끼우기'; $('out2').textContent = in2 ? '전구 2 빼기' : '전구 2 끼우기'; }
+  $('vS').addEventListener('input', () => { V = +$('vS').value; labels(); });
+  $('r1S').addEventListener('input', () => { R1 = +$('r1S').value; labels(); });
+  $('r2S').addEventListener('input', () => { R2 = +$('r2S').value; labels(); });
+  $('out1').addEventListener('click', () => { in1 = !in1; labels(); });
+  $('out2').addEventListener('click', () => { in2 = !in2; labels(); });
+  function setMode(m){
+    mode = m;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('.circOnly').forEach(e => e.classList.toggle('hide', m === 'tap'));
+    document.querySelectorAll('.tapOnly').forEach(e => e.classList.toggle('hide', m !== 'tap'));
+    $('hintTxt').textContent = m === 'tap'
+      ? '가정의 콘센트와 멀티탭은 병렬로 연결되어 있어서, 기구를 더 꽂을수록 멀티탭 전선에 흐르는 전체 전류가 커집니다.'
+      : '전구 두 개를 직렬 또는 병렬로 연결하고 밝기, 전류, 전압, 소비 전력을 비교하세요. 전구를 하나 빼 보면 연결 방법의 차이가 드러납니다.';
+    resize(); tapUpdate();
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
+    if (mode !== 'tap'){
+      const S = solve(), k = 90;
+      phase.s = (phase.s || 0) + S.It * k * dt; phase.p1 = (phase.p1 || 0) + S.I1 * k * dt; phase.p2 = (phase.p2 || 0) + S.I2 * k * dt;
+      table(draw());
+    } else drawTap();
+    requestAnimationFrame(frame);
+  }
+  labels(); resize(); tapUpdate(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

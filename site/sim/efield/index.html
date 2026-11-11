@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>전기장과 전기력선</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --pos:#d64541; --neg:#2f6fdf; --probe:#2e9e6a; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:8px}
+  #sim{height:380px;background:#fbfcfd}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.pos{color:var(--pos);font-weight:700} button.neg{color:var(--neg);font-weight:700}
+  .checks{display:flex;flex-wrap:wrap;gap:14px;font-size:15px;margin-top:12px}
+  .checks label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .checks input{width:18px;height:18px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ h1{font-size:19px} #sim{height:400px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>전기장과 전기력선</h1>
+  <p class="hint">전하를 놓고 끌어서 옮기며 전기력선과 등전위선의 모양을 관찰하세요. 초록색 시험 전하를 끌면 그 위치의 전기장 세기와 방향, 전위를 읽을 수 있습니다. 전하를 화면 밖으로 끌어내면 지워집니다.</p>
+
+  <div class="card">
+    <canvas id="sim"></canvas>
+    <div class="stats">
+      <div class="stat"><div class="k">시험 전하 위치의 전기장 세기</div><div class="val" id="sE" style="color:var(--probe)">-</div></div>
+      <div class="stat"><div class="k">전기장의 방향</div><div class="val" id="sDir">-</div></div>
+      <div class="stat"><div class="k">전위</div><div class="val" id="sV">-</div></div>
+    </div>
+    <div class="row">
+      <button class="b pos" id="addP">+ 전하 추가</button>
+      <button class="b neg" id="addN">− 전하 추가</button>
+      <label style="font-size:15px">새 전하의 크기
+        <select id="qS"><option value="1">1 nC</option><option value="2">2 nC</option><option value="3">3 nC</option></select>
+      </label>
+    </div>
+    <div class="row">
+      <span style="font-size:14px;color:var(--sub)">예시 배치:</span>
+      <button class="b" data-p="one">점전하 하나</button>
+      <button class="b" data-p="same">같은 부호 두 전하</button>
+      <button class="b" data-p="dipole">다른 부호 두 전하</button>
+      <button class="b" data-p="plates">평행한 두 판</button>
+      <button class="b" data-p="clear">모두 지우기</button>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="cLines" checked> 전기력선</label>
+      <label><input type="checkbox" id="cEq"> 등전위선</label>
+      <label><input type="checkbox" id="cVec"> 전기장 화살표</label>
+      <label><input type="checkbox" id="cGrid" checked> 눈금 (1 칸 = 5 cm)</label>
+    </div>
+    <p class="note">전기장 세기 E = kq/r², 전위 V = kq/r (k = 9.0 × 10⁹ N·m²/C²)이며, 여러 전하가 있으면 각 전하가 만드는 전기장을 벡터로 더합니다. 등전위선은 같은 전위를 잇는 선으로, 붉은 선은 (+) 전위, 푸른 선은 (−) 전위입니다. 전기력선은 등전위선과 수직으로 만나고, 전기력선이 빽빽할수록 전기장이 셉니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const CP = '#d64541', CN = '#2f6fdf', CPR = '#2e9e6a', INK = '#1d2330';
+  const K = 8.99e9;
+  const c = $('sim'), ctx = c.getContext('2d');
+  const layer = document.createElement('canvas'), lctx = layer.getContext('2d');   // 전기력선·등전위선 캐시
+
+  let W, H, ppc;          // ppc: 1 cm 당 픽셀
+  let charges = [];       // {x, y (cm), q (nC)}
+  let probe = { x: 0, y: 0 };
+  let dirty = true, drag = null, eqStep = 0;
+
+  // 좌표: 화면 가운데가 원점, 오른쪽 +x, 위쪽 +y (cm)
+  const toPx = (x, y) => [W / 2 + x * ppc, H / 2 - y * ppc];
+  const toCm = (px, py) => [(px - W / 2) / ppc, (H / 2 - py) / ppc];
+
+  function field(x, y){   // N/C, cm 좌표
+    let ex = 0, ey = 0, v = 0;
+    for (const ch of charges){
+      const dx = (x - ch.x) * 0.01, dy = (y - ch.y) * 0.01, r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
+      if (r < 1e-4) continue;
+      const e = K * ch.q * 1e-9 / r2; ex += e * dx / r; ey += e * dy / r; v += K * ch.q * 1e-9 / r;
+    }
+    return { ex, ey, v };
+  }
+
+  function resize(){
+    const d = window.devicePixelRatio || 1; W = c.clientWidth; H = c.clientHeight;
+    c.width = W * d; c.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+    layer.width = W * d; layer.height = H * d; lctx.setTransform(d, 0, 0, d, 0, 0);
+    ppc = Math.min(W, H) / 36;     // 짧은 변이 36 cm
+    dirty = true;
+  }
+  window.addEventListener('resize', resize);
+
+  function preset(p){
+    if (p === 'one') charges = [{ x: 0, y: 0, q: 2 }];
+    if (p === 'same') charges = [{ x: -6, y: 0, q: 2 }, { x: 6, y: 0, q: 2 }];
+    if (p === 'dipole') charges = [{ x: -6, y: 0, q: 2 }, { x: 6, y: 0, q: -2 }];
+    if (p === 'plates'){ charges = []; for (let i = -8; i <= 8; i++){ charges.push({ x: i * 1.2, y: 6, q: 0.4 }); charges.push({ x: i * 1.2, y: -6, q: -0.4 }); } }
+    if (p === 'clear') charges = [];
+    probe = p === 'plates' ? { x: 3, y: 0 } : p === 'one' ? { x: 8, y: 4 } : { x: 0, y: 6 };
+    dirty = true;
+  }
+
+  // ---------- 전기력선 ----------
+  function trace(x0, y0, sign, startIdx){
+    // 픽셀 단위로 E 방향(sign=+1) 또는 반대(-1)를 따라감
+    const pts = [[x0, y0]]; let x = x0, y = y0, endIdx = -1;
+    for (let n = 0; n < 1600; n++){
+      const step = (px, py) => { const [cx, cy] = toCm(px, py), f = field(cx, cy), m = Math.hypot(f.ex, f.ey) || 1; return [sign * f.ex / m, -sign * f.ey / m]; };
+      const h = 2.2, k1 = step(x, y), k2 = step(x + k1[0] * h / 2, y + k1[1] * h / 2);
+      x += k2[0] * h; y += k2[1] * h; pts.push([x, y]);
+      if (x < -40 || x > W + 40 || y < -40 || y > H + 40) break;
+      let hit = false;
+      for (let i = 0; i < charges.length; i++){ if (i === startIdx) continue; const [px, py] = toPx(charges[i].x, charges[i].y);
+        if (Math.hypot(px - x, py - y) < 6 && Math.sign(charges[i].q) === -sign){ hit = true; endIdx = i; break; } }
+      if (hit) break;
+    }
+    return { pts, endIdx };
+  }
+  function drawLine(pts, color){
+    if (pts.length < 4) return;
+    lctx.strokeStyle = color; lctx.lineWidth = 1.4; lctx.beginPath();
+    pts.forEach((p, i) => i ? lctx.lineTo(p[0], p[1]) : lctx.moveTo(p[0], p[1])); lctx.stroke();
+    // 화살표 (전기장 방향)
+    const visible = pts.filter(p => p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H);
+    if (visible.length < 30) return;
+    const [ax, ay] = visible[Math.floor(visible.length * 0.45)], [bx, by] = visible[Math.floor(visible.length * 0.45) + 3];
+    const L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L;
+    lctx.fillStyle = color; lctx.beginPath(); lctx.moveTo(bx + ux * 4, by + uy * 4);
+    lctx.lineTo(bx - ux * 5 - uy * 4, by - uy * 5 + ux * 4); lctx.lineTo(bx - ux * 5 + uy * 4, by - uy * 5 - ux * 4); lctx.closePath(); lctx.fill();
+  }
+  function drawFieldLines(){
+    const col = '#3a4252';
+    charges.forEach((ch, i) => {
+      if (ch.q <= 0) return;
+      const n = charges.length > 20 ? 2 : Math.max(4, Math.round(8 * ch.q)), [px, py] = toPx(ch.x, ch.y);
+      for (let k = 0; k < n; k++){ const a = charges.length > 20 ? (k ? Math.PI * 0.5 : -Math.PI * 0.5) : 2 * Math.PI * (k + 0.5) / n;
+        drawLine(trace(px + 8 * Math.cos(a), py + 8 * Math.sin(a), 1, i).pts, col); }
+    });
+    // (−) 전하로 들어오는 선 중 (+) 전하에서 시작하지 않은 것 (무한히 먼 곳에서 오는 선)
+    charges.forEach((ch, i) => {
+      if (ch.q >= 0) return;
+      const n = charges.length > 20 ? 2 : Math.max(4, Math.round(8 * -ch.q)), [px, py] = toPx(ch.x, ch.y);
+      for (let k = 0; k < n; k++){ const a = 2 * Math.PI * (k + 0.5) / n;
+        const tr = trace(px + 8 * Math.cos(a), py + 8 * Math.sin(a), -1, i);
+        if (tr.endIdx === -1) drawLine(tr.pts.slice().reverse(), col); }
+    });
+  }
+
+  // ---------- 등전위선 (마칭 스퀘어) ----------
+  function drawEquip(){
+    const s = 5, nx = Math.ceil(W / s) + 1, ny = Math.ceil(H / s) + 1, g = new Float32Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){ const [x, y] = toCm(i * s, j * s); g[j * nx + i] = field(x, y).v; }
+    // 화면에 보이는 전위의 크기에 맞춰 같은 간격의 전위 값을 고른다
+    const abs = Array.from(g, Math.abs).filter(isFinite).sort((a, b) => a - b), p90 = abs[Math.floor(abs.length * 0.6)] || 1;
+    const raw = p90 / 3, pw = Math.pow(10, Math.floor(Math.log10(raw))), stepV = [1, 2, 5, 10].map(k => k * pw).find(v => v >= raw);
+    const levels = [];
+    for (let k = 1; k <= 8; k++){ levels.push(k * stepV); levels.push(-k * stepV); }
+    eqStep = stepV;
+    lctx.lineWidth = 1.3; lctx.setLineDash([5, 4]);
+    for (const lv of levels){
+      lctx.strokeStyle = lv > 0 ? 'rgba(214,69,65,0.75)' : 'rgba(47,111,223,0.75)'; lctx.beginPath();
+      for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++){
+        const a = g[j * nx + i], b = g[j * nx + i + 1], cc = g[(j + 1) * nx + i + 1], d = g[(j + 1) * nx + i];
+        const idx = (a > lv ? 8 : 0) | (b > lv ? 4 : 0) | (cc > lv ? 2 : 0) | (d > lv ? 1 : 0);
+        if (idx === 0 || idx === 15) continue;
+        const x = i * s, y = j * s, t = (p, q) => (lv - p) / (q - p);
+        const T = [x + s * t(a, b), y], R = [x + s, y + s * t(b, cc)], B = [x + s * t(d, cc), y + s], L = [x, y + s * t(a, d)];
+        const seg = (p, q) => { lctx.moveTo(p[0], p[1]); lctx.lineTo(q[0], q[1]); };
+        switch (idx){
+          case 1: case 14: seg(L, B); break; case 2: case 13: seg(B, R); break; case 3: case 12: seg(L, R); break;
+          case 4: case 11: seg(T, R); break; case 6: case 9: seg(T, B); break; case 7: case 8: seg(L, T); break;
+          case 5: seg(L, T); seg(B, R); break; case 10: seg(T, R); seg(L, B); break;
+        }
+      }
+      lctx.stroke();
+    }
+    lctx.setLineDash([]);
+  }
+
+  function rebuild(){
+    lctx.clearRect(0, 0, W, H);
+    if ($('cGrid').checked){
+      lctx.strokeStyle = '#eef0f4'; lctx.lineWidth = 1;
+      for (let x = 0; ; x += 5){ const [p] = toPx(x, 0), [m] = toPx(-x, 0); if (p > W + 5) break;
+        lctx.beginPath(); lctx.moveTo(p, 0); lctx.lineTo(p, H); lctx.moveTo(m, 0); lctx.lineTo(m, H); lctx.stroke(); }
+      for (let y = 0; ; y += 5){ const [, p] = toPx(0, y), [, m] = toPx(0, -y); if (m > H + 5) break;
+        lctx.beginPath(); lctx.moveTo(0, p); lctx.lineTo(W, p); lctx.moveTo(0, m); lctx.lineTo(W, m); lctx.stroke(); }
+    }
+    if ($('cEq').checked) drawEquip();
+    if ($('cVec').checked){
+      const sp = 30;
+      for (let py = sp / 2; py < H; py += sp) for (let px = sp / 2; px < W; px += sp){
+        const [x, y] = toCm(px, py), f = field(x, y), m = Math.hypot(f.ex, f.ey); if (m < 1) continue;
+        const a = Math.min(1, Math.log10(m) / 4 - 0.2), L = 11, ux = f.ex / m, uy = -f.ey / m;
+        lctx.globalAlpha = Math.max(0.15, a); lctx.strokeStyle = '#8e44ad'; lctx.fillStyle = '#8e44ad'; lctx.lineWidth = 1.5;
+        lctx.beginPath(); lctx.moveTo(px - ux * L, py - uy * L); lctx.lineTo(px + ux * L * 0.6, py + uy * L * 0.6); lctx.stroke();
+        lctx.beginPath(); lctx.moveTo(px + ux * L, py + uy * L); lctx.lineTo(px + ux * 3 - uy * 4, py + uy * 3 + ux * 4); lctx.lineTo(px + ux * 3 + uy * 4, py + uy * 3 - ux * 4); lctx.closePath(); lctx.fill();
+      }
+      lctx.globalAlpha = 1;
+    }
+    if ($('cLines').checked) drawFieldLines();
+    dirty = false;
+  }
+
+  function fmtSci(v){
+    if (!isFinite(v)) return '-';
+    const a = Math.abs(v); if (a < 1) return v.toFixed(2);
+    if (a < 10000) return Math.round(v).toLocaleString('ko-KR');
+    const e = Math.floor(Math.log10(a)), m = v / Math.pow(10, e); return m.toFixed(2) + ' × 10' + String(e).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d] || '⁻').join('');
+  }
+
+  function draw(){
+    if (dirty) rebuild();
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(layer, 0, 0, W, H);
+    // 전하
+    const plates = charges.length > 20;
+    for (const ch of charges){
+      const [px, py] = toPx(ch.x, ch.y), r = plates ? 5 : 9 + 3 * Math.abs(ch.q);
+      ctx.fillStyle = ch.q > 0 ? CP : CN; ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.fill();
+      if (!plates){ ctx.fillStyle = '#fff'; ctx.font = 'bold 15px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(ch.q > 0 ? '+' : '−', px, py + 1);
+        ctx.fillStyle = INK; ctx.font = '11px ' + FONT; ctx.fillText((ch.q > 0 ? '+' : '−') + Math.abs(ch.q) + ' nC', px, py + r + 10); }
+    }
+    // 시험 전하
+    const [qx, qy] = toPx(probe.x, probe.y), f = field(probe.x, probe.y), m = Math.hypot(f.ex, f.ey);
+    if (m > 0.5){
+      const L = Math.min(80, 14 + 14 * Math.log10(1 + m / 50)), ux = f.ex / m, uy = -f.ey / m;
+      ctx.strokeStyle = CPR; ctx.fillStyle = CPR; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(qx + ux * (L - 8), qy + uy * (L - 8)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(qx + ux * L, qy + uy * L); ctx.lineTo(qx + ux * (L - 12) - uy * 6, qy + uy * (L - 12) + ux * 6); ctx.lineTo(qx + ux * (L - 12) + uy * 6, qy + uy * (L - 12) - ux * 6); ctx.closePath(); ctx.fill();
+      ctx.font = 'bold 13px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('E', qx + ux * (L + 10), qy + uy * (L + 10));
+    }
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = CPR; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(qx, qy, 7, 0, 7); ctx.fill(); ctx.stroke();
+    if ($('cEq').checked && eqStep && charges.length){ ctx.fillStyle = '#5b6475'; ctx.font = '11px ' + FONT; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText('등전위선 간격 ' + eqStep + ' V', W - 6, H - 4); }
+    if (!charges.length){ ctx.fillStyle = '#5b6475'; ctx.font = 'bold 14px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('[+ 전하 추가] 또는 예시 배치를 눌러 보세요', W / 2, 24); }
+    // 수치
+    $('sE').textContent = charges.length ? fmtSci(m) + ' N/C' : '0 N/C';
+    if (m > 0.5){ let deg = Math.atan2(f.ey, f.ex) * 180 / Math.PI; $('sDir').textContent = '+x축에서 ' + String(Math.round(deg)).replace('-', '−') + '°'; }
+    else $('sDir').textContent = '-';
+    $('sV').textContent = fmtSci(f.v) + ' V';
+  }
+
+  // ---------- 끌기 ----------
+  function local(e){ const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  c.addEventListener('pointerdown', e => {
+    const [x, y] = local(e), [qx, qy] = toPx(probe.x, probe.y);
+    if (Math.hypot(x - qx, y - qy) < 24){ drag = { type: 'probe' }; }
+    else {
+      let best = -1, bd = 26;
+      charges.forEach((ch, i) => { const [px, py] = toPx(ch.x, ch.y), d = Math.hypot(px - x, py - y); if (d < bd){ bd = d; best = i; } });
+      if (best >= 0) drag = { type: 'charge', i: best };
+      else { [probe.x, probe.y] = toCm(x, y); drag = { type: 'probe' }; }
+    }
+    c.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  c.addEventListener('pointermove', e => {
+    if (!drag) return; const [x, y] = local(e), [cx, cy] = toCm(x, y);
+    if (drag.type === 'probe'){ probe.x = cx; probe.y = cy; }
+    else { charges[drag.i].x = cx; charges[drag.i].y = cy; drag.out = x < -10 || y < -10 || x > W + 10 || y > H + 10; dirty = true; }
+  });
+  const up = () => { if (drag && drag.type === 'charge' && drag.out){ charges.splice(drag.i, 1); dirty = true; } drag = null; };
+  c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+
+  function add(sign){
+    const q = sign * +$('qS').value, ang = charges.length * 2.1;
+    charges.push({ x: 8 * Math.cos(ang) * (charges.length ? 1 : 0), y: 8 * Math.sin(ang) * (charges.length ? 1 : 0), q }); dirty = true;
+  }
+  $('addP').addEventListener('click', () => add(1));
+  $('addN').addEventListener('click', () => add(-1));
+  document.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => preset(b.dataset.p)));
+  ['cLines', 'cEq', 'cVec', 'cGrid'].forEach(id => $(id).addEventListener('change', () => dirty = true));
+
+  // 끄는 동안에는 30 fps 정도로 다시 계산
+  let lastBuild = 0;
+  function frame(now){
+    if (dirty && drag && now - lastBuild < 33){ /* 다음 프레임에 */ }
+    else { if (dirty) lastBuild = now; draw(); }
+    requestAnimationFrame(frame);
+  }
+  resize(); preset('dipole'); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

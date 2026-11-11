@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>기체 분자 상자</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --q:#c0392b; --w:#2f6fdf; --u:#e0782f; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%}
+  #sim{height:250px}
+  #graph{height:250px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums;color:var(--accent)}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  button.b.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  button.heat{color:#c0392b;font-weight:700} button.cool{color:#2f6fdf;font-weight:700}
+  button.heat:active,button.heat.on{background:#fdecea} button.cool:active,button.cool.on{background:#e8f0fd}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>기체 분자 상자</h1>
+  <p class="hint" id="hintTxt"></p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="pvt" class="on">압력·부피·온도</button>
+      <button data-m="proc">열역학 과정</button>
+      <button data-m="mix">확산과 열의 이동</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <div class="row m-pvt">
+      <button class="b on" id="recB">지금 값 기록하기</button>
+      <button class="b" id="clrB">기록 지우기</button>
+      <select id="axS"><option value="PV">압력–부피 그래프</option><option value="PT">압력–온도 그래프</option><option value="VT">부피–온도 그래프</option></select>
+    </div>
+    <div class="row m-proc hide">
+      <select id="procS"><option value="v">부피 일정 (등적 과정)</option><option value="p">압력 일정 (등압 과정)</option><option value="t">온도 일정 (등온 과정)</option></select>
+      <button class="b heat" id="heatB">열 가하기 (누르고 있기)</button>
+      <button class="b cool" id="coolB">열 빼앗기 (누르고 있기)</button>
+      <button class="b" id="procReset">처음 상태로</button>
+    </div>
+    <div class="row m-mix hide">
+      <select id="mixS"><option value="diff">두 기체의 확산</option><option value="heat">뜨거운 기체와 차가운 기체</option></select>
+      <button class="b on" id="wallB">칸막이 치우기</button>
+      <button class="b" id="mixReset">처음 상태로</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <canvas id="graph"></canvas>
+  </div>
+
+  <div class="card m-pvt">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>부피 V</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="20" max="60" step="1" value="50"><div class="range"><span>20 mL</span><span>60 mL</span></div></div>
+      <div class="sl"><div class="top"><span>온도 T</span><b id="tV"></b></div>
+        <input type="range" id="tS" min="150" max="600" step="5" value="300"><div class="range"><span>150 K</span><span>600 K</span></div></div>
+    </div>
+  </div>
+  <div class="card"><p class="note" id="noteTxt" style="margin:0"></p></div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const INK = '#1d2330', CQ = '#c0392b', CW = '#2f6fdf', CU = '#e0782f', R = 8.31;
+  const c = $('sim'), ctx = c.getContext('2d'), g = $('graph'), gctx = g.getContext('2d');
+  let mode = 'pvt', W, H, GW, GH;
+
+  function fit(cv, x){ const d = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; cv.width = w * d; cv.height = h * d; x.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(c, ctx); [GW, GH] = fit(g, gctx); }
+  window.addEventListener('resize', resize);
+
+  // ---------- 분자 ----------
+  // 상자 좌표는 0~1 (가로는 상자 너비 비율). 속력은 sqrt(T)에 비례
+  let P = [];
+  function gauss(){ return Math.sqrt(-2 * Math.log(Math.random() + 1e-9)) * Math.cos(2 * Math.PI * Math.random()); }
+  function makeParticles(n, xmin, xmax, T, kind){
+    const arr = [];
+    for (let i = 0; i < n; i++){ const s = 0.17 * Math.sqrt(T / 300); arr.push({ x: xmin + Math.random() * (xmax - xmin), y: Math.random(), vx: gauss() * s, vy: gauss() * s, k: kind || 0 }); }
+    return arr;
+  }
+  let hitCount = 0, hitRate = 0;
+  // 분자 이동. box: 오른쪽 벽 위치(0~1), wall: 칸막이 위치 (없으면 null), aspect: 화면 상자 가로/세로
+  function moveParticles(dt, right, wall, onWall){
+    for (const p of P){
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.x < 0){ p.x = -p.x; p.vx = Math.abs(p.vx); hitCount++; }
+      if (p.x > right){ p.x = 2 * right - p.x; p.vx = -Math.abs(p.vx); hitCount++; }
+      if (p.y < 0){ p.y = -p.y; p.vy = Math.abs(p.vy); hitCount++; }
+      if (p.y > 1){ p.y = 2 - p.y; p.vy = -Math.abs(p.vy); hitCount++; }
+      if (wall !== null){
+        const side = p.x < wall ? -1 : 1, prev = p.x - p.vx * dt;
+        if ((prev < wall) !== (p.x < wall)){ p.x = 2 * wall - p.x; p.vx = -p.vx; if (onWall) onWall(p, prev < wall ? -1 : 1); }
+      }
+      // 아주 조금씩 방향을 흐트러뜨려 실제 기체처럼 섞이게 함
+      if (Math.random() < 0.02){ const a = (Math.random() - 0.5) * 0.6, cs = Math.cos(a), sn = Math.sin(a), vx = p.vx; p.vx = vx * cs - p.vy * sn; p.vy = vx * sn + p.vy * cs; }
+    }
+  }
+  function rescale(f){ for (const p of P){ p.vx *= f; p.vy *= f; } }
+
+  function drawBox(x0, y0, bw, bh, right, opt){
+    opt = opt || {};
+    ctx.fillStyle = '#fbfcfd'; ctx.fillRect(x0, y0, bw * right, bh);
+    ctx.strokeStyle = INK; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x0 + bw * right, y0); ctx.lineTo(x0, y0); ctx.lineTo(x0, y0 + bh); ctx.lineTo(x0 + bw * right, y0 + bh); ctx.stroke();
+    if (opt.piston){ ctx.fillStyle = '#9aa3b2'; ctx.fillRect(x0 + bw * right, y0 + 2, 12, bh - 4); ctx.fillRect(x0 + bw * right + 12, y0 + bh / 2 - 4, W - (x0 + bw * right + 12) - 6, 8); }
+    else { ctx.beginPath(); ctx.moveTo(x0 + bw * right, y0); ctx.lineTo(x0 + bw * right, y0 + bh); ctx.stroke(); }
+    for (const p of P){
+      ctx.fillStyle = p.k === 1 ? '#2f6fdf' : p.k === 2 ? '#e0782f' : opt.colorBySpeed ? speedColor(Math.hypot(p.vx, p.vy)) : '#d64541';
+      ctx.beginPath(); ctx.arc(x0 + bw * p.x, y0 + bh * p.y, 3.4, 0, 7); ctx.fill();
+    }
+  }
+  function speedColor(v){ const f = Math.min(1, v / 0.45); return `rgb(${Math.round(60 + 190 * f)},${Math.round(90 + 40 * (1 - f))},${Math.round(220 - 180 * f)})`; }
+  function flame(x, y, on, cold){
+    if (!on) return;
+    ctx.fillStyle = cold ? '#7fb8ff' : '#ff8c1a';
+    for (let i = -2; i <= 2; i++){ const fx = x + i * 16, h = 10 + 6 * Math.random();
+      ctx.beginPath(); ctx.moveTo(fx - 5, y); ctx.quadraticCurveTo(fx, y - h * 1.6, fx + 5, y); ctx.fill(); }
+    ctx.fillStyle = INK; ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(cold ? '열을 빼앗는 중' : '열을 가하는 중', x + 44, y - 6);
+  }
+  function txt(s, x, y, color, align, size, bold){ ctx.fillStyle = color || '#5b6475'; ctx.font = (bold ? 'bold ' : '') + (size || 12) + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); }
+
+  // ================= 압력·부피·온도 =================
+  const n = 0.002;   // mol (50 mL, 300 K에서 약 100 kPa)
+  let curT = 300, recs = [];
+  const pressure = (V, T) => n * R * T / (V * 1e-6) / 1000;   // kPa
+  function stepPVT(dt){
+    const T = +$('tS').value, V = +$('vS').value;
+    if (Math.abs(T - curT) > 0.5){ rescale(Math.sqrt(T / curT)); curT = T; }
+    const right = V / 60;
+    moveParticles(dt, right, null);
+    const bw = W - 60, bh = H - 40;
+    drawBox(14, 20, bw, bh, right, { piston: true });
+    txt('피스톤', 14 + bw * right + 18, 12, '#5b6475', 'left');
+    return { T, V, Pk: pressure(V, T) };
+  }
+  function drawPVTGraph(cur){
+    gctx.clearRect(0, 0, GW, GH);
+    const ax = $('axS').value, L = 56, Rm = 14, top = 14, h = GH - 50, pw = GW - L - Rm;
+    const def = { P: ['압력 (kPa)', 0, 450, r => r.Pk], V: ['부피 (mL)', 0, 60, r => r.V], T: ['절대 온도 (K)', 0, 600, r => r.T] };
+    const yk = ax[0], xk = ax[1], [yn, y0, y1, yf] = def[yk], [xn, x0, x1, xf] = def[xk];
+    const X = v => L + (v - x0) / (x1 - x0) * pw, Y = v => top + h - (v - y0) / (y1 - y0) * h;
+    gctx.strokeStyle = '#d9dde4'; gctx.lineWidth = 1; gctx.strokeRect(L, top, pw, h);
+    gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475';
+    for (let i = 0; i <= 5; i++){ const xv = x0 + (x1 - x0) * i / 5, yv = y0 + (y1 - y0) * i / 5;
+      gctx.textAlign = 'center'; gctx.textBaseline = 'top'; gctx.fillText(String(Math.round(xv)), X(xv), top + h + 4);
+      gctx.textAlign = 'right'; gctx.textBaseline = 'middle'; gctx.fillText(String(Math.round(yv)), L - 4, Y(yv));
+      gctx.strokeStyle = '#eef0f4'; gctx.beginPath(); gctx.moveTo(L, Y(yv)); gctx.lineTo(L + pw, Y(yv)); gctx.stroke(); }
+    gctx.textAlign = 'center'; gctx.textBaseline = 'top'; gctx.fillText(xn, L + pw / 2, top + h + 20);
+    gctx.save(); gctx.translate(12, top + h / 2); gctx.rotate(-Math.PI / 2); gctx.textBaseline = 'middle'; gctx.fillText(yn, 0, 0); gctx.restore();
+    for (const r of recs){ gctx.fillStyle = '#2f6fdf'; gctx.beginPath(); gctx.arc(X(xf(r)), Y(yf(r)), 5, 0, 7); gctx.fill(); }
+    gctx.strokeStyle = '#d64541'; gctx.lineWidth = 2; gctx.beginPath(); gctx.arc(X(xf(cur)), Y(yf(cur)), 7, 0, 7); gctx.stroke();
+    gctx.fillStyle = '#d64541'; gctx.textAlign = 'left'; gctx.textBaseline = 'bottom'; gctx.font = '11px ' + FONT; gctx.fillText('지금', X(xf(cur)) + 9, Y(yf(cur)) - 2);
+  }
+
+  // ================= 열역학 과정 =================
+  let st = null, heating = 0, path = [], Qs = 0, Ws = 0, dUs = 0;
+  function procReset(){ st = { T: 300, V: 40 }; Qs = Ws = dUs = 0; path = [{ V: 40, P: pressure(40, 300) }]; P = makeParticles(70, 0, 40 / 60, 300); curT = 300; }
+  function stepProc(dt){
+    const kind = $('procS').value, rate = 3 * heating;   // J/s
+    if (rate !== 0){
+      const Q = rate * dt, Pk = pressure(st.V, st.T) * 1000;
+      let dT = 0, dV = 0;
+      if (kind === 'v') dT = Q / (1.5 * n * R);
+      else if (kind === 'p'){ dT = Q / (2.5 * n * R); dV = n * R * dT / Pk * 1e6; }
+      else { dV = Q / Pk * 1e6; }
+      const T2 = st.T + dT, V2 = st.V + dV;
+      if (T2 >= 120 && T2 <= 700 && V2 >= 15 && V2 <= 60){
+        const W1 = kind === 'v' ? 0 : kind === 'p' ? n * R * dT : Q;
+        Qs += Q; Ws += W1; dUs += 1.5 * n * R * dT; st.T = T2; st.V = V2;
+        if (Math.abs(st.T - curT) > 0.3){ rescale(Math.sqrt(st.T / curT)); curT = st.T; }
+        const last = path[path.length - 1], Pn = pressure(st.V, st.T);
+        if (Math.hypot(last.V - st.V, (last.P - Pn) / 8) > 0.3) path.push({ V: st.V, P: Pn });
+      }
+    }
+    const right = st.V / 60;
+    moveParticles(dt, right, null);
+    const bw = W - 60, bh = H - 60;
+    drawBox(14, 14, bw, bh, right, { piston: kind !== 'v', colorBySpeed: true });
+    if (kind === 'v'){ ctx.fillStyle = '#5b6475'; ctx.fillRect(14 + bw * right, 14, 6, bh); txt('고정된 벽', 14 + bw * right + 10, 8, '#5b6475', 'left'); }
+    flame(14 + bw * 0.25, H - 10, heating !== 0, heating < 0);
+    return { Pk: pressure(st.V, st.T) };
+  }
+  function drawProcGraph(){
+    gctx.clearRect(0, 0, GW, GH);
+    const split = Math.min(GW * 0.6, GW - 150), L = 50, top = 16, h = GH - 52, pw = split - L - 10;
+    const X = v => L + (v - 10) / 55 * pw, Y = p => top + h - p / 450 * h;
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(L, top, pw, h);
+    gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475';
+    [10, 20, 30, 40, 50, 60].forEach(v => { gctx.textAlign = 'center'; gctx.textBaseline = 'top'; gctx.fillText(String(v), X(v), top + h + 4); });
+    [0, 100, 200, 300, 400].forEach(p => { gctx.textAlign = 'right'; gctx.textBaseline = 'middle'; gctx.fillText(String(p), L - 4, Y(p)); });
+    gctx.textAlign = 'center'; gctx.textBaseline = 'top'; gctx.fillText('부피 (mL)', L + pw / 2, top + h + 20);
+    gctx.save(); gctx.translate(10, top + h / 2); gctx.rotate(-Math.PI / 2); gctx.textBaseline = 'middle'; gctx.fillText('압력 (kPa)', 0, 0); gctx.restore();
+    // 기체가 한 일 = 그래프 아래 넓이
+    if (path.length > 1 && $('procS').value !== 'v'){
+      gctx.fillStyle = 'rgba(47,111,223,0.15)'; gctx.beginPath(); gctx.moveTo(X(path[0].V), Y(0));
+      path.forEach(p => gctx.lineTo(X(p.V), Y(p.P))); gctx.lineTo(X(path[path.length - 1].V), Y(0)); gctx.closePath(); gctx.fill();
+    }
+    gctx.strokeStyle = INK; gctx.lineWidth = 2.5; gctx.beginPath(); path.forEach((p, i) => i ? gctx.lineTo(X(p.V), Y(p.P)) : gctx.moveTo(X(p.V), Y(p.P))); gctx.stroke();
+    const cur = { V: st.V, P: pressure(st.V, st.T) };
+    gctx.fillStyle = '#d64541'; gctx.beginPath(); gctx.arc(X(cur.V), Y(cur.P), 5, 0, 7); gctx.fill();
+    gctx.fillStyle = '#5b6475'; gctx.beginPath(); gctx.arc(X(path[0].V), Y(path[0].P), 4, 0, 7); gctx.fill();
+    // 에너지 막대
+    const bx = split + 10, bw2 = GW - bx - 6, items = [['Q 가한 열', Qs, CQ], ['W 기체가 한 일', Ws, CW], ['ΔU 내부 에너지 변화', dUs, CU]];
+    const mx = Math.max(10, ...items.map(i => Math.abs(i[1]))), mid = top + h / 2, colW = bw2 / 3;
+    gctx.strokeStyle = '#9aa3b2'; gctx.beginPath(); gctx.moveTo(bx, mid); gctx.lineTo(bx + bw2, mid); gctx.stroke();
+    items.forEach(([nm, v, col], i) => {
+      const x = bx + colW * i + colW * 0.2, w = colW * 0.6, hh = v / mx * (h / 2 - 14);
+      gctx.fillStyle = col; gctx.fillRect(x, Math.min(mid, mid - hh), w, Math.abs(hh));
+      gctx.fillStyle = INK; gctx.font = 'bold 11px ' + FONT; gctx.textAlign = 'center'; gctx.textBaseline = v >= 0 ? 'bottom' : 'top';
+      gctx.fillText(v.toFixed(1), x + w / 2, mid - hh + (v >= 0 ? -2 : 2));
+      gctx.fillStyle = col; gctx.font = 'bold 12px ' + FONT; gctx.textBaseline = 'top'; gctx.fillText(nm.split(' ')[0], x + w / 2, top + h + 4);
+    });
+    gctx.fillStyle = '#5b6475'; gctx.font = '11px ' + FONT; gctx.textAlign = 'center'; gctx.textBaseline = 'top'; gctx.fillText('에너지 (J)', bx + bw2 / 2, 0);
+  }
+
+  // ================= 확산과 열의 이동 =================
+  let wallOn = true, mixT = 0, mixBuf = [];
+  function mixReset(){
+    wallOn = true; $('wallB').textContent = $('mixS').value === 'diff' ? '칸막이 치우기' : '금속판으로 바꾸기'; $('wallB').classList.add('on'); mixT = 0; mixBuf = [];
+    if ($('mixS').value === 'diff') P = makeParticles(60, 0, 0.5, 300, 1).concat(makeParticles(60, 0.5, 1, 300, 2));
+    else P = makeParticles(60, 0, 0.5, 520, 0).concat(makeParticles(60, 0.5, 1, 120, 0));
+  }
+  function sideTemp(left){ let s = 0, k = 0; for (const p of P){ if ((p.x < 0.5) === left){ s += p.vx * p.vx + p.vy * p.vy; k++; } } return k ? 300 * (s / k) / (2 * 0.17 * 0.17) : 0; }
+  function stepMix(dt){
+    const diff = $('mixS').value === 'diff';
+    mixT += dt;
+    // 칸막이: 확산에서는 치우면 사라지고, 열의 이동에서는 열이 통하는 벽이 된다
+    const wall = diff ? (wallOn ? 0.5 : null) : 0.5;
+    // 열이 통하는 판에 부딪친 분자는 반대편의 분자 하나와 에너지를 나눈다 (전체 에너지는 보존)
+    const onWall = (!diff && !wallOn) ? (p) => {
+      const others = P.filter(q => (q.x < 0.5) !== (p.x < 0.5)); if (!others.length) return;
+      const q = others[Math.floor(Math.random() * others.length)], e1 = p.vx * p.vx + p.vy * p.vy, e2 = q.vx * q.vx + q.vy * q.vy, a = 0.3;
+      const n1 = (1 - a) * e1 + a * e2, n2 = a * e1 + (1 - a) * e2, f1 = Math.sqrt(n1 / e1), f2 = Math.sqrt(n2 / e2);
+      p.vx *= f1; p.vy *= f1; q.vx *= f2; q.vy *= f2; } : null;
+    moveParticles(dt, 1, wall, onWall);
+    const bw = W - 28, bh = H - 40;
+    drawBox(14, 20, bw, bh, 1, { colorBySpeed: !diff });
+    if (wall !== null){ ctx.fillStyle = diff ? '#5b6475' : (wallOn ? '#5b6475' : '#c9a227'); ctx.fillRect(14 + bw * 0.5 - 3, 20, 6, bh);
+      txt(diff ? '칸막이' : (wallOn ? '단열 칸막이' : '열이 통하는 금속판'), 14 + bw * 0.5, 10, '#5b6475'); }
+    let leftA = 0, totA = 0; for (const p of P){ if (p.k === 1){ totA++; if (p.x < 0.5) leftA++; } }
+    const TL = sideTemp(true), TR = sideTemp(false);
+    if (Math.floor(mixT * 10) !== Math.floor((mixT - dt) * 10)) mixBuf.push({ t: mixT, a: leftA / totA, TL, TR });
+    if (mixBuf.length > 600) mixBuf.shift();
+    return { leftA, totA, TL, TR, diff };
+  }
+  function drawMixGraph(r){
+    gctx.clearRect(0, 0, GW, GH);
+    const L = 48, Rm = 14, top = 22, h = GH - 56, pw = GW - L - Rm, t1 = Math.max(mixT, 20), t0 = Math.max(0, t1 - 60);
+    const X = tt => L + (tt - t0) / (t1 - t0) * pw;
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(L, top, pw, h);
+    gctx.font = 'bold 12px ' + FONT; gctx.textAlign = 'left'; gctx.textBaseline = 'bottom';
+    let Y;
+    if (r.diff){
+      gctx.fillStyle = '#2f6fdf'; gctx.fillText('파란 분자 중 왼쪽 칸에 있는 비율 (%)', L, top - 4);
+      Y = v => top + h - v * h;
+      gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'right'; gctx.textBaseline = 'middle';
+      [0, 0.5, 1].forEach(v => gctx.fillText(String(v * 100), L - 4, Y(v)));
+      gctx.setLineDash([4, 4]); gctx.strokeStyle = '#9aa3b2'; gctx.beginPath(); gctx.moveTo(L, Y(0.5)); gctx.lineTo(L + pw, Y(0.5)); gctx.stroke(); gctx.setLineDash([]);
+      gctx.strokeStyle = '#2f6fdf'; gctx.lineWidth = 2.2; gctx.beginPath(); mixBuf.filter(b => b.t >= t0).forEach((b, i) => i ? gctx.lineTo(X(b.t), Y(b.a)) : gctx.moveTo(X(b.t), Y(b.a))); gctx.stroke();
+    } else {
+      gctx.fillStyle = '#e0782f'; gctx.fillText('왼쪽 칸 온도', L, top - 4); gctx.fillStyle = '#2f6fdf'; gctx.fillText('오른쪽 칸 온도 (K)', L + 90, top - 4);
+      Y = v => top + h - v / 600 * h;
+      gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'right'; gctx.textBaseline = 'middle';
+      [0, 200, 400, 600].forEach(v => gctx.fillText(String(v), L - 4, Y(v)));
+      [['TL', '#e0782f'], ['TR', '#2f6fdf']].forEach(([k, col]) => { gctx.strokeStyle = col; gctx.lineWidth = 2.2; gctx.beginPath();
+        mixBuf.filter(b => b.t >= t0).forEach((b, i) => i ? gctx.lineTo(X(b.t), Y(b[k])) : gctx.moveTo(X(b.t), Y(b[k]))); gctx.stroke(); });
+    }
+    gctx.fillStyle = '#5b6475'; gctx.textAlign = 'center'; gctx.textBaseline = 'top';
+    for (let s = Math.ceil(t0 / 10) * 10; s <= t1; s += 10) gctx.fillText(String(s), X(s), top + h + 4);
+    gctx.fillText('시간 (s)', L + pw / 2, top + h + 20);
+  }
+
+  function setStats(items){ $('stats').innerHTML = items.map(([k, v, cc]) => `<div class="stat"><div class="k">${k}</div><div class="val"${cc ? ` style="color:${cc}"` : ''}>${v}</div></div>`).join(''); }
+
+  // ---------- 조작 ----------
+  const TEXT = {
+    pvt: ['부피와 온도를 바꾸며 기체 분자의 운동과 압력의 변화를 관찰하세요. [지금 값 기록하기]로 점을 찍어 그래프를 만들 수 있습니다.',
+      '기체의 압력은 분자들이 벽에 부딪치며 주는 힘 때문에 생깁니다. 온도가 일정할 때 부피를 줄이면 분자가 벽에 더 자주 부딪쳐 압력이 커지고(보일 법칙), 부피가 일정할 때 온도를 높이면 분자가 더 빠르게 부딪쳐 압력이 커집니다(샤를 법칙). 이상 기체 법칙 PV = nRT (여기서 n = 0.002 mol).'],
+    proc: ['과정을 고르고 열을 가하거나 빼앗아 보세요. 가한 열 Q가 기체의 내부 에너지 변화 ΔU와 기체가 한 일 W로 어떻게 나뉘는지 비교합니다. 분자 색은 빠를수록 붉습니다.',
+      '열역학 제1법칙: Q = ΔU + W. 등적 과정에서는 W = 0이라 가한 열이 모두 내부 에너지(온도)를 높이고, 등온 과정에서는 ΔU = 0이라 가한 열이 모두 일로 바뀝니다. 등압 과정에서는 두 가지로 나뉩니다. 기체가 한 일은 압력–부피 그래프 아래의 넓이(파란 부분)와 같습니다. (단원자 이상 기체, n = 0.002 mol)'],
+    mix: ['칸막이를 치우고 시간이 지나면 어떻게 되는지 관찰하세요. 한번 섞이거나 온도가 같아진 기체가 저절로 처음 상태로 되돌아가는지도 기다려 보세요.',
+      '분자들이 고르게 퍼진 상태는 한쪽에 모인 상태보다 가능한 배치(경우의 수)가 훨씬 많아서, 자연 현상은 무질서도(엔트로피)가 커지는 쪽으로 일어납니다. 분자 120개가 모두 처음처럼 나뉠 확률은 매우 작아서 사실상 되돌아가지 않습니다. 열도 같은 까닭으로 뜨거운 쪽에서 차가운 쪽으로만 저절로 이동합니다(비가역 현상).'] };
+  function setMode(m){
+    mode = m;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    ['pvt', 'proc', 'mix'].forEach(k => document.querySelectorAll('.m-' + k).forEach(e => e.classList.toggle('hide', k !== m)));
+    $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1];
+    if (m === 'pvt'){ curT = +$('tS').value; P = makeParticles(70, 0, +$('vS').value / 60, curT); }
+    if (m === 'proc') procReset();
+    if (m === 'mix') mixReset();
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  function labels(){ $('vV').textContent = $('vS').value + ' mL'; $('tV').textContent = $('tS').value + ' K (' + (+$('tS').value - 273) + ' °C)'; }
+  $('vS').addEventListener('input', () => { labels(); const r = +$('vS').value / 60; for (const p of P) if (p.x > r) p.x = r * Math.random(); });
+  $('tS').addEventListener('input', labels);
+  $('recB').addEventListener('click', () => { const T = +$('tS').value, V = +$('vS').value; recs.push({ T, V, Pk: pressure(V, T) }); });
+  $('clrB').addEventListener('click', () => { recs = []; });
+  $('procS').addEventListener('change', procReset);
+  $('procReset').addEventListener('click', procReset);
+  const hold = (id, v) => { const b = $(id);
+    const on = e => { heating = v; b.classList.add('on'); e.preventDefault(); }, off = () => { if (heating === v) heating = 0; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, off)); };
+  hold('heatB', 1); hold('coolB', -1);
+  $('mixS').addEventListener('change', mixReset);
+  $('mixReset').addEventListener('click', mixReset);
+  $('wallB').addEventListener('click', () => { wallOn = !wallOn; $('wallB').textContent = wallOn ? '칸막이 치우기' : ($('mixS').value === 'diff' ? '칸막이 다시 넣기' : '단열 칸막이로 바꾸기'); $('wallB').classList.toggle('on', wallOn);
+    if ($('mixS').value !== 'diff') $('wallB').textContent = wallOn ? '금속판으로 바꾸기' : '단열 칸막이로 바꾸기'; });
+
+  let last = performance.now(), hitT = 0;
+  function frame(now){
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
+    ctx.clearRect(0, 0, W, H);
+    hitT += dt; if (hitT > 1){ hitRate = hitCount / hitT; hitCount = 0; hitT = 0; }
+    if (mode === 'pvt'){
+      const r = stepPVT(dt); drawPVTGraph(r);
+      setStats([['압력 P', r.Pk.toFixed(0) + ' kPa', '#d64541'], ['부피 V', r.V + ' mL'], ['온도 T', r.T + ' K'], ['벽에 부딪치는 횟수', Math.round(hitRate) + ' 회/s']]);
+    } else if (mode === 'proc'){
+      const r = stepProc(dt); drawProcGraph();
+      setStats([['압력', r.Pk.toFixed(0) + ' kPa'], ['부피', st.V.toFixed(1) + ' mL'], ['온도', st.T.toFixed(0) + ' K'], ['Q = ΔU + W', Qs.toFixed(1) + ' = ' + dUs.toFixed(1) + ' + ' + Ws.toFixed(1)]]);
+    } else {
+      const r = stepMix(dt); drawMixGraph(r);
+      if (r.diff) setStats([['왼쪽 칸의 파란 분자', r.leftA + ' / ' + r.totA + '개', '#2f6fdf'], ['모두 처음처럼 나뉠 확률', '약 10⁻³⁶']]);
+      else setStats([['왼쪽 칸 온도', Math.round(r.TL) + ' K', '#e0782f'], ['오른쪽 칸 온도', Math.round(r.TR) + ' K', '#2f6fdf']]);
+    }
+    requestAnimationFrame(frame);
+  }
+  labels(); resize(); setMode('pvt'); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

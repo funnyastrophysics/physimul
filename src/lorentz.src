@@ -1,0 +1,100 @@
+로런츠 힘
+  <h1>로런츠 힘</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="particle">자기장 속 하전 입자</button>
+      <button data-m="wire">자기장 속 도선</button>
+    </div>
+    <canvas id="sim" style="height:330px;border-radius:8px"></canvas>
+    <div class="row m-particle">
+      <button class="b primary" id="fireB">입자 쏘기</button>
+      <select id="pS"><option value="p">양성자 (+)</option><option value="e">전자 (−)</option><option value="a">알파 입자 (+2, 질량 4배)</option></select>
+      <button class="b" id="bdirB">자기장 방향 바꾸기</button>
+      <button class="b" id="clrB">궤적 지우기</button>
+    </div>
+    <div class="row m-wire">
+      <button class="b" id="idirB">전류 방향 바꾸기</button>
+      <button class="b" id="mflipB">자석 뒤집기</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-particle"><div class="top"><span>입자의 속력</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="1" max="5" step="0.5" value="3"><div class="range"><span>1 × 10⁶ m/s</span><span>5 × 10⁶ m/s</span></div></div>
+      <div class="sl"><div class="top"><span>자기장의 세기 B</span><b id="bV"></b></div>
+        <input type="range" id="bS" min="0.1" max="1" step="0.05" value="0.5"><div class="range"><span>0.1 T</span><span>1 T</span></div></div>
+      <div class="sl m-wire"><div class="top"><span>전류의 세기 I</span><b id="iV"></b></div>
+        <input type="range" id="iS" min="0" max="5" step="0.5" value="3"><div class="range"><span>0 A</span><span>5 A</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, bdir = 1, trails = [], cur = null, idir = 1, mflip = 1, swing = 0;
+bindLabels({ vS: ['vV', v => v.toFixed(1) + ' × 10⁶ m/s'], bS: ['bV', v => v.toFixed(2) + ' T'], iS: ['iV', v => v.toFixed(1) + ' A'] });
+const P = { p: { q: 1.6e-19, m: 1.67e-27, c: RED, n: '양성자' }, e: { q: -1.6e-19, m: 9.11e-31, c: BLUE, n: '전자' }, a: { q: 3.2e-19, m: 6.64e-27, c: ORANGE, n: '알파 입자' } };
+function particle(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const B = +$('bS').value * bdir, sp = 22;
+  // 자기장 기호
+  for (let y = sp / 2; y < H; y += sp) for (let x = sp / 2; x < W; x += sp){
+    if (bdir > 0){ line(ctx, [[x - 3, y - 3], [x + 3, y + 3]], GRAY, 1); line(ctx, [[x - 3, y + 3], [x + 3, y - 3]], GRAY, 1); } else { ctx.fillStyle = GRAY; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 7); ctx.fill(); } }
+  T(ctx, bdir > 0 ? '⊗ 자기장: 종이면에 들어가는 방향' : '⊙ 자기장: 종이면에서 나오는 방향', W - 8, H - 10, { align: 'right', size: 11, color: INK, bold: true });
+  // 화면 스케일: 양성자 3×10⁶ m/s, 0.5 T일 때 반지름이 약 W/4 되도록
+  const k = (Math.min(W, H) * 0.32) / (1.67e-27 * 3e6 / (1.6e-19 * 0.5));
+  trails.forEach(tr => { ctx.strokeStyle = tr.c; ctx.lineWidth = 2; ctx.globalAlpha = 0.55; ctx.beginPath(); tr.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.globalAlpha = 1; });
+  // 발사 장치
+  const gx = 18, gy = H * 0.6; ctx.fillStyle = WIRE; ctx.fillRect(0, gy - 10, gx + 6, 20);
+  if (cur){
+    const pt = P[cur.k], visualR = (pt.m * cur.v / (Math.abs(pt.q) * Math.abs(B))) * k;
+    // 화면 속력 일정 (보기 좋게), 방향은 F = qv×B
+    const vs = 160, w = vs / visualR * Math.sign(-pt.q * B);   // 시계/반시계
+    const n = 8; for (let i = 0; i < n; i++){ const h = dt / n, a = Math.atan2(cur.vy, cur.vx) + w * h; cur.vx = Math.cos(a); cur.vy = Math.sin(a); cur.x += cur.vx * vs * h; cur.y += cur.vy * vs * h; cur.tr.pts.push([cur.x, cur.y]); }
+    ctx.fillStyle = pt.c; ctx.beginPath(); ctx.arc(cur.x, cur.y, 6, 0, 7); ctx.fill();
+    // 속도와 힘 화살표
+    arrow(ctx, cur.x, cur.y, cur.x + cur.vx * 40, cur.y + cur.vy * 40, GREEN, 2.5); T(ctx, 'v', cur.x + cur.vx * 48, cur.y + cur.vy * 48, { color: GREEN, bold: true });
+    const fx = -cur.vy * Math.sign(w), fy = cur.vx * Math.sign(w);
+    arrow(ctx, cur.x, cur.y, cur.x + fx * 34, cur.y + fy * 34, PURPLE, 2.5); T(ctx, 'F', cur.x + fx * 42, cur.y + fy * 42, { color: PURPLE, bold: true });
+    cur.t += dt; if (cur.x < -20 || cur.x > W + 20 || cur.y < -20 || cur.y > H + 20 || cur.t > 12) cur = null;
+  } else T(ctx, '[입자 쏘기]를 누르세요', W / 2, 16, { bold: true, color: BLUE, size: 13 });
+  const pt = P[$('pS').value], v = +$('vS').value * 1e6, r = pt.m * v / (Math.abs(pt.q) * Math.abs(B));
+  setStats([['원운동 반지름 r = mv/(|q|B)', r >= 0.01 ? (r * 100).toFixed(2) + ' cm' : (r * 1000).toFixed(3) + ' mm'], ['주기 2πm/(|q|B)', (2 * Math.PI * pt.m / (Math.abs(pt.q) * Math.abs(B)) * 1e9).toFixed(3) + ' ns'], ['로런츠 힘 |q|vB', (Math.abs(pt.q) * v * Math.abs(B)).toExponential(2).replace('e-', ' × 10^-') + ' N', PURPLE]]);
+  if (pt === P.e) T(ctx, '전자는 질량이 매우 작아 반지름이 아주 작습니다 (화면에서는 크게 확대)', W / 2, 34, { size: 11 });
+}
+function wire(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const I = +$('iS').value * idir, B = +$('bS').value * mflip, L = 0.05, F = B * I * L;   // F > 0: 바깥(화면 아래쪽으로 표시)
+  swing += ((F * 300) - swing) * Math.min(1, dt * 3);
+  const cx = W / 2, top = 30, mag = Math.min(W * 0.6, 260), my = H * 0.62;
+  // 말굽자석 (윗면 N, 아랫면 S 또는 반대) - 옆에서 본 모습
+  const nTop = mflip > 0;
+  ctx.fillStyle = nTop ? RED : BLUE; ctx.fillRect(cx - mag / 2, my - 70, mag, 34); T(ctx, nTop ? 'N' : 'S', cx - mag / 2 + 18, my - 53, { color: '#fff', bold: true, size: 15 });
+  ctx.fillStyle = nTop ? BLUE : RED; ctx.fillRect(cx - mag / 2, my + 36, mag, 34); T(ctx, nTop ? 'S' : 'N', cx - mag / 2 + 18, my + 53, { color: '#fff', bold: true, size: 15 });
+  ctx.fillStyle = '#9aa3b2'; ctx.fillRect(cx + mag / 2, my - 70, 24, 140);
+  for (let i = 0; i < 5; i++){ const x = cx - mag / 2 + 50 + i * (mag - 70) / 4; arrow(ctx, x, nTop ? my - 34 : my + 34, x, nTop ? my - 6 : my + 6, 'rgba(142,68,173,0.6)', 1.5, 7); arrow(ctx, x, nTop ? my + 6 : my - 6, x, nTop ? my + 34 : my - 34, 'rgba(142,68,173,0.6)', 1.5, 7); }
+  T(ctx, '자기장 B', cx + mag / 2 - 10, my - 80, { color: PURPLE, bold: true, size: 11, align: 'right' });
+  // 그네 도선 (종이면에 수직: 단면을 원으로) - 힘에 따라 화면 왼쪽/오른쪽으로 흔들림
+  const wx = cx + swing;
+  line(ctx, [[cx - 40, top], [wx - 8, my], [wx + 8, my], [cx + 40, top]], WIRE, 1.5);
+  ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.arc(wx, my, 10, 0, 7); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+  if (I > 0){ ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(wx, my, 2.5, 0, 7); ctx.fill(); } else if (I < 0){ line(ctx, [[wx - 6, my - 6], [wx + 6, my + 6]], INK, 1.5); line(ctx, [[wx - 6, my + 6], [wx + 6, my - 6]], INK, 1.5); }
+  if (Math.abs(F) > 1e-6) arrow(ctx, wx, my, wx + Math.sign(F) * (20 + Math.abs(F) * 120), my, ORANGE, 3.5);
+  T(ctx, I === 0 ? '전류가 흐르지 않습니다' : (I > 0 ? '⊙ 전류: 종이면에서 나오는 방향' : '⊗ 전류: 종이면에 들어가는 방향'), 8, 14, { align: 'left', bold: true, color: INK });
+  if (Math.abs(F) > 1e-6) T(ctx, '힘 F', wx + Math.sign(F) * (30 + Math.abs(F) * 120), my - 16, { color: ORANGE, bold: true });
+  setStats([['도선이 받는 힘 F = BIL', Math.abs(F).toFixed(3) + ' N', ORANGE], ['자기장 속 도선의 길이', (L * 100) + ' cm'], ['힘의 방향', Math.abs(F) < 1e-6 ? '-' : F > 0 ? '오른쪽' : '왼쪽']]);
+}
+const TEXT = {
+  particle: ['균일한 자기장 속으로 하전 입자를 쏘아 보세요. 입자의 종류, 속력, 자기장의 세기와 방향을 바꾸며 궤적을 비교합니다.',
+    '자기장 속에서 움직이는 하전 입자는 속도와 자기장에 모두 수직인 로런츠 힘(F = qvB)을 받습니다. 힘이 속도에 수직이므로 속력은 변하지 않고 방향만 바뀌어 등속 원운동을 합니다. 전하의 부호가 반대면 반대 방향으로 휘어집니다. 입자 가속기, 질량 분석기, 핵융합 장치(토카막), 지구 주위의 밴앨런대가 이 원리와 관련 있습니다.'],
+  wire: ['말굽자석 사이에 매단 도선을 옆에서 본 모습입니다. 전류의 세기와 방향, 자석의 방향을 바꾸며 도선이 움직이는 방향을 확인하세요.',
+    '자기장 속에서 전류가 흐르는 도선은 전류와 자기장에 모두 수직인 힘을 받고, 크기는 F = BIL입니다. 전류의 방향이나 자기장의 방향 중 하나를 바꾸면 힘의 방향이 반대가 됩니다. 이 힘이 전동기와 스피커를 움직입니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('fireB').addEventListener('click', () => { const k = $('pS').value, tr = { c: P[k].c, pts: [] }; trails.push(tr); if (trails.length > 6) trails.shift();
+  cur = { k, v: +$('vS').value * 1e6, x: 24, y: s.H * 0.6, vx: 1, vy: 0, tr, t: 0 }; });
+$('clrB').addEventListener('click', () => { trails = []; });
+$('bdirB').addEventListener('click', () => { bdir = -bdir; });
+$('idirB').addEventListener('click', () => { idir = -idir; });
+$('mflipB').addEventListener('click', () => { mflip = -mflip; });
+loop(dt => mode === 'particle' ? particle(dt) : wire(dt));

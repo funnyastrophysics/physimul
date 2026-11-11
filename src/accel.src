@@ -1,0 +1,115 @@
+등가속도 운동과 정지 거리
+  <h1>등가속도 운동과 정지 거리</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="ramp">빗면 위 수레</button>
+      <button data-m="car">자동차의 정지 거리</button>
+    </div>
+    <canvas id="sim" style="height:220px"></canvas>
+    <div class="row">
+      <button class="b primary" id="goB">출발</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label class="chk m-ramp"><input type="checkbox" id="cDots" checked> 0.2초 간격 위치</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card"><canvas id="graph" style="height:330px"></canvas></div>
+  <div class="card">
+    <div class="controls m-ramp">
+      <div class="sl"><div class="top"><span>빗면의 기울기</span><b id="angV"></b></div>
+        <input type="range" id="angS" min="3" max="30" step="1" value="10"><div class="range"><span>3°</span><span>30°</span></div></div>
+    </div>
+    <div class="controls m-car">
+      <div class="sl"><div class="top"><span>자동차의 속력</span><b id="spV"></b></div>
+        <input type="range" id="spS" min="30" max="110" step="5" value="60"><div class="range"><span>30 km/h</span><span>110 km/h</span></div></div>
+      <div class="sl"><div class="top"><span>반응 시간</span><b id="rtV"></b></div>
+        <input type="range" id="rtS" min="0.5" max="2.5" step="0.1" value="1"><div class="range"><span>0.5 s</span><span>2.5 s (휴대폰을 보는 경우 등)</span></div></div>
+      <div class="sl"><div class="top"><span>도로 상태</span></div>
+        <select id="roadS"><option value="0.8">마른 도로</option><option value="0.5">젖은 도로</option><option value="0.15">얼어붙은 도로</option></select></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const g = 9.8;
+const S = $('sim'), G = $('graph'); let s, gr;
+const rs = () => { s = fitCanvas(S); gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+let mode, run = false, t = 0, buf = [];
+// 빗면
+const LEN = 2.0; let x = 0, v = 0;
+// 자동차
+let cx = 0, cv = 0, phase = 0;   // phase 0 대기, 1 반응, 2 제동, 3 정지
+bindLabels({ angS: ['angV', v => v + '°'], spS: ['spV', v => v + ' km/h'], rtS: ['rtV', v => v.toFixed(1) + ' s'] });
+
+function reset(){ run = false; t = 0; buf = []; x = 0; v = 0; cx = 0; cv = +$('spS').value / 3.6; phase = 0; $('goB').textContent = '출발'; }
+function stepRamp(dt){
+  const a = g * Math.sin(+$('angS').value * Math.PI / 180);
+  if (run && x < LEN){ x += v * dt + 0.5 * a * dt * dt; v += a * dt; t += dt; if (x >= LEN){ x = LEN; run = false; } buf.push({ t, s: x, v, a }); }
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const ang = +$('angS').value * Math.PI / 180, x0 = 30, y0 = 30, len = Math.min((W - 60) / Math.cos(ang), (H - 60) / Math.sin(ang) * 0.95, W * 1.5);
+  const P = d => [x0 + d / LEN * len * Math.cos(ang), y0 + d / LEN * len * Math.sin(ang)];
+  const [ex, ey] = P(LEN);
+  ctx.fillStyle = '#e6e9ef'; ctx.beginPath(); ctx.moveTo(x0, y0 + 8); ctx.lineTo(ex, ey + 8); ctx.lineTo(ex, H - 4); ctx.lineTo(x0, H - 4); ctx.closePath(); ctx.fill();
+  line(ctx, [[x0, y0 + 8], [ex, ey + 8]], INK, 2); line(ctx, [[x0 - 10, H - 4], [W - 10, H - 4]], INK, 1.5);
+  for (let d = 0; d <= LEN + 1e-9; d += 0.5){ const [px, py] = P(d); line(ctx, [[px, py + 8], [px + 6 * Math.sin(ang), py + 8 - 0]], SUB, 1); T(ctx, d.toFixed(1) + ' m', px + 10 * Math.sin(ang), py + 22, { size: 10 }); }
+  if ($('cDots').checked) for (let tt = 0.2; tt <= t + 1e-9; tt += 0.2){ const d = Math.min(LEN, 0.5 * a * tt * tt), [px, py] = P(d);
+    ctx.fillStyle = 'rgba(47,111,223,0.5)'; ctx.beginPath(); ctx.arc(px, py - 7, 4, 0, 7); ctx.fill(); }
+  // 수레
+  const [px, py] = P(x); ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
+  ctx.fillStyle = BLUE; ctx.fillRect(-16, -14, 32, 14); ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(-9, 3, 4, 0, 7); ctx.arc(9, 3, 4, 0, 7); ctx.fill(); ctx.restore();
+  T(ctx, '기울기 ' + $('angS').value + '°', W - 12, 16, { align: 'right', bold: true, color: INK });
+  setStats([['시간', t.toFixed(2) + ' s'], ['이동 거리', x.toFixed(2) + ' m', BLUE], ['속도', v.toFixed(2) + ' m/s', ORANGE], ['가속도', (g * Math.sin(ang)).toFixed(2) + ' m/s²', GREEN]]);
+  timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: ['s'], names: ['이동 거리 s (m)'], colors: [BLUE], min: 0.5, pos: true }, { keys: ['v'], names: ['속도 v (m/s)'], colors: [ORANGE], min: 1, pos: true }, { keys: ['a'], names: ['가속도 a (m/s²)'], colors: [GREEN], min: 1, pos: true }], 3);
+}
+function stepCar(dt){
+  const v0 = +$('spS').value / 3.6, rt = +$('rtS').value, mu = +$('roadS').value, a = mu * g;
+  if (run && phase < 3){
+    t += dt;
+    if (phase === 0) phase = 1;
+    if (phase === 1){ cx += v0 * dt; cv = v0; if (t >= rt) phase = 2; }
+    else if (phase === 2){ cv = Math.max(0, cv - a * dt); cx += cv * dt; if (cv <= 0){ phase = 3; run = false; } }
+    buf.push({ t, v: cv * 3.6, x: cx });
+  }
+  const dR = v0 * rt, dB = v0 * v0 / (2 * a), tot = dR + dB;
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const span = Math.max(60, niceMax(tot * 1.1)), L = 20, sc = (W - 40) / span, X = d => L + d * sc, roadY = H * 0.55;
+  ctx.fillStyle = '#4a505c'; ctx.fillRect(0, roadY - 28, W, 56);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([14, 12]); ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(W, roadY); ctx.stroke(); ctx.setLineDash([]);
+  if (+$('roadS').value < 0.2){ ctx.fillStyle = 'rgba(200,230,255,0.35)'; ctx.fillRect(0, roadY - 28, W, 56); }
+  if (+$('roadS').value > 0.2 && +$('roadS').value < 0.6){ ctx.fillStyle = 'rgba(80,140,220,0.2)'; ctx.fillRect(0, roadY - 28, W, 56); }
+  // 거리 막대
+  const by = roadY + 46;
+  ctx.fillStyle = ORANGE; ctx.fillRect(X(0), by, dR * sc, 12); ctx.fillStyle = RED; ctx.fillRect(X(dR), by, dB * sc, 12);
+  T(ctx, '공주 거리 ' + dR.toFixed(1) + ' m', X(0), by + 24, { align: 'left', color: ORANGE, bold: true, size: 11 });
+  T(ctx, '제동 거리 ' + dB.toFixed(1) + ' m', Math.min(W - 4, X(tot)), by + 38, { align: 'right', color: RED, bold: true, size: 11 });
+  for (let d = 0; d <= span; d += span / 5){ T(ctx, d + ' m', X(d), roadY - 40, { size: 10 }); }
+  // 위험 표지
+  ctx.fillStyle = YELLOW; ctx.beginPath(); ctx.moveTo(X(0), roadY - 72); ctx.lineTo(X(0) - 10, roadY - 54); ctx.lineTo(X(0) + 10, roadY - 54); ctx.closePath(); ctx.fill(); T(ctx, '!', X(0), roadY - 61, { color: INK, bold: true });
+  T(ctx, '위험 발견', X(0) + 14, roadY - 62, { align: 'left', color: INK, size: 11 });
+  // 자동차
+  const carX = X(cx); ctx.fillStyle = phase === 2 ? '#c0392b' : BLUE;
+  ctx.fillRect(carX - 30, roadY - 22, 30, 14); ctx.fillRect(carX - 24, roadY - 30, 18, 9);
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(carX - 24, roadY - 7, 4, 0, 7); ctx.arc(carX - 6, roadY - 7, 4, 0, 7); ctx.fill();
+  if (phase === 2){ T(ctx, '브레이크!', carX - 15, roadY - 40, { color: RED, bold: true }); }
+  if (phase === 1){ T(ctx, '반응하는 중…', carX - 15, roadY - 40, { color: ORANGE, bold: true }); }
+  setStats([['공주 거리', dR.toFixed(1) + ' m', ORANGE], ['제동 거리', dB.toFixed(1) + ' m', RED], ['정지 거리', tot.toFixed(1) + ' m', INK], ['지금 속력', (cv * 3.6).toFixed(0) + ' km/h']]);
+  // 속도–시간 그래프 (넓이 = 이동 거리)
+  const { ctx: c2, W: GW, H: GH } = gr; c2.clearRect(0, 0, GW, GH);
+  const tEnd = rt + v0 / a, A = axes(c2, GW, GH, { x0: 0, x1: Math.max(4, Math.ceil(tEnd * 1.1)), y0: 0, y1: 120, xt: [...Array(Math.max(4, Math.ceil(tEnd * 1.1)) + 1).keys()].filter(k => k % (tEnd > 10 ? 2 : 1) === 0), yt: [0, 30, 60, 90, 120], xl: '시간 (s)', yl: '속력 (km/h)', top: 26, B: 40 });
+  c2.fillStyle = 'rgba(224,120,47,0.25)'; c2.fillRect(A.X(0), A.Y(v0 * 3.6), A.X(rt) - A.X(0), A.Y(0) - A.Y(v0 * 3.6));
+  c2.fillStyle = 'rgba(214,69,65,0.22)'; c2.beginPath(); c2.moveTo(A.X(rt), A.Y(0)); c2.lineTo(A.X(rt), A.Y(v0 * 3.6)); c2.lineTo(A.X(tEnd), A.Y(0)); c2.closePath(); c2.fill();
+  line(c2, [[A.X(0), A.Y(v0 * 3.6)], [A.X(rt), A.Y(v0 * 3.6)], [A.X(tEnd), A.Y(0)]], GRAY, 1.5, true);
+  c2.strokeStyle = INK; c2.lineWidth = 2.5; c2.beginPath(); buf.forEach((b, i) => i ? c2.lineTo(A.X(b.t), A.Y(b.v)) : c2.moveTo(A.X(b.t), A.Y(b.v))); c2.stroke();
+  T(c2, '그래프 아래 넓이 = 이동 거리', A.L + 4, 10, { align: 'left', bold: true, color: INK });
+}
+const TEXT = {
+  ramp: ['빗면에서 수레를 놓으면 일정한 알짜힘(중력의 빗면 방향 성분)을 받아 등가속도 운동을 합니다. 기울기를 바꾸며 위치, 속도, 가속도 그래프를 비교하세요.',
+    '마찰이 없을 때 빗면 위 수레의 가속도는 a = g sinθ로 일정합니다(뉴턴 운동 제2법칙). 같은 시간 간격 동안 이동한 거리는 점점 늘어나고, 속도–시간 그래프는 기울기가 가속도인 직선입니다.'],
+  car: ['위험을 발견한 뒤 브레이크를 밟기까지(반응 시간) 자동차는 같은 속력으로 달리고, 그 뒤 마찰력에 의해 등가속도 운동으로 멈춥니다.',
+    '공주 거리는 속력에 비례하고, 제동 거리는 속력의 제곱에 비례합니다(속력이 2배면 제동 거리는 4배). 휴대폰을 보거나 졸면 반응 시간이 길어지고, 젖거나 얼어붙은 도로에서는 마찰력이 작아 제동 거리가 크게 늘어납니다. 마찰계수는 대략적인 값입니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); reset(); });
+$('goB').addEventListener('click', () => { if (!run && (t > 0)) reset(); run = true; });
+$('resetB').addEventListener('click', reset);
+['angS', 'spS', 'rtS', 'roadS'].forEach(id => $(id).addEventListener('input', reset));
+$('roadS').addEventListener('change', reset);
+loop(dt => mode === 'ramp' ? stepRamp(dt) : stepCar(dt));

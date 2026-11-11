@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>물리 수업 실험실</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:20px 16px 40px}
+  header h1{font-size:26px;margin:8px 0 4px}
+  header p{color:var(--sub);margin:0 0 20px;font-size:15px}
+  nav.tabs{display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
+  nav.tabs a{flex:1;text-align:center;padding:12px 6px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700;font-size:15px}
+  nav.tabs a:active{background:#e8eefb}
+  section{margin-bottom:28px;scroll-margin-top:70px}
+  section h2{font-size:20px;margin:0 0 4px}
+  section .desc{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .item{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;text-decoration:none;color:var(--ink)}
+  a.item:active{transform:scale(.98)}
+  .item .tag{display:inline-block;font-size:12px;color:var(--accent);background:#e8eefb;border-radius:6px;padding:2px 8px;margin-bottom:8px}
+  .item h3{margin:0 0 4px;font-size:17px}
+  .item p{margin:0;color:var(--sub);font-size:14px;line-height:1.45}
+  .soon{opacity:.6;border-style:dashed}
+  .soon .tag{color:var(--sub);background:#eceef2}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+  .chips a{font-size:14px;padding:7px 12px;border-radius:999px;background:#e8eefb;color:var(--accent);text-decoration:none;font-weight:700}
+  .part{margin-bottom:22px;scroll-margin-top:70px}
+  .ph{font-size:17px;margin:0 0 2px;padding-left:10px;border-left:4px solid var(--accent)}
+  .ph span{font-size:13px;color:var(--sub);font-weight:400}
+  .part .desc{margin:0 0 10px 14px}
+  footer{color:var(--sub);font-size:12px;text-align:center;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>물리 수업 실험실</h1>
+    <p>시뮬레이션으로 보고, 휴대폰 센서로 재고, 문제로 확인해요.</p>
+  </header>
+
+  <nav class="tabs">
+    <a href="#sim">시뮬레이션</a>
+    <a href="#tools">측정 도구</a>
+    <a href="#practice">연습문제</a>
+  </nav>
+
+  <section id="sim">
+    <h2>시뮬레이션</h2>
+    <p class="desc">값을 바꾸고 직접 조작하면서 현상을 관찰해요.</p>
+    <div class="chips"><a href="#mech">역학과 열</a><a href="#em">전자기</a><a href="#wave">파동과 빛</a><a href="#modern">현대 물리</a></div>
+    <div class="part" id="mech">
+      <h3 class="ph">역학과 열 <span>12</span></h3>
+      <p class="desc">힘과 운동, 운동량과 에너지, 열과 열기관</p>
+      <div class="grid">
+        <a class="item" href="sim/accel/">
+          <h3>등가속도 운동과 정지 거리</h3>
+          <p>빗면 위 수레의 운동과 v–t 그래프, 자동차의 반응 거리와 제동 거리를 확인해요.</p>
+        </a>
+        <a class="item" href="sim/forces/">
+          <h3>힘의 합성과 빗면</h3>
+          <p>힘을 끌어 합력과 평형을 찾고, 빗면 위 물체에 작용하는 힘과 마찰을 분석해요.</p>
+        </a>
+        <a class="item" href="sim/torque/">
+          <h3>돌림힘과 평형</h3>
+          <p>저울대와 두 받침 위의 막대로 돌림힘의 평형과 받침의 힘을 구해요.</p>
+        </a>
+        <a class="item" href="sim/projectile/">
+          <h3>포물선 운동</h3>
+          <p>처음 속력과 각도를 바꾸며 궤적, 속도 성분, 역학적 에너지를 관찰해요.</p>
+        </a>
+        <a class="item" href="sim/circular/">
+          <h3>등속 원운동</h3>
+          <p>속도와 구심력의 방향을 보고, 줄을 끊으면 물체가 어디로 가는지 확인해요.</p>
+        </a>
+        <a class="item" href="sim/orbit/">
+          <h3>인공위성과 탈출 속도</h3>
+          <p>원궤도 위성의 주기와 케플러 법칙, 행성별 탈출 속도를 비교해요.</p>
+        </a>
+        <a class="item" href="sim/collision/">
+          <h3>일차원 충돌과 운동량 보존</h3>
+          <p>두 수레의 충돌과 분리에서 운동량의 합과 서로 주고받는 힘을 비교해요.</p>
+        </a>
+        <a class="item" href="sim/energy/">
+          <h3>역학적 에너지 보존</h3>
+          <p>곡면·진자·용수철에서 운동 에너지와 퍼텐셜 에너지의 전환, 마찰에 의한 열에너지를 확인해요.</p>
+        </a>
+        <a class="item" href="sim/shm/">
+          <h3>용수철 진자의 단진동</h3>
+          <p>용수철 상수와 질량을 바꾸며 주기, 변위·속도·가속도 그래프를 관찰해요.</p>
+        </a>
+        <a class="item" href="sim/heating/">
+          <h3>비열과 잠열</h3>
+          <p>얼음을 가열해 물과 수증기가 되는 동안의 온도 변화와 숨은열을 확인해요.</p>
+        </a>
+        <a class="item" href="sim/gas/">
+          <h3>기체 분자 상자</h3>
+          <p>압력·부피·온도의 관계, 열역학 과정, 확산과 열의 이동을 분자 운동으로 봐요.</p>
+        </a>
+        <a class="item" href="sim/engine/">
+          <h3>열기관의 순환 과정</h3>
+          <p>P–V 그래프에서 흡수한 열, 방출한 열, 한 일과 열효율을 구해요.</p>
+        </a>
+      </div>
+    </div>
+    <div class="part" id="em">
+      <h3 class="ph">전자기 <span>8</span></h3>
+      <p class="desc">전기장과 회로, 전류와 자기장, 전자기 유도</p>
+      <div class="grid">
+        <a class="item" href="sim/charging/">
+          <h3>정전기 유도와 유전 분극</h3>
+          <p>검전기와 접지로 도체의 정전기 유도를, 절연체의 유전 분극을 관찰해요.</p>
+        </a>
+        <a class="item" href="sim/efield/">
+          <h3>전기장과 전기력선</h3>
+          <p>전하를 배치하며 전기력선과 등전위선을 보고, 전기장 세기와 전위를 측정해요.</p>
+        </a>
+        <a class="item" href="sim/circuit/">
+          <h3>저항의 직렬·병렬 회로</h3>
+          <p>전구의 밝기, 전압, 전류, 소비 전력을 비교하고 멀티탭 과부하를 체험해요.</p>
+        </a>
+        <a class="item" href="sim/capacitor/">
+          <h3>축전기와 인덕터 회로</h3>
+          <p>축전기의 충전·방전과 LC 회로의 에너지 전환을 관찰해요.</p>
+        </a>
+        <a class="item" href="sim/bfield/">
+          <h3>전류에 의한 자기장</h3>
+          <p>직선 도선, 원형 도선, 솔레노이드 주위의 자기장을 나침반으로 확인해요.</p>
+        </a>
+        <a class="item" href="sim/lorentz/">
+          <h3>로런츠 힘</h3>
+          <p>자기장 속에서 움직이는 하전 입자와 전류가 흐르는 도선이 받는 힘을 관찰해요.</p>
+        </a>
+        <a class="item" href="sim/motor/">
+          <h3>전동기와 스피커</h3>
+          <p>자기력으로 회전하는 전동기와 소리를 내는 스피커의 원리를 확인해요.</p>
+        </a>
+        <a class="item" href="sim/induction/">
+          <h3>전자기 유도</h3>
+          <p>자석과 코일, 변압기·무선 충전, 자기 브레이크에서 유도 전류를 관찰해요.</p>
+        </a>
+      </div>
+    </div>
+    <div class="part" id="wave">
+      <h3 class="ph">파동과 빛 <span>7</span></h3>
+      <p class="desc">파동의 성질, 소리, 빛의 굴절·간섭·편광</p>
+      <div class="grid">
+        <a class="item" href="sim/wave/">
+          <h3>탄성파의 진행, 반사, 투과</h3>
+          <p>횡파와 종파, 고정단·자유단 반사, 두 매질의 경계에서 반사와 투과를 비교해요.</p>
+        </a>
+        <a class="item" href="sim/standing/">
+          <h3>현과 관의 정상파</h3>
+          <p>줄과 관에 생기는 정상파의 마디와 배, 진동수를 보고 소리로 들어 봐요.</p>
+        </a>
+        <a class="item" href="sim/doppler/">
+          <h3>도플러 효과</h3>
+          <p>움직이는 음원의 파면을 보고, 관찰자 위치에 따라 달라지는 소리를 들어 봐요.</p>
+        </a>
+        <a class="item" href="sim/soundinterf/">
+          <h3>음파의 간섭</h3>
+          <p>두 스피커 사이에서 마이크를 옮기며 보강 간섭과 상쇄 간섭을 찾아요.</p>
+        </a>
+        <a class="item" href="sim/optics/">
+          <h3>빛의 굴절과 렌즈·거울</h3>
+          <p>굴절과 전반사, 렌즈와 거울의 광선 추적으로 상을 찾아요.</p>
+        </a>
+        <a class="item" href="sim/slit/">
+          <h3>이중 슬릿과 회절</h3>
+          <p>빛의 간섭과 회절, 얇은 막 간섭, 전자·광자를 하나씩 보내는 실험을 해요.</p>
+        </a>
+        <a class="item" href="sim/polarization/">
+          <h3>빛의 편광</h3>
+          <p>편광판을 돌려 빛의 밝기를 보고, 액정 화면(LCD)의 원리를 확인해요.</p>
+        </a>
+      </div>
+    </div>
+    <div class="part" id="modern">
+      <h3 class="ph">현대 물리 <span>3</span></h3>
+      <p class="desc">빛과 물질의 이중성, 원자와 반도체</p>
+      <div class="grid">
+        <a class="item" href="sim/photoelectric/">
+          <h3>광전 효과</h3>
+          <p>빛의 진동수와 세기, 금속의 종류를 바꾸며 광전자가 튀어나오는 조건을 찾아요.</p>
+        </a>
+        <a class="item" href="sim/spectrum/">
+          <h3>원자의 에너지 준위와 스펙트럼</h3>
+          <p>수소 원자의 전자 전이로 선 스펙트럼을 만들고, 별의 흡수 스펙트럼을 분석해요.</p>
+        </a>
+        <a class="item" href="sim/diode/">
+          <h3>반도체와 다이오드 회로</h3>
+          <p>에너지띠, p-n 접합, 정류 회로, 논리 회로를 차례로 살펴봐요.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <h2>측정 도구</h2>
+    <p class="desc">휴대폰과 패드의 센서로 실제 값을 측정해요.</p>
+    <div class="grid">
+      <div class="item soon">
+        <span class="tag">준비 중</span>
+        <h3>가속도 측정</h3>
+        <p>가속도 센서로 운동하는 휴대폰의 가속도를 기록해요.</p>
+      </div>
+      <div class="item soon">
+        <span class="tag">준비 중</span>
+        <h3>소리 주파수 측정</h3>
+        <p>마이크로 소리의 진동수를 측정해요.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="practice">
+    <h2>연습문제</h2>
+    <p class="desc">수업을 듣는 학생만 이용할 수 있어요.</p>
+    <div class="grid">
+      <div class="item soon">
+        <span class="tag">준비 중</span>
+        <h3>기출 연습</h3>
+        <p>수업 코드를 입력하고 단원별 문제를 풀어요.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>수업용 비영리 자료입니다.</footer>
+</div>
+</body>
+</html>

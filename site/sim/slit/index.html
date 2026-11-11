@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>이중 슬릿과 회절</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+  .tabs button{font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%;border-radius:8px}
+  #sim{height:260px;background:#0d1117}
+  #graph{height:170px;margin-top:10px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums;color:var(--accent)}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.b.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+  label.chk input{width:18px;height:18px}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.5}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} .tabs{grid-template-columns:repeat(2,1fr)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>이중 슬릿과 회절</h1>
+  <p class="hint" id="hintTxt"></p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="double" class="on">이중 슬릿</button>
+      <button data-m="single">단일 슬릿 회절</button>
+      <button data-m="film">얇은 막 간섭</button>
+      <button data-m="quantum">하나씩 보내기</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <canvas id="graph"></canvas>
+    <div class="row m-quantum hide">
+      <button class="b on" id="qGo">멈춤</button>
+      <button class="b" id="qClear">스크린 지우기</button>
+      <label style="font-size:15px">보내는 빠르기
+        <select id="qRate"><option value="3">1초에 3개</option><option value="30" selected>1초에 30개</option><option value="300">1초에 300개</option></select></label>
+      <label style="font-size:15px">입자
+        <select id="qKind"><option value="e">전자</option><option value="p">광자</option></select></label>
+      <label class="chk"><input type="checkbox" id="qObs"> 어느 슬릿을 지나는지 관측하기</label>
+    </div>
+    <div class="row m-film hide">
+      <label style="font-size:15px">비추는 빛
+        <select id="fLight"><option value="white">햇빛 (흰빛)</option><option value="mono">단색광</option></select></label>
+      <label class="chk"><input type="checkbox" id="fDrain" checked> 시간이 지나며 막이 얇아지기</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-double m-single m-quantum m-film" id="ctlLam"><div class="top"><span>빛의 파장 λ</span><b id="lamV"></b></div>
+        <input type="range" id="lamS" min="400" max="700" step="5" value="550"><div class="range"><span>400 nm (보라)</span><span>700 nm (빨강)</span></div></div>
+      <div class="sl m-double m-quantum"><div class="top"><span>두 슬릿 사이 간격 d</span><b id="dV"></b></div>
+        <input type="range" id="dS" min="0.1" max="0.5" step="0.05" value="0.25"><div class="range"><span>0.10 mm</span><span>0.50 mm</span></div></div>
+      <div class="sl m-single"><div class="top"><span>슬릿의 폭 a</span><b id="aV"></b></div>
+        <input type="range" id="aS" min="0.02" max="0.2" step="0.01" value="0.06"><div class="range"><span>0.02 mm</span><span>0.20 mm</span></div></div>
+      <div class="sl m-double m-single"><div class="top"><span>슬릿과 스크린 사이 거리 L</span><b id="LV"></b></div>
+        <input type="range" id="LS" min="0.5" max="2" step="0.1" value="1"><div class="range"><span>0.5 m</span><span>2.0 m</span></div></div>
+      <div class="sl m-film hide"><div class="top"><span>막 윗부분의 두께</span><b id="tV"></b></div>
+        <input type="range" id="tS" min="0" max="400" step="5" value="250"><div class="range"><span>0 nm</span><span>400 nm</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const c = $('sim'), ctx = c.getContext('2d'), g = $('graph'), gctx = g.getContext('2d');
+  let mode = 'double', W, H, GW, GH, t = 0;
+
+  function fit(cv, x){ const d = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; cv.width = w * d; cv.height = h * d; x.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(c, ctx); [GW, GH] = fit(g, gctx); }
+  window.addEventListener('resize', resize);
+
+  // 파장(nm) → RGB
+  function lamRGB(l){
+    let r = 0, gg = 0, b = 0;
+    if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ gg = (l - 440) / 50; b = 1; } else if (l < 510){ gg = 1; b = -(l - 510) / 20; }
+    else if (l < 580){ r = (l - 510) / 70; gg = 1; } else if (l < 645){ r = 1; gg = -(l - 645) / 65; } else r = 1;
+    const f = l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1;
+    return [r * f, gg * f, b * f];
+  }
+  const css = (rgb, k) => `rgb(${Math.round(255 * Math.min(1, rgb[0] * k))},${Math.round(255 * Math.min(1, rgb[1] * k))},${Math.round(255 * Math.min(1, rgb[2] * k))})`;
+  const sinc2 = x => Math.abs(x) < 1e-6 ? 1 : (Math.sin(x) / x) ** 2;
+
+  // 스크린 위 세기 (y: m)
+  function intensity(y, kind){
+    const lam = +$('lamS').value * 1e-9, L = kind === 'quantum' ? 1 : +$('LS').value;
+    if (kind === 'single'){ const a = +$('aS').value * 1e-3; return sinc2(Math.PI * a * y / (lam * L)); }
+    const d = +$('dS').value * 1e-3, a = d / 4;
+    const env = sinc2(Math.PI * a * y / (lam * L));
+    return env * Math.cos(Math.PI * d * y / (lam * L)) ** 2;
+  }
+  const YR = 0.012;   // 스크린에 보이는 범위 ±12 mm
+
+  // ---------- 파동 그림 (이중·단일 슬릿) ----------
+  const off = document.createElement('canvas'), octx = off.getContext('2d'); let img = null;
+  function drawWaves(kind){
+    const sw = W * 0.74, nx = 150, ny = Math.round(nx * H / sw);
+    if (off.width !== nx || off.height !== ny){ off.width = nx; off.height = ny; img = octx.createImageData(nx, ny); }
+    const lam = +$('lamS').value, rgb = lamRGB(lam), lpx = 6 + (lam - 400) / 300 * 6, k = 2 * Math.PI / lpx, w = 2 * Math.PI * 1.2;
+    const bx = Math.round(nx * 0.22), cy = ny / 2;
+    const srcs = kind === 'single'
+      ? (() => { const a = 2 + +$('aS').value / 0.2 * 9, n = 7; return Array.from({ length: n }, (_, i) => cy - a / 2 + a * i / (n - 1)); })()
+      : (() => { const d = 4 + (+$('dS').value - 0.1) / 0.4 * 26; return [cy - d / 2, cy + d / 2]; })();
+    const D = img.data;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+      let v;
+      if (i < bx) v = Math.cos(k * i - w * t);
+      else { v = 0; for (const sy of srcs){ const r = Math.hypot(i - bx, j - sy) + 0.5; v += Math.cos(k * (r + bx) - w * t) / Math.sqrt(r) * 2.2; } v /= srcs.length > 2 ? srcs.length / 2.2 : 1; }
+      const s = Math.max(0, Math.min(1, 0.5 + 0.5 * v * 0.9)), p = (j * nx + i) * 4;
+      D[p] = 255 * rgb[0] * s * 0.95; D[p + 1] = 255 * rgb[1] * s * 0.95; D[p + 2] = 255 * rgb[2] * s * 0.95; D[p + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(off, 0, 0, sw, H);
+    // 가림막
+    const sx = sw / nx, X = bx * sx;
+    ctx.fillStyle = '#9aa3b2';
+    const holes = kind === 'single' ? [[cy - (2 + +$('aS').value / 0.2 * 9) / 2, cy + (2 + +$('aS').value / 0.2 * 9) / 2]] : srcs.map(s => [s - 1.2, s + 1.2]);
+    let yPrev = 0; holes.forEach(([a, b]) => { ctx.fillRect(X - 3, yPrev * sx, 6, a * sx - yPrev * sx); yPrev = b; }); ctx.fillRect(X - 3, yPrev * sx, 6, H - yPrev * sx);
+    // 스크린 (실제 비율의 무늬)
+    const scrX = sw + 8, scrW = W - scrX;
+    ctx.fillStyle = '#000'; ctx.fillRect(sw, 0, W - sw, H);
+    for (let py = 0; py < H; py++){ const y = (py / H - 0.5) * 2 * YR, I = intensity(y, kind); ctx.fillStyle = css(rgb, I * 1.1); ctx.fillRect(scrX, py, scrW, 1); }
+    ctx.fillStyle = '#fff'; ctx.font = '12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('스크린', scrX + scrW / 2, 4);
+    ctx.textAlign = 'left'; ctx.fillText(kind === 'single' ? '슬릿' : '이중 슬릿', X + 6, 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '11px ' + FONT; ctx.fillText('(파동 그림은 크기를 과장)', 6, H - 16);
+  }
+
+  function drawGraphIntensity(kind){
+    gctx.clearRect(0, 0, GW, GH);
+    const L = 14, R = 14, top = 22, h = GH - 50, pw = GW - L - R, rgb = lamRGB(+$('lamS').value);
+    gctx.font = 'bold 12px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'left'; gctx.textBaseline = 'top'; gctx.fillText('스크린 위 빛의 세기', L, 2);
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(L, top, pw, h);
+    gctx.beginPath(); for (let i = 0; i <= pw; i++){ const y = (i / pw - 0.5) * 2 * YR, I = intensity(y, kind); const yy = top + h - I * h * 0.95; i ? gctx.lineTo(L + i, yy) : gctx.moveTo(L + i, yy); }
+    gctx.strokeStyle = css(rgb, 0.85); gctx.lineWidth = 2.2; gctx.stroke();
+    gctx.fillStyle = '#5b6475'; gctx.font = '11px ' + FONT; gctx.textAlign = 'center';
+    for (let mm = -12; mm <= 12; mm += 4){ const X = L + (mm / 1000 / YR + 1) / 2 * pw; gctx.fillText((mm > 0 ? '+' : mm < 0 ? '−' : '') + Math.abs(mm), X, top + h + 4); }
+    gctx.fillText('스크린 가운데로부터의 거리 (mm)', L + pw / 2, top + h + 18);
+  }
+
+  // ---------- 얇은 막 ----------
+  let drain = 0;
+  function filmColor(tnm, light){
+    // 비눗물 막(n = 1.33)에서 반사된 빛: 윗면 반사에서 위상이 반대로 바뀌므로 2nt = (m + ½)λ 일 때 보강
+    const n = 1.33;
+    if (light === 'mono'){ const l = +$('lamS').value, I = Math.sin(2 * Math.PI * n * tnm / l) ** 2, rgb = lamRGB(l); return [rgb[0] * I, rgb[1] * I, rgb[2] * I]; }
+    let r = 0, gg = 0, b = 0, s = 0;
+    for (let l = 400; l <= 700; l += 10){ const I = Math.sin(2 * Math.PI * n * tnm / l) ** 2, c3 = lamRGB(l); r += c3[0] * I; gg += c3[1] * I; b += c3[2] * I; s += 1; }
+    return [r / s * 2.6, gg / s * 2.6, b / s * 2.6];
+  }
+  function drawFilm(){
+    ctx.fillStyle = '#e9edf2'; ctx.fillRect(0, 0, W, H);
+    const fx = W * 0.08, fw = W * 0.5, fy = 20, fh = H - 40, top = Math.max(0, +$('tS').value - drain), light = $('fLight').value;
+    // 고리 틀
+    ctx.strokeStyle = '#5b6475'; ctx.lineWidth = 4; ctx.strokeRect(fx - 3, fy - 3, fw + 6, fh + 6);
+    for (let py = 0; py < fh; py++){ const tn = top + 900 * (py / fh) ** 1.3, col = filmColor(tn, light); ctx.fillStyle = css(col, 1); ctx.fillRect(fx, fy + py, fw, 1); }
+    // 두께 눈금
+    ctx.fillStyle = '#1d2330'; ctx.font = '11px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    [0, 0.25, 0.5, 0.75, 1].forEach(f => { const tn = top + 900 * f ** 1.3; ctx.fillText(Math.round(tn) + ' nm', fx + fw + 10, fy + f * fh); ctx.fillRect(fx + fw + 3, fy + f * fh, 5, 1); });
+    ctx.font = 'bold 12px ' + FONT; ctx.fillText('막의 두께', fx + fw + 10, fy - 10);
+    // 옆 그림: 두 면에서 반사
+    const ox = W * 0.8, oy = H * 0.5;
+    if (W > 480){
+      ctx.fillStyle = 'rgba(160,200,235,0.6)'; ctx.fillRect(ox - 34, oy - 12, 68, 24);
+      ctx.strokeStyle = '#1d2330'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ox - 40, oy - 60); ctx.lineTo(ox - 12, oy - 12); ctx.lineTo(ox + 6, oy - 60); ctx.moveTo(ox - 12, oy - 12); ctx.lineTo(ox, oy + 12); ctx.lineTo(ox + 12, oy - 12); ctx.lineTo(ox + 30, oy - 60); ctx.stroke();
+      ctx.fillStyle = '#5b6475'; ctx.font = '11px ' + FONT; ctx.textAlign = 'center'; ctx.fillText('윗면 반사', ox - 10, oy - 84); ctx.fillText('아랫면 반사', ox + 40, oy - 68); ctx.fillText('비누막', ox, oy + 26);
+    }
+    return top;
+  }
+  function drawFilmGraph(top){
+    gctx.clearRect(0, 0, GW, GH);
+    const L = 40, R = 14, tp = 22, h = GH - 50, pw = GW - L - R, light = $('fLight').value;
+    gctx.font = 'bold 12px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'left'; gctx.textBaseline = 'top';
+    gctx.fillText(light === 'mono' ? '막의 두께에 따른 반사광의 세기' : '막의 두께에 따른 반사광의 색', L, 2);
+    for (let i = 0; i < pw; i++){ const tn = 1000 * i / pw, col = filmColor(tn, light);
+      if (light === 'mono'){ const I = Math.max(col[0], col[1], col[2]); gctx.fillStyle = css(lamRGB(+$('lamS').value), 0.8); gctx.fillRect(L + i, tp + h - I * h, 1, I * h); }
+      else { gctx.fillStyle = css(col, 1); gctx.fillRect(L + i, tp, 1, h); } }
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(L, tp, pw, h);
+    gctx.fillStyle = '#5b6475'; gctx.font = '11px ' + FONT; gctx.textAlign = 'center';
+    for (let tn = 0; tn <= 1000; tn += 200) gctx.fillText(String(tn), L + tn / 1000 * pw, tp + h + 4);
+    gctx.fillText('막의 두께 (nm)', L + pw / 2, tp + h + 18);
+    const X = L + Math.min(1, top / 1000) * pw; gctx.strokeStyle = '#1d2330'; gctx.setLineDash([4, 3]); gctx.beginPath(); gctx.moveTo(X, tp); gctx.lineTo(X, tp + h); gctx.stroke(); gctx.setLineDash([]);
+  }
+
+  // ---------- 하나씩 보내기 ----------
+  let hits = [], qRun = true, acc = 0;
+  const NB = 80; let hist = new Array(NB).fill(0);
+  function sampleY(){
+    const obs = $('qObs').checked, d = +$('dS').value * 1e-3, lam = +$('lamS').value * 1e-9, a = d / 4;
+    for (let k = 0; k < 200; k++){
+      const y = (Math.random() * 2 - 1) * YR;
+      const I = obs ? sinc2(Math.PI * a * y / lam) : intensity(y, 'quantum');
+      if (Math.random() < I) return y;
+    }
+    return 0;
+  }
+  function drawQuantum(dt){
+    if (qRun){ acc += dt * +$('qRate').value; while (acc >= 1){ acc -= 1; const y = sampleY(); hits.push({ y, x: Math.random(), age: 0 }); const bi = Math.floor((y / YR + 1) / 2 * NB); if (bi >= 0 && bi < NB) hist[bi]++; } }
+    if (hits.length > 20000) hits.splice(0, hits.length - 20000);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+    const bx = W * 0.25, sx = W * 0.45, scrX = sx, scrW = W - sx - 6, kind = $('qKind').value, col = kind === 'e' ? '#7fd3ff' : css(lamRGB(+$('lamS').value), 1);
+    // 원천과 슬릿
+    ctx.fillStyle = '#3a4252'; ctx.fillRect(10, H / 2 - 16, 30, 32); ctx.fillStyle = '#fff'; ctx.font = '11px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(kind === 'e' ? '전자총' : '광원', 25, H / 2 + 20);
+    const dpx = 14 + (+$('dS').value - 0.1) / 0.4 * 30;
+    ctx.fillStyle = '#9aa3b2'; ctx.fillRect(bx - 3, 0, 6, H / 2 - dpx / 2 - 3); ctx.fillRect(bx - 3, H / 2 - dpx / 2 + 3, 6, dpx - 6); ctx.fillRect(bx - 3, H / 2 + dpx / 2 + 3, 6, H);
+    if ($('qObs').checked){ ctx.fillStyle = '#e0a400'; [H / 2 - dpx / 2, H / 2 + dpx / 2].forEach(yy => { ctx.beginPath(); ctx.arc(bx + 12, yy, 5, 0, 7); ctx.fill(); }); ctx.fillStyle = '#e0a400'; ctx.fillText('관측 장치', bx + 12, H / 2 + dpx / 2 + 10); }
+    // 날아가는 입자 몇 개
+    ctx.fillStyle = col;
+    for (let i = Math.max(0, hits.length - 6); i < hits.length; i++){ const h = hits[i]; h.age += dt; if (h.age < 0.35){ const f = h.age / 0.35, x = 40 + (scrX - 40) * f, yT = H / 2 + h.y / YR * H / 2, y = f < (bx - 40) / (scrX - 40) ? H / 2 : H / 2 + (yT - H / 2) * (x - bx) / (scrX - bx); ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill(); } }
+    // 스크린
+    ctx.fillStyle = '#05070a'; ctx.fillRect(scrX, 0, scrW, H);
+    ctx.fillStyle = col;
+    for (const h of hits){ const y = H / 2 + h.y / YR * H / 2, x = scrX + 3 + h.x * (scrW - 6); ctx.globalAlpha = h.age < 0.4 ? 1 : 0.75; ctx.fillRect(x, y, 1.6, 1.6); }
+    ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText('스크린', scrX + scrW / 2, 4);
+    // 히스토그램 (그래프 캔버스)
+    gctx.clearRect(0, 0, GW, GH);
+    const L = 14, R = 14, tp = 22, hh = GH - 46, pw = GW - L - R, mx = Math.max(1, ...hist);
+    gctx.font = 'bold 12px ' + FONT; gctx.fillStyle = '#5b6475'; gctx.textAlign = 'left'; gctx.textBaseline = 'top'; gctx.fillText('스크린의 위치별로 도착한 개수', L, 2);
+    gctx.fillStyle = kind === 'e' ? '#2f8fd0' : css(lamRGB(+$('lamS').value), 0.85);
+    hist.forEach((v, i) => { const bh = v / mx * hh; gctx.fillRect(L + i * pw / NB, tp + hh - bh, pw / NB - 1, bh); });
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(L, tp, pw, hh);
+    gctx.fillStyle = '#5b6475'; gctx.font = '11px ' + FONT; gctx.textAlign = 'center'; gctx.fillText('← 스크린 아래쪽          스크린 위쪽 →', L + pw / 2, tp + hh + 6);
+    return hits.length;
+  }
+
+  function setStats(items){ $('stats').innerHTML = items.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="val">${v}</div></div>`).join(''); }
+
+  const TEXT = {
+    double: ['두 슬릿을 지난 빛이 겹치면서 밝은 무늬와 어두운 무늬가 번갈아 나타납니다. 파장, 슬릿 간격, 스크린까지 거리를 바꾸며 무늬 간격의 변화를 관찰하세요.',
+      '두 슬릿에서 온 빛의 경로차가 파장의 정수배이면 보강 간섭(밝은 무늬), 반파장의 홀수배이면 상쇄 간섭(어두운 무늬)이 일어납니다. 무늬 간격은 파장이 길수록, 스크린이 멀수록 넓고, 슬릿 간격이 넓을수록 좁습니다. 간섭은 빛이 파동이라는 증거입니다.'],
+    single: ['좁은 슬릿 하나를 지난 빛이 퍼져 나가는 회절 무늬를 관찰하세요. 슬릿의 폭을 좁히면 가운데 밝은 무늬가 넓어집니다.',
+      '틈이 좁을수록, 파장이 길수록 회절이 잘 일어납니다. 회절 때문에 렌즈와 망원경이 구별할 수 있는 두 점 사이의 거리(분해능)에는 한계가 있습니다.'],
+    film: ['비누막처럼 얇은 막의 윗면과 아랫면에서 반사된 빛이 간섭하여 두께에 따라 다른 색이 보입니다. 막은 아래로 갈수록 두껍습니다.',
+      '공기에서 비눗물로 들어가며 윗면에서 반사된 빛은 위상이 반대로 바뀌고, 아랫면에서 반사된 빛은 막 속을 왕복한 거리만큼 늦어집니다. 그래서 막이 아주 얇은 윗부분은 상쇄 간섭으로 어둡게 보입니다. 비눗방울, 기름 막, 카메라 렌즈의 반사 방지막에서 볼 수 있습니다.'],
+    quantum: ['전자나 광자를 하나씩 이중 슬릿으로 보내면 스크린에는 점이 하나씩 찍힙니다. 점이 많이 쌓이면 어떤 무늬가 나타나는지 관찰하세요.',
+      '하나하나는 입자처럼 한 점에 도착하지만, 많이 쌓이면 파동의 간섭무늬가 나타납니다. 입자가 어디에 도착할지는 확률로만 알 수 있으며, 그 확률 분포가 파동처럼 간섭합니다. 어느 슬릿을 지나는지 관측하면 간섭무늬가 사라집니다. 전자의 파장은 드브로이 파장 λ = h/p입니다.'] };
+  function setMode(m){
+    mode = m;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cls = [...e.classList].filter(k => k.startsWith('m-')); if (cls.length) e.classList.toggle('hide', !cls.includes('m-' + m)); });
+    $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1];
+    $('ctlLam').classList.toggle('hide', m === 'quantum' || (m === 'film' && $('fLight').value === 'white'));
+    g.style.height = m === 'film' ? '120px' : '170px'; resize();
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  $('fLight').addEventListener('change', () => setMode('film'));
+  $('qGo').addEventListener('click', () => { qRun = !qRun; $('qGo').textContent = qRun ? '멈춤' : '계속'; $('qGo').classList.toggle('on', qRun); });
+  const clearQ = () => { hits = []; hist = new Array(NB).fill(0); };
+  $('qClear').addEventListener('click', clearQ); $('qObs').addEventListener('change', clearQ); $('dS').addEventListener('input', () => { if (mode === 'quantum') clearQ(); });
+  $('lamS').addEventListener('input', () => { if (mode === 'quantum') clearQ(); });
+  $('tS').addEventListener('input', () => { drain = 0; });
+  function labels(){ $('lamV').textContent = $('lamS').value + ' nm'; $('dV').textContent = (+$('dS').value).toFixed(2) + ' mm'; $('aV').textContent = (+$('aS').value).toFixed(2) + ' mm';
+    $('LV').textContent = (+$('LS').value).toFixed(1) + ' m'; $('tV').textContent = $('tS').value + ' nm'; }
+  document.querySelectorAll('input[type=range]').forEach(r => r.addEventListener('input', labels));
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; t += dt;
+    const lam = +$('lamS').value * 1e-9;
+    if (mode === 'double' || mode === 'single'){
+      drawWaves(mode); drawGraphIntensity(mode);
+      if (mode === 'double'){ const dx = lam * +$('LS').value / (+$('dS').value * 1e-3); setStats([['밝은 무늬 사이 간격', (dx * 1000).toFixed(2) + ' mm'], ['파장', $('lamS').value + ' nm']]); }
+      else { const w = 2 * lam * +$('LS').value / (+$('aS').value * 1e-3); setStats([['가운데 밝은 무늬의 폭', (w * 1000).toFixed(1) + ' mm'], ['파장', $('lamS').value + ' nm']]); }
+    } else if (mode === 'film'){
+      if ($('fDrain').checked) drain = (drain + dt * 25) % (+$('tS').value + 1);
+      const top = drawFilm(); drawFilmGraph(top);
+      setStats([['막 윗부분의 두께', Math.round(top) + ' nm'], ['비눗물의 굴절률', '1.33']]);
+    } else {
+      const n = drawQuantum(dt);
+      setStats([['도착한 개수', n.toLocaleString('ko-KR') + '개'], ['상태', $('qObs').checked ? '관측함: 간섭무늬 없음' : '관측 안 함']]);
+    }
+    requestAnimationFrame(frame);
+  }
+  labels(); resize(); setMode('double'); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

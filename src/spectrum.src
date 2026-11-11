@@ -1,0 +1,96 @@
+원자의 에너지 준위와 스펙트럼
+  <h1>원자의 에너지 준위와 스펙트럼</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="bohr">수소 원자의 선 스펙트럼</button>
+      <button data-m="star">별의 스펙트럼 분석</button>
+    </div>
+    <canvas id="sim" style="height:360px;background:#fbfcfd;border-radius:8px"></canvas>
+    <div class="row m-bohr">
+      <button class="b primary" id="autoB">높은 준위로 들뜨게 하기</button>
+      <button class="b" id="clrB">스펙트럼 지우기</button>
+    </div>
+    <div class="row m-star"><select id="starS"><option value="0">별 A</option><option value="1">별 B</option><option value="2">별 C</option><option value="3">태양</option></select></div>
+    <div class="row m-star" id="elChk"></div>
+    <div class="row m-star"><button class="b primary" id="chkB">정답 확인</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card"><p class="note" id="noteTxt"></p></div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, n = 1, anim = null, lines = [], queue = [], msg = '';
+const EN = k => -13.6 / (k * k), NMAX = 6, HC = 1240;
+const SER = lo => lo === 1 ? '라이먼 계열 (자외선)' : lo === 2 ? '발머 계열 (가시광선)' : lo === 3 ? '파셴 계열 (적외선)' : '적외선';
+const lamOf = (hi, lo) => HC / (EN(hi) - EN(lo));
+// ── 수소 원자 ──
+function levelY(k){ const { H } = s, y0 = 26, y1 = H - 140, a = Math.log(13.6), b = Math.log(13.6 / 36); return y1 - (y1 - y0) * (a - Math.log(-EN(k))) / (a - b); }
+function startJump(to){ if (anim || to === n) return; const from = n, lam = from > to ? lamOf(from, to) : lamOf(to, from);
+  anim = { from, to, t: 0, lam }; if (from > to){ lines.push({ lam, hi: from, lo: to }); msg = `${from} → ${to} (방출)`; } else msg = `${from} → ${to} (흡수)`; }
+function drawBohr(dt){
+  const { ctx, W, H } = s, x0 = 74, x1 = W - 14;
+  for (let k = 1; k <= NMAX; k++){ const y = levelY(k); line(ctx, [[x0, y], [x1, y]], k === n && !anim ? ORANGE : '#9aa3b2', k === n && !anim ? 2.5 : 1.5);
+    T(ctx, `n=${k}`, 6, y, { align: 'left', size: 11, bold: true, base: 'middle' }); T(ctx, EN(k).toFixed(2) + ' eV', x1, y - 7, { align: 'right', size: 10, color: SUB }); }
+  T(ctx, '0 eV (이온화)', x0, 10, { align: 'left', size: 10, color: SUB }); line(ctx, [[x0, 18], [x1, 18]], '#d6dae1', 1, [4, 4]);
+  // 지난 전이 화살표 (최근 몇 개)
+  const xs = k => x0 + 22 + ((k * 37) % Math.max(40, x1 - x0 - 60));
+  lines.slice(-8).forEach((L, i) => { const x = xs(i + lines.length), c = L.lam < 380 || L.lam > 750 ? [0.6, 0.6, 0.65] : lamRGB(L.lam); arrow(ctx, x, levelY(L.hi), x, levelY(L.lo), rgbCss(c, 1, 0.45), 1.5, 6); });
+  // 전자
+  let ey = levelY(n);
+  if (anim){ anim.t += dt * 1.6; const u = Math.min(1, anim.t); ey = levelY(anim.from) + (levelY(anim.to) - levelY(anim.from)) * u;
+    const c = anim.lam < 380 || anim.lam > 750 ? [0.55, 0.55, 0.6] : lamRGB(anim.lam), px = W * 0.5 + (anim.from > anim.to ? 1 : -1) * (W * 0.45) * (anim.from > anim.to ? u : 1 - u), py = ey;
+    ctx.strokeStyle = rgbCss(c, 1, 1); ctx.lineWidth = 2; ctx.beginPath(); for (let j = 0; j <= 30; j++){ const q = j / 30 * 40, xx = px - (anim.from > anim.to ? q : -q), yy = py + Math.sin(q * 0.6) * 5; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
+    if (u >= 1){ n = anim.to; anim = null; if (queue.length) setTimeout(() => startJump(queue.shift()), 250); } }
+  ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(W * 0.5, ey, 7, 0, 7); ctx.fill();
+  T(ctx, '준위를 눌러 전자를 옮기세요 (에너지 간격은 보기 쉽게 조정)', W / 2, H - 116, { size: 10, color: SUB });
+  // 스펙트럼 띠
+  const sy = H - 82, sh = 34, sx0 = 10, sx1 = W - 10, LX = l => sx0 + (sx1 - sx0) * (l - 380) / (700 - 380);
+  ctx.fillStyle = '#11141b'; ctx.fillRect(sx0, sy, sx1 - sx0, sh);
+  lines.forEach(L => { if (L.lam >= 380 && L.lam <= 700){ ctx.fillStyle = rgbCss(lamRGB(L.lam), 1.2); ctx.fillRect(LX(L.lam) - 1.5, sy, 3, sh); } });
+  [400, 500, 600, 700].forEach(l => T(ctx, l + '', LX(l), sy + sh + 10, { size: 10, color: SUB }));
+  T(ctx, '수소의 방출 스펙트럼 (가시광선, nm)', W / 2, sy - 10, { size: 11, bold: true });
+  const uv = lines.filter(L => L.lam < 380).length, ir = lines.filter(L => L.lam > 700).length;
+  T(ctx, `자외선 ${uv}개 · 적외선 ${ir}개 (보이지 않음)`, W / 2, sy + sh + 24, { size: 10, color: SUB });
+  const last = lines[lines.length - 1];
+  setStats([['전자의 준위', 'n = ' + n + ' (' + EN(n).toFixed(2) + ' eV)', BLUE], ['최근 전이', msg || '—'], ...(last ? [['방출된 광자', `${(EN(last.hi) - EN(last.lo)).toFixed(2)} eV, ${last.lam.toFixed(0)} nm`, ORANGE], ['계열', SER(last.lo)]] : [])]);
+}
+// ── 별의 스펙트럼 ──
+const EL = { 'H': ['수소', [656.3, 486.1, 434.0, 410.2]], 'He': ['헬륨', [447.1, 471.3, 492.2, 501.6, 587.6, 667.8]], 'Na': ['나트륨', [589.0, 589.6]],
+  'Ca': ['칼슘', [393.4, 396.8, 422.7]], 'Fe': ['철', [430.8, 438.4, 527.0]], 'Mg': ['마그네슘', [516.7, 517.3, 518.4]] };
+const STARS = [['H'], ['H', 'Na', 'Ca'], ['He', 'H'], ['H', 'Na', 'Ca', 'Fe', 'Mg']];
+$('elChk').innerHTML = Object.keys(EL).map(k => `<label class="chk"><input type="checkbox" data-el="${k}"> ${EL[k][0]}</label>`).join('');
+let reveal = false;
+function drawStar(){
+  const { ctx, W, H } = s, sx0 = 64, sx1 = W - 10, LX = l => sx0 + (sx1 - sx0) * (l - 380) / (700 - 380), st = STARS[+$('starS').value];
+  const rowH = Math.min(34, (H - 70) / 7.4), gap = 6; let y = 12;
+  // 별의 흡수 스펙트럼
+  for (let px = sx0; px < sx1; px++){ const l = 380 + (px - sx0) / (sx1 - sx0) * 320; ctx.fillStyle = rgbCss(lamRGB(l), 1); ctx.fillRect(px, y, 1.5, rowH * 1.3); }
+  st.forEach(k => EL[k][1].forEach(l => { if (l >= 380 && l <= 700){ ctx.fillStyle = '#05070b'; ctx.fillRect(LX(l) - 1.2, y, 2.4, rowH * 1.3); } }));
+  T(ctx, $('starS').selectedOptions[0].text, 6, y + rowH * 0.65, { align: 'left', bold: true, size: 12, base: 'middle' }); y += rowH * 1.3 + 22;
+  T(ctx, '원소별 방출 스펙트럼 (실험실)', sx0, y - 4, { align: 'left', size: 10, color: SUB });
+  Object.keys(EL).forEach(k => { const chk = document.querySelector(`[data-el="${k}"]`).checked;
+    ctx.fillStyle = '#11141b'; ctx.fillRect(sx0, y, sx1 - sx0, rowH);
+    EL[k][1].forEach(l => { if (l >= 380 && l <= 700){ ctx.fillStyle = rgbCss(lamRGB(l), 1.3); ctx.fillRect(LX(l) - 1.2, y, 2.4, rowH); if (chk){ ctx.fillStyle = 'rgba(46,111,219,0.22)'; ctx.fillRect(LX(l) - 1, 12, 2, rowH * 1.3); } } });
+    const ok = st.includes(k), col = reveal ? (ok === chk ? GREEN : RED) : (chk ? BLUE : INK);
+    T(ctx, EL[k][0] + (reveal ? (ok ? ' ✓' : '') : ''), 6, y + rowH / 2, { align: 'left', size: 11, bold: chk || reveal, color: col, base: 'middle' }); y += rowH + gap; });
+  [400, 500, 600, 700].forEach(l => T(ctx, l + ' nm', LX(l), y + 6, { size: 10, color: SUB, align: l === 700 ? 'right' : 'center' }));
+  const sel = Object.keys(EL).filter(k => document.querySelector(`[data-el="${k}"]`).checked);
+  const right = sel.length === st.length && sel.every(k => st.includes(k));
+  setStats([['고른 원소', sel.length ? sel.map(k => EL[k][0]).join(', ') : '없음'], ['결과', reveal ? (right ? '정답!' : '다시 비교해 보세요') : '정답 확인을 누르세요', reveal ? (right ? GREEN : RED) : SUB]]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); if (mode === 'bohr') drawBohr(dt); else drawStar(); }
+const TEXT = {
+  bohr: ['수소 원자의 에너지 준위입니다. 준위를 눌러 전자를 옮겨 보세요. 전자가 높은 준위에서 낮은 준위로 내려올 때 두 준위의 에너지 차이만큼의 광자를 방출합니다.',
+    '원자 속 전자는 불연속적인 에너지 준위에만 있을 수 있으므로, 전자가 전이할 때 방출하는 광자의 에너지 hf = E<sub>높은</sub> − E<sub>낮은</sub>도 특정한 값만 가집니다. 그래서 기체 원자의 스펙트럼은 띄엄띄엄한 선 스펙트럼으로 나타납니다. n=2로 내려오는 전이(발머 계열)는 가시광선, n=1로 내려오는 전이(라이먼 계열)는 자외선, n=3으로 내려오는 전이(파셴 계열)는 적외선을 방출합니다.'],
+  star: ['별빛의 스펙트럼에 나타난 검은 흡수선을 실험실에서 얻은 원소의 방출선과 비교해, 별의 대기에 어떤 원소가 있는지 찾아보세요. 원소를 고르면 그 원소의 선 위치가 별의 스펙트럼 위에 파랗게 표시됩니다.',
+    '별의 대기 속 원자는 자신이 방출하는 빛과 같은 파장의 빛을 흡수하므로, 별빛의 연속 스펙트럼에는 그 원소의 방출선과 같은 위치에 검은 흡수선이 생깁니다. 원소마다 선의 위치가 고유하므로 흡수선을 비교하면 직접 가 볼 수 없는 별의 구성 원소를 알 수 있습니다. 헬륨은 태양의 스펙트럼에서 처음 발견되었습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').innerHTML = TEXT[m][1]; rs(); });
+pointer(S, (x, y) => { if (mode !== 'bohr') return false; let best = 0, bd = 1e9; for (let k = 1; k <= NMAX; k++){ const d = Math.abs(levelY(k) - y); if (d < bd){ bd = d; best = k; } } if (bd > 18) return false; queue = []; startJump(best); });
+$('autoB').addEventListener('click', () => { if (anim) return; queue = []; const hi = 3 + Math.floor(Math.random() * 4); if (n !== hi) startJump(hi);
+  // 들뜬 뒤 무작위로 단계를 밟아 바닥상태로
+  let k = hi; while (k > 2){ k = Math.random() < 0.5 ? k - 1 : 2 + Math.floor(Math.random() * (k - 2)); queue.push(k); } queue.push(1); if (!anim) startJump(queue.shift()); });
+$('clrB').addEventListener('click', () => { lines = []; msg = ''; });
+$('starS').addEventListener('change', () => { reveal = false; document.querySelectorAll('[data-el]').forEach(c => c.checked = false); });
+$('elChk').addEventListener('change', () => { reveal = false; });
+$('chkB').addEventListener('click', () => { reveal = true; });
+loop(draw);

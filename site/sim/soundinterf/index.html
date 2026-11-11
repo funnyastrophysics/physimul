@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>음파의 간섭</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>음파의 간섭</h1>
+  <p class="hint">두 스피커에서 같은 진동수의 소리가 나옵니다. 마이크(초록색)를 끌어 소리가 크게 들리는 곳과 거의 들리지 않는 곳을 찾고, 두 스피커까지의 거리 차이를 파장과 비교하세요.</p>
+  <div class="card">
+    <canvas id="sim" style="height:330px;border-radius:8px;background:#fff"></canvas>
+    <div class="row">
+      <select id="viewS"><option value="inst">파동의 순간 모습</option><option value="int">소리 세기 분포</option></select>
+      <select id="phS"><option value="0">같은 위상</option><option value="1">반대 위상</option></select>
+      <button class="b primary" id="sndB">소리 듣기</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>파장 λ</span><b id="lV"></b></div>
+        <input type="range" id="lS" min="0.2" max="0.8" step="0.02" value="0.4"><div class="range"><span>0.2 m</span><span>0.8 m</span></div></div>
+      <div class="sl"><div class="top"><span>두 스피커 사이 거리 d</span><b id="dV"></b></div>
+        <input type="range" id="dS" min="0.4" max="2" step="0.05" value="1.2"><div class="range"><span>0.4 m</span><span>2 m</span></div></div>
+    </div>
+    <p class="note">두 스피커까지의 거리 차이가 파장의 정수배(0, λ, 2λ, …)인 곳에서는 마루와 마루가 만나 보강 간섭이 일어나 소리가 크게 들리고, 반파장의 홀수배(λ/2, 3λ/2, …)인 곳에서는 마루와 골이 만나 상쇄 간섭이 일어나 소리가 작게 들립니다. 두 스피커의 위상이 반대이면 보강과 상쇄의 위치가 서로 바뀝니다. 소음 제거 헤드폰은 소음과 반대 위상의 소리를 만들어 상쇄 간섭을 일으킵니다.</p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const VS = 340, S = $('sim'); let s, img, cv, cx; const CELL = 3, WM = 4;   // 화면 가로 = 4 m
+const rs = () => { s = fitCanvas(S); cv = document.createElement('canvas'); cv.width = Math.ceil(s.W / CELL); cv.height = Math.ceil(s.H / CELL); cx = cv.getContext('2d'); img = cx.createImageData(cv.width, cv.height); };
+window.addEventListener('resize', rs); rs();
+bindLabels({ lS: ['lV', v => v.toFixed(2) + ' m (' + (VS / v).toFixed(0) + ' Hz)'], dS: ['dV', v => v.toFixed(2) + ' m'] });
+let t = 0, mic = { x: 2.6, y: 0 }, snd = null;
+const k = () => s.W / WM, X = x => x * k(), Y = y => s.H / 2 - y * k();
+const spk = () => { const d = +$('dS').value; return [{ x: 0.25, y: d / 2 }, { x: 0.25, y: -d / 2 }]; };
+function amp(x, y, ph){ const lam = +$('lS').value, K = 2 * Math.PI / lam, sg = $('phS').value === '1' ? Math.PI : 0; let re = 0, im = 0;
+  spk().forEach((p, i) => { const r = Math.max(Math.hypot(x - p.x, y - p.y), 0.05), a = 1 / Math.sqrt(r), q = K * r - ph + (i ? sg : 0); re += a * Math.cos(q); im += a * Math.sin(q); }); return [re, im]; }
+function draw(dt){
+  const { ctx, W, H } = s; t += dt; const ph = 2 * Math.PI * t * 1.2, mode = $('viewS').value, kk = k(), d = img.data;
+  for (let j = 0; j < cv.height; j++) for (let i = 0; i < cv.width; i++){
+    const x = (i + 0.5) * CELL / kk, y = (H / 2 - (j + 0.5) * CELL) / kk, [re, im] = amp(x, y, 0), o = (j * cv.width + i) * 4;
+    if (mode === 'inst'){ const v = (re * Math.cos(ph) + im * Math.sin(ph)) * 0.55, c = Math.max(-1, Math.min(1, v));
+      if (c > 0){ d[o] = 255 - 200 * c; d[o + 1] = 255 - 130 * c; d[o + 2] = 255 - 20 * c; } else { d[o] = 255 + 10 * c; d[o + 1] = 255 + 150 * c; d[o + 2] = 255 + 180 * c; } }
+    else { const I = Math.min(1, (re * re + im * im) * 0.28); d[o] = 255 - 230 * I; d[o + 1] = 255 - 160 * I; d[o + 2] = 255 - 40 * I; }
+    d[o + 3] = 255; }
+  cx.putImageData(img, 0, 0); ctx.clearRect(0, 0, W, H); ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, 0, 0, cv.width * CELL, cv.height * CELL);
+  spk().forEach((p, i) => { const x = X(p.x), y = Y(p.y); ctx.fillStyle = INK; ctx.fillRect(x - 14, y - 11, 10, 22); ctx.beginPath(); ctx.moveTo(x - 4, y - 6); ctx.lineTo(x + 6, y - 14); ctx.lineTo(x + 6, y + 14); ctx.lineTo(x - 4, y + 6); ctx.fill(); T(ctx, i ? 'S₂' : 'S₁', x - 9, y + (i ? 26 : -18), { bold: true, size: 12 }); });
+  const mx = X(mic.x), my = Y(mic.y);
+  spk().forEach(p => line(ctx, [[X(p.x) + 6, Y(p.y)], [mx, my]], 'rgba(30,35,45,0.45)', 1.2, [5, 4]));
+  ctx.fillStyle = 'rgba(46,158,106,0.25)'; ctx.beginPath(); ctx.arc(mx, my, 20, 0, 7); ctx.fill(); ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(mx, my, 8, 0, 7); ctx.fill();
+  T(ctx, '마이크 (끌기)', mx, my > H - 40 ? my - 26 : my + 32, { color: GREEN, bold: true, size: 11 });
+  // 마이크 위치의 진폭
+  const [re, im] = amp(mic.x, mic.y, 0), A = Math.hypot(re, im), [p1, p2] = spk(), r1 = Math.hypot(mic.x - p1.x, mic.y - p1.y), r2 = Math.hypot(mic.x - p2.x, mic.y - p2.y), Am = 1 / Math.sqrt(r1) + 1 / Math.sqrt(r2), rel = A / Am;
+  const bw = 90, bx = W - bw - 10, by = 12; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(bx - 6, by - 4, bw + 12, 36); ctx.fillStyle = '#e3e6ea'; ctx.fillRect(bx, by + 14, bw, 10); ctx.fillStyle = GREEN; ctx.fillRect(bx, by + 14, bw * rel, 10);
+  T(ctx, '마이크 소리 크기', bx + bw / 2, by + 6, { size: 11, bold: true });
+  const lam = +$('lS').value, dd = Math.abs(r1 - r2), n = dd / lam;
+  const anti = $('phS').value === '1', fr = n - Math.floor(n), near = x => Math.min(x, 1 - x);
+  const kind = (anti ? near(Math.abs(fr - 0.5)) : near(fr)) < 0.12 ? ['보강 간섭', ORANGE] : (anti ? near(fr) : near(Math.abs(fr - 0.5))) < 0.12 ? ['상쇄 간섭', BLUE] : ['중간', SUB];
+  setStats([['거리 차이 |S₁P − S₂P|', dd.toFixed(2) + ' m'], ['거리 차이 ÷ 파장', n.toFixed(2) + ' λ'], ['마이크 위치', kind[0], kind[1]], ['진동수', (VS / lam).toFixed(0) + ' Hz']]);
+  if (snd) snd.set(VS / lam, 0.25 * rel * rel + 0.002);
+}
+pointer(S, (x, y) => { if (Math.hypot(x - X(mic.x), y - Y(mic.y)) > 36) return false; }, (x, y) => { mic.x = Math.max(0.5, Math.min(WM - 0.05, x / k())); mic.y = (s.H / 2 - Math.max(4, Math.min(s.H - 4, y))) / k(); });
+$('sndB').addEventListener('click', () => { if (snd){ snd.stop(); snd = null; $('sndB').textContent = '소리 듣기'; } else { snd = tone(); $('sndB').textContent = '소리 끄기'; } });
+loop(draw);
+})();
+</script>
+</body>
+</html>

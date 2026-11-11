@@ -1,0 +1,58 @@
+등속 원운동
+  <h1>등속 원운동</h1>
+  <p class="hint">줄에 매단 공이 수평면에서 원운동을 합니다. 속도의 방향과 줄이 당기는 힘(구심력)의 방향을 비교하고, [줄 끊기]를 눌러 공이 어느 방향으로 날아가는지 확인하세요.</p>
+  <div class="card">
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row">
+      <button class="b primary" id="cutB">줄 끊기</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label class="chk"><input type="checkbox" id="cV" checked> 속도</label>
+      <label class="chk"><input type="checkbox" id="cF" checked> 구심력</label>
+      <label class="chk"><input type="checkbox" id="cTrail" checked> 지나간 자리</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>속력 v</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0.5" max="4" step="0.1" value="2"><div class="range"><span>0.5 m/s</span><span>4 m/s</span></div></div>
+      <div class="sl"><div class="top"><span>반지름 r</span><b id="rV"></b></div>
+        <input type="range" id="rS" min="0.3" max="1.2" step="0.05" value="0.8"><div class="range"><span>0.3 m</span><span>1.2 m</span></div></div>
+      <div class="sl"><div class="top"><span>공의 질량 m</span><b id="mV"></b></div>
+        <input type="range" id="mS" min="0.1" max="1" step="0.05" value="0.2"><div class="range"><span>0.1 kg</span><span>1 kg</span></div></div>
+    </div>
+    <p class="note">물체의 속력이 일정해도 운동 방향이 계속 바뀌므로 가속도가 있습니다. 이 가속도(구심 가속도 v²/r)는 원의 중심을 향하고, 이를 만드는 힘이 구심력(mv²/r)입니다. 힘의 방향이 속도와 수직이면 속력은 그대로이고 방향만 바뀝니다. 줄이 끊기면 구심력이 사라져 공은 그 순간의 속도 방향(접선 방향)으로 등속 직선 운동을 합니다. 화면은 위에서 내려다본 모습입니다.</p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let ang = 0, free = null, trail = [];
+bindLabels({ vS: ['vV', v => v.toFixed(1) + ' m/s'], rS: ['rV', v => v.toFixed(2) + ' m'], mS: ['mV', v => v.toFixed(2) + ' kg'] });
+function reset(){ free = null; trail = []; }
+$('cutB').addEventListener('click', () => { if (free) return; const v = +$('vS').value, r = +$('rS').value;
+  free = { x: r * Math.cos(ang), y: r * Math.sin(ang), vx: -v * Math.sin(ang), vy: v * Math.cos(ang) }; });
+$('resetB').addEventListener('click', reset);
+['vS', 'rS'].forEach(id => $(id).addEventListener('input', () => { trail = []; }));
+loop(dt => {
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const v = +$('vS').value, r = +$('rS').value, m = +$('mS').value, w = v / r, k = Math.min(W, H) / 3.2, cx = W / 2, cy = H / 2;
+  const X = x => cx + x * k, Y = y => cy - y * k;
+  let bx, by, vx, vy;
+  if (!free){ ang += w * dt; bx = r * Math.cos(ang); by = r * Math.sin(ang); vx = -v * Math.sin(ang); vy = v * Math.cos(ang); }
+  else { free.x += free.vx * dt; free.y += free.vy * dt; bx = free.x; by = free.y; vx = free.vx; vy = free.vy; if (Math.hypot(bx, by) > 2.2) reset(); }
+  trail.push([bx, by]); if (trail.length > 400) trail.shift();
+  // 원 궤도
+  ctx.setLineDash([4, 5]); ctx.strokeStyle = GRAY; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  if ($('cTrail').checked){ ctx.strokeStyle = 'rgba(47,111,223,0.35)'; ctx.lineWidth = 3; ctx.beginPath(); trail.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke(); }
+  // 중심과 줄
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 7); ctx.fill(); T(ctx, '중심', cx + 8, cy + 12, { align: 'left', size: 11 });
+  if (!free) line(ctx, [[cx, cy], [X(bx), Y(by)]], WIRE, 1.5);
+  const br = 8 + m * 10;
+  ctx.fillStyle = '#5a6478'; ctx.beginPath(); ctx.arc(X(bx), Y(by), br, 0, 7); ctx.fill();
+  const vk = 22;   // 1 m/s = 22 px
+  if ($('cV').checked){ arrow(ctx, X(bx), Y(by), X(bx) + vx * vk, Y(by) - vy * vk, BLUE, 3); T(ctx, '속도', X(bx) + vx * vk * 1.15, Y(by) - vy * vk * 1.15 - 8, { color: BLUE, bold: true }); }
+  if ($('cF').checked && !free){ const F = m * v * v / r, fk = Math.min(90, 12 + F * 6), ux = -bx / r, uy = -by / r;
+    arrow(ctx, X(bx), Y(by), X(bx) + ux * fk, Y(by) - uy * fk, RED, 3); T(ctx, '구심력', X(bx) + ux * fk * 1.25, Y(by) - uy * fk * 1.25, { color: RED, bold: true }); }
+  if (free) T(ctx, '줄이 끊겨 접선 방향으로 날아갑니다', W / 2, 16, { bold: true, color: ORANGE, size: 14 });
+  setStats([['주기', (2 * Math.PI * r / v).toFixed(2) + ' s'], ['구심 가속도', (v * v / r).toFixed(2) + ' m/s²'], ['구심력', free ? '0 N' : (m * v * v / r).toFixed(2) + ' N', RED], ['속력', v.toFixed(1) + ' m/s', BLUE]]);
+});
+rs();

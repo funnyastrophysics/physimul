@@ -1,0 +1,168 @@
+반도체와 다이오드 회로
+  <h1>반도체와 다이오드 회로</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="band">에너지띠</button>
+      <button data-m="pn">p-n 접합 다이오드</button>
+      <button data-m="rect">정류 회로</button>
+      <button data-m="logic">논리 회로</button>
+    </div>
+    <canvas id="sim" style="height:300px;border-radius:8px"></canvas>
+    <div class="row m-pn"><button class="b" id="flipB">전원 뒤집기</button></div>
+    <div class="row m-rect"><select id="rectS"><option value="half">반파 정류 (다이오드 1개)</option><option value="full">전파 정류 (다이오드 4개)</option></select><label class="chk"><input type="checkbox" id="cCap"> 축전기로 평활</label></div>
+    <div class="row m-logic"><select id="gateS"><option value="and">AND 게이트</option><option value="or">OR 게이트</option><option value="not">NOT 게이트</option></select>
+      <button class="b" id="aB">입력 A: 0</button><button class="b" id="bB">입력 B: 0</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-pn m-rect"><canvas id="graph" style="height:220px"></canvas></div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-band"><div class="top"><span>온도</span><b id="tV"></b></div>
+        <input type="range" id="tS" min="0" max="600" step="10" value="300"><div class="range"><span>0 K</span><span>600 K</span></div></div>
+      <div class="sl m-pn"><div class="top"><span>전원 전압</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0" max="1.2" step="0.02" value="0.4"><div class="range"><span>0 V</span><span>1.2 V</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); if (G.clientWidth) gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+let mode, flip = 1, A = 0, Bv = 0, t = 0, buf = [], phase = 0, capV = 0;
+bindLabels({ tS: ['tV', v => v + ' K'], vS: ['vV', v => v.toFixed(2) + ' V'] });
+// ---------- 에너지띠 ----------
+let bandDots = null;
+function band(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const Tk = +$('tS').value, cols = [{ n: '도체', gap: -0.3 }, { n: '반도체', gap: 1.1 }, { n: '절연체', gap: 6 }], cw = W / 3;
+  if (!bandDots) bandDots = cols.map(() => Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), up: false })));
+  cols.forEach((c, k) => {
+    const x0 = k * cw + 10, w = cw - 20, eTop = 40, eBot = H - 40, scale = (eBot - eTop) / 9;
+    const vbTop = eBot - 2.4 * scale, cbBot = c.gap < 0 ? vbTop - c.gap * scale : vbTop - c.gap * scale;
+    // 원자가 띠
+    ctx.fillStyle = '#c9d6ea'; ctx.fillRect(x0, vbTop, w, eBot - vbTop);
+    ctx.fillStyle = '#f6dfc8'; ctx.fillRect(x0, Math.max(eTop, cbBot - 2.4 * scale), w, cbBot - Math.max(eTop, cbBot - 2.4 * scale));
+    if (c.gap > 0){ ctx.setLineDash([3, 3]); line(ctx, [[x0 + w / 2, vbTop], [x0 + w / 2, cbBot]], INK, 1); ctx.setLineDash([]); T(ctx, '띠틈', x0 + w / 2 + 4, (vbTop + cbBot) / 2, { align: 'left', size: 10, color: INK }); }
+    T(ctx, c.n, x0 + w / 2, 18, { bold: true, color: INK, size: 14 });
+    T(ctx, '원자가 띠', x0 + w / 2, eBot - 10, { size: 10, color: INK }); T(ctx, '전도띠', x0 + w / 2, Math.max(eTop, cbBot - 2.4 * scale) + 10, { size: 10, color: INK });
+    // 전자: 온도가 높으면 띠틈을 뛰어넘는 확률 증가
+    const p = c.gap <= 0 ? 0.5 : Tk === 0 ? 0 : Math.min(0.5, 0.6 * Math.exp(-c.gap / (Tk / 300 * 0.45)));   // 보기 쉽도록 과장
+    bandDots[k].forEach(d => {
+      if (Math.random() < dt * 2) d.up = Math.random() < p;
+      const yb = d.up ? cbBot - 4 - d.y * Math.min(2.2 * scale, cbBot - eTop - 6) * 0.9 : vbTop + 6 + d.y * (eBot - vbTop - 24);
+      d.x = (d.x + dt * (d.up ? 0.15 : 0.0) + 1) % 1;
+      ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(x0 + 6 + d.x * (w - 12), yb, 3.2, 0, 7); ctx.fill();
+    });
+    const n = bandDots[k].filter(d => d.up).length;
+    c.free = c.gap <= 0 ? '많음' : n === 0 ? '거의 없음' : n + '개';
+  });
+  T(ctx, '에너지 ↑', 6, H / 2, { align: 'left', size: 10 });
+  setStats(cols.map(c => [c.n + '의 전도띠 전자', c.free]));
+}
+// ---------- p-n 다이오드 ----------
+let carriers = null;
+function pn(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const V = +$('vS').value * flip, I = V > 0 ? 1e-8 * (Math.exp(V / 0.05) - 1) : -1e-9, Ima = Math.min(I * 1000, 200);   // mA
+  const x0 = W * 0.12, x1 = W * 0.88, mid = (x0 + x1) / 2, y0 = 60, y1 = 170;
+  const dep = Math.max(6, 34 - 30 * Math.max(0, V) / 0.7 + (V < 0 ? 30 * -V : 0));
+  ctx.fillStyle = '#fbe3e1'; ctx.fillRect(x0, y0, mid - x0, y1 - y0); ctx.fillStyle = '#e1eafb'; ctx.fillRect(mid, y0, x1 - mid, y1 - y0);
+  ctx.fillStyle = 'rgba(160,160,160,0.25)'; ctx.fillRect(mid - dep, y0, dep * 2, y1 - y0);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  T(ctx, 'p형 (양공 많음)', (x0 + mid) / 2, y0 - 10, { bold: true, color: RED, size: 12 }); T(ctx, 'n형 (전자 많음)', (mid + x1) / 2, y0 - 10, { bold: true, color: BLUE, size: 12 });
+  T(ctx, '공핍층', mid, y1 + 12, { size: 10 });
+  if (!carriers) carriers = Array.from({ length: 36 }, (_, i) => ({ hole: i < 18, x: Math.random(), y: Math.random() }));
+  const flow = Ima > 0.5 ? Math.min(1, Ima / 50) : 0;
+  carriers.forEach(c => {
+    if (c.hole){ c.x += flow * dt * 0.5; if (c.x > 1) c.x = 0; } else { c.x -= flow * dt * 0.5; if (c.x < 0) c.x = 1; }
+    let px = c.hole ? x0 + c.x * (x1 - x0) * (flow ? 1 : 0.5) : x1 - (1 - c.x) * (x1 - x0) * (flow ? 1 : 0.5);
+    if (!flow){ px = c.hole ? Math.min(px, mid - dep - 4) : Math.max(px, mid + dep + 4); }
+    const py = y0 + 10 + c.y * (y1 - y0 - 20);
+    if (c.hole){ ctx.strokeStyle = RED; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.stroke(); } else { ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill(); }
+  });
+  // 회로와 전원
+  const by = y1 + 60; line(ctx, [[x0, (y0 + y1) / 2], [x0 - 20, (y0 + y1) / 2], [x0 - 20, by], [mid - 16, by]]); line(ctx, [[x1, (y0 + y1) / 2], [x1 + 20, (y0 + y1) / 2], [x1 + 20, by], [mid + 16, by]]);
+  const posLeft = flip > 0;
+  ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(mid + (posLeft ? -6 : 6), by - 14); ctx.lineTo(mid + (posLeft ? -6 : 6), by + 14); ctx.stroke();
+  ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(mid + (posLeft ? 6 : -6), by - 8); ctx.lineTo(mid + (posLeft ? 6 : -6), by + 8); ctx.stroke();
+  T(ctx, '+', mid + (posLeft ? -16 : 16), by - 16, { color: RED, bold: true });
+  T(ctx, flip > 0 ? '순방향 연결: p형에 (+), n형에 (−)' : '역방향 연결: p형에 (−), n형에 (+)', W / 2, 16, { bold: true, color: flip > 0 ? GREEN : RED, size: 13 });
+  T(ctx, Ima > 0.5 ? '전류가 흐릅니다' : '전류가 거의 흐르지 않습니다', W / 2, by + 30, { bold: true, color: Ima > 0.5 ? ORANGE : SUB });
+  setStats([['다이오드에 걸린 전압', fmt(V, 2) + ' V'], ['전류', Ima > 0.01 ? Ima.toFixed(1) + ' mA' : '거의 0', ORANGE], ['공핍층', V < 0 ? '넓어짐' : V > 0.5 ? '거의 사라짐' : '좁아짐']]);
+  // I–V 그래프
+  if (!gr) return; const { ctx: c2, W: GW, H: GH } = gr; c2.clearRect(0, 0, GW, GH);
+  const Ax = axes(c2, GW, GH, { x0: -1.2, x1: 1.2, y0: -20, y1: 200, xt: [-1.2, -0.6, 0, 0.6, 1.2], yt: [0, 50, 100, 150, 200], xl: '전압 (V)', yl: '전류 (mA)' });
+  c2.strokeStyle = INK; c2.lineWidth = 2; c2.beginPath(); for (let v = -1.2; v <= 1.2; v += 0.01){ const i = v > 0 ? Math.min(220, 1e-5 * (Math.exp(v / 0.05) - 1)) : 0; v === -1.2 ? c2.moveTo(Ax.X(v), Ax.Y(i)) : c2.lineTo(Ax.X(v), Ax.Y(i)); } c2.stroke();
+  c2.fillStyle = RED; c2.beginPath(); c2.arc(Ax.X(V), Ax.Y(Math.max(0, Ima)), 6, 0, 7); c2.fill();
+}
+// ---------- 정류 회로 ----------
+function rect(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  t += dt; const f = 0.5, vin = 10 * Math.sin(2 * Math.PI * f * t), full = $('rectS').value === 'full';
+  let vout = full ? Math.max(0, Math.abs(vin) - 1.4) : Math.max(0, vin - 0.7);
+  if ($('cCap').checked){ if (vout > capV) capV = vout; else capV *= Math.exp(-dt / 2.5); vout = capV; } else capV = vout;
+  buf.push({ t, vin, vout }); while (buf.length && buf[0].t < t - 6.5) buf.shift();
+  // 회로 그림
+  const L = 40, R = W - 40, Tp = 50, Bt = H - 50, mx = (L + R) / 2;
+  line(ctx, [[L, Tp], [R, Tp], [R, Bt], [L, Bt], [L, Tp]], WIRE, 2);
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(L, (Tp + Bt) / 2, 18, 0, 7); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); for (let i = 0; i <= 20; i++){ const x = L - 10 + i, y = (Tp + Bt) / 2 - 6 * Math.sin(i / 20 * 2 * Math.PI); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  T(ctx, '교류', L + 24, (Tp + Bt) / 2, { align: 'left', size: 11 });
+  // 다이오드 기호
+  const diode = (x, y, rot, on) => { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = on ? ORANGE : '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-9, -9); ctx.lineTo(-9, 9); ctx.lineTo(7, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); line(ctx, [[8, -9], [8, 9]], INK, 2); ctx.restore(); };
+  if (!full){ ctx.fillStyle = '#fbfcfd'; ctx.fillRect(mx - 14, Tp - 12, 28, 24); diode(mx, Tp, 0, vin > 0.7); }
+  else { const bw = 64; ctx.fillStyle = '#fff'; ctx.fillRect(mx - bw / 2, Tp - bw / 2, bw, bw); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.strokeRect(mx - bw / 2, Tp - bw / 2, bw, bw);
+    const r = bw * 0.32, pos = vin > 0.7, neg = vin < -0.7;
+    line(ctx, [[mx - r, Tp], [mx, Tp - r], [mx + r, Tp], [mx, Tp + r], [mx - r, Tp]], GRAY, 1.2);
+    [[-0.5, -0.5, -Math.PI / 4, pos], [0.5, -0.5, Math.PI / 4, neg], [-0.5, 0.5, Math.PI / 4, neg], [0.5, 0.5, -Math.PI / 4, pos]].forEach(([dx, dy, a, on]) => { ctx.save(); ctx.translate(mx + dx * r, Tp + dy * r); ctx.scale(0.55, 0.55); diode(0, 0, a, on); ctx.restore(); });
+    T(ctx, '다이오드 4개 (브리지)', mx, Tp - bw / 2 - 10, { size: 11 }); T(ctx, '주황색: 지금 전류가 흐르는 다이오드', mx, Tp + bw / 2 + 12, { size: 10, color: ORANGE }); }
+  // 저항(부하)
+  ctx.fillStyle = '#fbfcfd'; ctx.fillRect(R - 12, (Tp + Bt) / 2 - 24, 24, 48); ctx.strokeStyle = WIRE; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(R, (Tp + Bt) / 2 - 24);
+  for (let i = 0; i < 6; i++) ctx.lineTo(R + (i % 2 ? -8 : 8), (Tp + Bt) / 2 - 24 + 48 * (i + 0.5) / 6); ctx.lineTo(R, (Tp + Bt) / 2 + 24); ctx.stroke();
+  T(ctx, '저항', R - 16, (Tp + Bt) / 2, { align: 'right', size: 11 });
+  if ($('cCap').checked){ const cx = R - 60; line(ctx, [[cx, Tp], [cx, (Tp + Bt) / 2 - 5]]); line(ctx, [[cx, (Tp + Bt) / 2 + 5], [cx, Bt]]); line(ctx, [[cx - 14, (Tp + Bt) / 2 - 5], [cx + 14, (Tp + Bt) / 2 - 5]], INK, 3); line(ctx, [[cx - 14, (Tp + Bt) / 2 + 5], [cx + 14, (Tp + Bt) / 2 + 5]], INK, 3); T(ctx, '축전기', cx - 18, (Tp + Bt) / 2, { align: 'right', size: 11 }); }
+  if (vout > 0.3) arrow(ctx, R + 14, Tp + 20, R + 14, Tp + 60, ORANGE, 2.5);
+  T(ctx, vout > 0.3 ? '저항에는 항상 같은 방향으로 전류가 흐릅니다' : '지금은 전류가 흐르지 않습니다', W / 2, Bt + 22, { bold: true, color: vout > 0.3 ? ORANGE : SUB, size: 12 });
+  setStats([['입력 전압 (교류)', fmt(vin, 1) + ' V', BLUE], ['출력 전압 (저항)', fmt(vout, 1) + ' V', ORANGE]]);
+  if (gr) timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: ['vin', 'vout'], names: ['입력 전압 (V)', '출력 전압 (V)'], colors: [BLUE, ORANGE], fixed: 12 }], 6);
+}
+// ---------- 논리 회로 ----------
+function logic(){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const g = $('gateS').value, out = g === 'and' ? (A && Bv) : g === 'or' ? (A || Bv) : !A;
+  $('bB').classList.toggle('hide', g === 'not');
+  const L = 40, R = W - 50, Tp = 50, Bt = H - 60, my = (Tp + Bt) / 2;
+  // 전원과 LED, 스위치(트랜지스터 대신 스위치로 표현)
+  line(ctx, [[L, Tp], [R, Tp], [R, Bt], [L, Bt], [L, Tp]], WIRE, 2);
+  ctx.fillStyle = '#fbfcfd'; ctx.fillRect(L - 14, my - 12, 28, 24); line(ctx, [[L - 12, my - 4], [L + 12, my - 4]], INK, 3); line(ctx, [[L - 6, my + 4], [L + 6, my + 4]], INK, 5); T(ctx, '전원', L + 18, my, { align: 'left', size: 11 });
+  const sw = (x, y, on, name) => { ctx.fillStyle = '#fbfcfd'; ctx.fillRect(x - 24, y - 14, 48, 28); ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(x - 18, y, 3.5, 0, 7); ctx.arc(x + 18, y, 3.5, 0, 7); ctx.fill();
+    line(ctx, [[x - 18, y], on ? [x + 18, y] : [x + 14, y - 16]], on ? GREEN : INK, 3); T(ctx, name + (on ? ' = 1' : ' = 0'), x, y - 22, { bold: true, color: on ? GREEN : INK, size: 12 }); };
+  if (g === 'and'){ sw(W * 0.35, Tp, A, 'A'); sw(W * 0.6, Tp, Bv, 'B'); T(ctx, '두 스위치를 직렬로 연결', W / 2, Tp + 30, { size: 11 }); }
+  else if (g === 'or'){ const x = W * 0.48; line(ctx, [[x - 40, Tp], [x - 40, Tp + 50], [x + 40, Tp + 50], [x + 40, Tp]], WIRE, 2); sw(x, Tp, A, 'A'); sw(x, Tp + 50, Bv, 'B'); T(ctx, '두 스위치를 병렬로 연결', x, Tp + 80, { size: 11 }); }
+  else { // NOT: 스위치가 LED와 병렬 (스위치를 닫으면 LED 쪽 전류가 우회)
+    const x = W * 0.66; line(ctx, [[x, Tp], [x, Bt]], WIRE, 2); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(x - 20, my - 24, 40, 48);
+    ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(x, my - 18, 3.5, 0, 7); ctx.arc(x, my + 18, 3.5, 0, 7); ctx.fill();
+    line(ctx, [[x, my - 18], A ? [x, my + 18] : [x + 16, my + 14]], A ? GREEN : INK, 3); T(ctx, 'A = ' + A, x - 10, my, { bold: true, color: A ? GREEN : INK, align: 'right' });
+    ctx.fillStyle = '#fbfcfd'; ctx.fillRect(W * 0.45 - 12, Tp - 10, 24, 20); ctx.strokeStyle = WIRE; ctx.lineWidth = 2; ctx.strokeRect(W * 0.45 - 12, Tp - 6, 24, 12); T(ctx, '저항', W * 0.45, Tp - 16, { size: 10 });
+    T(ctx, '스위치를 닫으면 전류가 LED를 피해 흐름', W * 0.4, Bt + 22, { size: 11 }); }
+  // LED
+  const lx = R, ly = my; if (out){ const gg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 40); gg.addColorStop(0, 'rgba(255,80,60,0.8)'); gg.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(lx, ly, 40, 0, 7); ctx.fill(); }
+  ctx.fillStyle = out ? '#ff5a3c' : '#f3d0cb'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(lx, ly, 13, 0, 7); ctx.fill(); ctx.stroke(); T(ctx, '출력 LED = ' + (out ? 1 : 0), lx, ly - 34, { bold: true, color: out ? RED : SUB, align: 'right' });
+  // 진리표
+  const rows = g === 'not' ? [[0, 1], [1, 0]] : [[0, 0], [0, 1], [1, 0], [1, 1]].map(([a, b]) => [a, b, g === 'and' ? a & b : a | b]);
+  setStats(rows.map(r => [g === 'not' ? 'A = ' + r[0] : 'A ' + r[0] + ', B ' + r[1], '출력 ' + r[r.length - 1], (g === 'not' ? r[0] === A : r[0] === A && r[1] === Bv) ? RED : null]));
+}
+const TEXT = {
+  band: ['도체, 반도체, 절연체의 에너지띠를 비교하세요. 온도를 높이면 반도체에서 원자가 띠의 전자가 띠틈을 넘어 전도띠로 올라갑니다.',
+    '고체에서 전자는 띠 모양의 에너지 준위(에너지띠)에 있습니다. 전도띠의 전자는 자유롭게 움직여 전류를 흐르게 합니다. 도체는 전도띠에 전자가 있고, 절연체는 띠틈이 매우 넓어 전자가 올라가지 못합니다. 반도체는 띠틈이 좁아 온도나 빛, 불순물 첨가에 따라 전기 전도성이 크게 달라집니다.'],
+  pn: ['p형과 n형 반도체를 붙인 다이오드에 전압을 걸어 보세요. 전원의 방향과 전압에 따라 전류가 어떻게 달라지는지 그래프와 함께 확인합니다.',
+    '순방향 전압을 걸면 공핍층이 좁아져 양공과 전자가 접합면을 넘어 이동하므로 전류가 잘 흐릅니다(실리콘은 약 0.7 V 이상). 역방향 전압을 걸면 공핍층이 넓어져 전류가 거의 흐르지 않습니다. 이처럼 다이오드는 한쪽 방향으로만 전류를 흐르게 합니다. 발광 다이오드(LED)는 전자와 양공이 결합할 때 빛을 냅니다.'],
+  rect: ['교류를 다이오드에 통과시키면 출력 전압이 어떻게 달라지는지 그래프로 비교하세요. (화면에서 보이도록 교류의 진동수를 0.5 Hz로 느리게 나타냈습니다)',
+    '다이오드는 한 방향으로만 전류를 흐르게 하므로 교류를 직류로 바꾸는 정류에 쓰입니다. 다이오드 1개는 반주기만 통과시키고(반파 정류), 4개를 다리 모양으로 연결하면 두 반주기를 모두 같은 방향으로 바꿉니다(전파 정류). 축전기를 함께 쓰면 전압이 고르게 됩니다. 휴대폰 충전기 속에 이런 회로가 들어 있습니다.'],
+  logic: ['입력 A, B를 눌러 0과 1을 바꾸며 출력 LED가 켜지는 조건을 진리표와 비교하세요.',
+    '디지털 회로는 0과 1로 정보를 처리하며, 실제 회로에서는 트랜지스터가 아주 빠른 스위치 역할을 합니다. AND 게이트는 두 입력이 모두 1일 때만, OR 게이트는 하나라도 1이면 출력이 1이고, NOT 게이트는 입력을 반대로 바꿉니다. 이런 논리 회로를 수십억 개 모아 컴퓨터의 중앙 처리 장치를 만듭니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; buf = []; t = 0; rs(); });
+$('flipB').addEventListener('click', () => { flip = -flip; });
+$('aB').addEventListener('click', () => { A = A ? 0 : 1; $('aB').textContent = '입력 A: ' + A; $('aB').classList.toggle('on', !!A); });
+$('bB').addEventListener('click', () => { Bv = Bv ? 0 : 1; $('bB').textContent = '입력 B: ' + Bv; $('bB').classList.toggle('on', !!Bv); });
+loop(dt => ({ band, pn, rect, logic })[mode](dt));

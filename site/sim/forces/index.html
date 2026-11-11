@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>힘의 합성과 빗면</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>힘의 합성과 빗면</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="sum">힘의 합성</button>
+      <button data-m="slope">빗면 위의 물체</button>
+    </div>
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row m-sum">
+      <label class="chk"><input type="checkbox" id="cPar" checked> 평행사변형</label>
+      <label class="chk"><input type="checkbox" id="cEq"> 평형을 이루는 힘</label>
+      <label class="chk"><input type="checkbox" id="cThird"> 세 번째 힘 추가</label>
+    </div>
+    <div class="row m-slope">
+      <button class="b primary" id="goB">놓기</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label class="chk"><input type="checkbox" id="cComp" checked> 중력의 성분</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls m-slope">
+      <div class="sl"><div class="top"><span>빗면의 기울기 θ</span><b id="angV"></b></div>
+        <input type="range" id="angS" min="0" max="60" step="1" value="30"><div class="range"><span>0°</span><span>60°</span></div></div>
+      <div class="sl"><div class="top"><span>물체의 질량</span><b id="mV"></b></div>
+        <input type="range" id="mS" min="1" max="10" step="0.5" value="2"><div class="range"><span>1 kg</span><span>10 kg</span></div></div>
+      <div class="sl"><div class="top"><span>정지 마찰 계수</span><b id="musV"></b></div>
+        <input type="range" id="musS" min="0" max="1" step="0.05" value="0.4"><div class="range"><span>0</span><span>1</span></div></div>
+      <div class="sl"><div class="top"><span>운동 마찰 계수</span><b id="mukV"></b></div>
+        <input type="range" id="mukS" min="0" max="1" step="0.05" value="0.3"><div class="range"><span>0</span><span>1</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const g = 9.8, S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode;
+bindLabels({ angS: ['angV', v => v + '°'], mS: ['mV', v => v.toFixed(1) + ' kg'], musS: ['musV', v => v.toFixed(2)], mukS: ['mukV', v => v.toFixed(2)] });
+
+// ---------- 힘의 합성 (단위: N, 화면 1 N = k px) ----------
+let F = [{ x: 4, y: 1, c: BLUE, n: 'F₁' }, { x: 1, y: 3.5, c: ORANGE, n: 'F₂' }, { x: -2, y: -2.5, c: GREEN, n: 'F₃' }], drag = -1;
+function sumView(){ const { W, H } = s; return { ox: W / 2, oy: H / 2 + 20, k: Math.min(W, H) / 13 }; }
+function drawSum(){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const { ox, oy, k } = sumView(), list = $('cThird').checked ? F : F.slice(0, 2);
+  // 격자 (1 N)
+  ctx.strokeStyle = '#eef0f4'; ctx.lineWidth = 1;
+  for (let i = -8; i <= 8; i++){ ctx.beginPath(); ctx.moveTo(ox + i * k, 0); ctx.lineTo(ox + i * k, H); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, oy + i * k); ctx.lineTo(W, oy + i * k); ctx.stroke(); }
+  T(ctx, '격자 1칸 = 1 N, 화살표 끝을 끌어 보세요', 8, 12, { align: 'left', size: 11 });
+  const R = list.reduce((a, f) => ({ x: a.x + f.x, y: a.y + f.y }), { x: 0, y: 0 });
+  if ($('cPar').checked && list.length === 2){
+    const [a, b] = list; line(ctx, [[ox + a.x * k, oy - a.y * k], [ox + R.x * k, oy - R.y * k]], b.c, 1.2, true); line(ctx, [[ox + b.x * k, oy - b.y * k], [ox + R.x * k, oy - R.y * k]], a.c, 1.2, true);
+  }
+  if ($('cPar').checked && list.length === 3){ // 꼬리에 머리를 잇기
+    let px = 0, py = 0; list.forEach(f => { line(ctx, [[ox + px * k, oy - py * k], [ox + (px + f.x) * k, oy - (py + f.y) * k]], f.c, 1.2, true); px += f.x; py += f.y; });
+  }
+  list.forEach(f => { arrow(ctx, ox, oy, ox + f.x * k, oy - f.y * k, f.c, 3, 12); T(ctx, f.n, ox + f.x * k * 1.08 + 8, oy - f.y * k * 1.08, { color: f.c, bold: true, size: 14 }); ctx.fillStyle = f.c; ctx.globalAlpha = 0.18; ctx.beginPath(); ctx.arc(ox + f.x * k, oy - f.y * k, 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
+  const Rm = Math.hypot(R.x, R.y);
+  if (Rm > 0.05) arrow(ctx, ox, oy, ox + R.x * k, oy - R.y * k, PURPLE, 4, 14);
+  if (Rm > 0.05) T(ctx, '합력', ox + R.x * k + 14, oy - R.y * k - 12, { color: PURPLE, bold: true, size: 14 });
+  if ($('cEq').checked && Rm > 0.05){ arrow(ctx, ox, oy, ox - R.x * k, oy + R.y * k, RED, 3, 12); T(ctx, '평형을 이루는 힘', ox - R.x * k, oy + R.y * k + 16, { color: RED, bold: true }); }
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(ox, oy, 6, 0, 7); ctx.fill();
+  const ang = Math.atan2(R.y, R.x) * 180 / Math.PI;
+  setStats(list.map(f => [f.n + ' 크기', Math.hypot(f.x, f.y).toFixed(2) + ' N', f.c]).concat([['합력의 크기', Rm.toFixed(2) + ' N', PURPLE], ['합력의 방향', Rm > 0.05 ? '+x축에서 ' + fmt(ang, 0) + '°' : '-']]));
+}
+pointer(S, (x, y) => {
+  if (mode !== 'sum') return false; const { ox, oy, k } = sumView(), list = $('cThird').checked ? F : F.slice(0, 2);
+  drag = -1; let best = 30; list.forEach((f, i) => { const d = Math.hypot(ox + f.x * k - x, oy - f.y * k - y); if (d < best){ best = d; drag = i; } });
+  return drag >= 0 ? undefined : false;
+}, (x, y) => { const { ox, oy, k } = sumView(); F[drag].x = Math.round((x - ox) / k * 2) / 2; F[drag].y = Math.round((oy - y) / k * 2) / 2; });
+
+// ---------- 빗면 ----------
+let pos = 0, vel = 0, run = false;
+function drawSlope(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
+  const th = +$('angS').value * Math.PI / 180, m = +$('mS').value, mus = +$('musS').value, muk = +$('mukS').value;
+  const Fg = m * g, Fpar = Fg * Math.sin(th), N = Fg * Math.cos(th), fsMax = mus * N;
+  const moving = Math.abs(vel) > 1e-6 || (run && Fpar > fsMax + 1e-9);
+  let fric, a;
+  if (moving){ fric = muk * N; a = (Fpar - fric) / m; } else { fric = Math.min(Fpar, fsMax); a = 0; }
+  if (run && moving){ vel = Math.max(0, vel + a * dt); pos += vel * dt; if (vel <= 0 && Fpar <= fsMax) vel = 0; }
+  // 그리기
+  const Lpx = Math.min(W * 0.85, (H - 70) / Math.max(0.3, Math.sin(th)) * 0.9, W * 0.85), x0 = W - 20, y0 = H - 30;
+  const topX = x0 - Lpx * Math.cos(th), topY = y0 - Lpx * Math.sin(th);
+  ctx.fillStyle = '#e6e9ef'; ctx.beginPath(); ctx.moveTo(topX, topY); ctx.lineTo(x0, y0); ctx.lineTo(topX, y0); ctx.closePath(); ctx.fill();
+  line(ctx, [[topX, topY], [x0, y0], [topX - 10, y0]], INK, 2); line(ctx, [[topX, topY], [topX, y0]], INK, 1);
+  if (th > 0.02){ ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x0, y0, 34, Math.PI, Math.PI + th); ctx.stroke(); T(ctx, 'θ', x0 - 44, y0 - 10, { color: INK, bold: true }); }
+  const d = Math.min(Lpx - 30, 40 + pos * 60), ux = Math.cos(th), uy = Math.sin(th);
+  const bx = topX + d * ux, by = topY + d * uy, size = 26 + m * 2;
+  ctx.save(); ctx.translate(bx, by); ctx.rotate(th); ctx.fillStyle = '#5a6478'; ctx.fillRect(-size / 2, -size, size, size); ctx.restore();
+  const cx = bx + size / 2 * uy, cy = by - size / 2 * ux, k = 80 / Math.sqrt(Fg * 19.6);   // 화살표 길이는 힘에 비례
+  arrow(ctx, cx, cy, cx, cy + Fg * k, RED, 3); T(ctx, '중력 ' + Fg.toFixed(1) + ' N', cx + 6, cy + Fg * k + 10, { color: RED, bold: true, align: 'left', size: 11 });
+  if ($('cComp').checked && th > 0.02){
+    arrow(ctx, cx, cy, cx + Fpar * k * ux, cy + Fpar * k * uy, RED, 1.8); arrow(ctx, cx, cy, cx - N * k * uy, cy + N * k * ux, RED, 1.8);
+    line(ctx, [[cx + Fpar * k * ux, cy + Fpar * k * uy], [cx, cy + Fg * k]], RED, 1, [3, 3]); line(ctx, [[cx - N * k * uy, cy + N * k * ux], [cx, cy + Fg * k]], RED, 1, [3, 3]);
+  }
+  arrow(ctx, cx, cy, cx + N * k * uy, cy - N * k * ux, BLUE, 3); T(ctx, '수직 항력', cx + N * k * uy + 6, cy - N * k * ux - 8, { color: BLUE, bold: true, size: 11, align: 'left' });
+  if (fric > 0.01){ arrow(ctx, cx, cy, cx - fric * k * ux, cy - fric * k * uy, GREEN, 3); T(ctx, (moving ? '운동' : '정지') + ' 마찰력', cx - fric * k * ux - 4, cy - fric * k * uy - 12, { color: GREEN, bold: true, size: 11, align: 'right' }); }
+  const state = !run ? '[놓기]를 누르세요' : moving ? '미끄러져 내려갑니다' : '정지해 있습니다 (중력의 빗면 성분 ≤ 최대 정지 마찰력)';
+  T(ctx, state, 10, 14, { align: 'left', bold: true, color: moving ? ORANGE : INK, size: 12 });
+  if (d >= Lpx - 31) run = false;
+  setStats([['중력의 빗면 방향 성분', Fpar.toFixed(1) + ' N', RED], ['수직 항력', N.toFixed(1) + ' N', BLUE], ['최대 정지 마찰력', fsMax.toFixed(1) + ' N', GREEN], ['알짜힘', (moving ? Fpar - muk * N : 0).toFixed(1) + ' N'], ['가속도', (moving ? a : 0).toFixed(2) + ' m/s²', ORANGE]]);
+}
+const TEXT = {
+  sum: ['화살표 끝을 끌어 두 힘의 크기와 방향을 바꾸고, 합력이 어떻게 정해지는지 관찰하세요.',
+    '두 힘의 합력은 두 힘을 이웃한 변으로 하는 평행사변형의 대각선입니다. 여러 힘은 화살표를 꼬리에 머리를 잇듯 이어 붙여 더할 수 있습니다. 합력과 크기가 같고 방향이 반대인 힘을 더하면 알짜힘이 0이 되어 물체는 평형을 이룹니다.'],
+  slope: ['빗면의 기울기와 마찰 계수를 바꾸며 물체에 작용하는 힘을 분석하세요. 중력을 빗면에 나란한 성분과 수직인 성분으로 나누면 운동을 예측할 수 있습니다.',
+    '중력의 빗면 방향 성분은 mg sinθ, 수직 성분은 mg cosθ이며 수직 항력과 크기가 같습니다. 중력의 빗면 방향 성분이 최대 정지 마찰력(μₛN)보다 크면 물체가 미끄러지고, 그때 가속도는 (mg sinθ − μₖN)/m입니다. 화살표 길이는 힘의 크기에 비례합니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+const reset = () => { pos = 0; vel = 0; run = false; };
+$('goB').addEventListener('click', () => { reset(); run = true; vel = 0; });
+$('resetB').addEventListener('click', reset);
+['angS', 'mS', 'musS', 'mukS'].forEach(id => $(id).addEventListener('input', reset));
+loop(dt => mode === 'sum' ? drawSum() : drawSlope(dt));
+})();
+</script>
+</body>
+</html>

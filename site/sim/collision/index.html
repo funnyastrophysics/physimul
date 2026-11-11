@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>일차원 충돌과 운동량 보존</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; --a:#2f6fdf; --b:#e0782f; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:15px;padding:10px 4px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%}
+  #sim{height:190px}
+  #mom{height:190px}
+  #force{height:170px;margin-top:8px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .ca b{color:var(--a)} .ca input{accent-color:var(--a)}
+  .cb b{color:var(--b)} .cb input{accent-color:var(--b)}
+  .cc b{color:var(--accent)} .cc input{accent-color:var(--accent)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+  button.b,select{font:inherit;font-size:15px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .hide{display:none!important}
+  .note{font-size:13px;color:var(--sub);margin-top:8px}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>일차원 충돌과 운동량 보존</h1>
+  <p class="hint">두 수레의 질량과 속도를 정하고 출발시키세요. 충돌 전후 운동량의 합과, 충돌하는 동안 두 수레가 서로에게 작용하는 힘을 비교합니다.</p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="hit" class="on">충돌</button>
+      <button data-m="split">분리 (발사체)</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <div class="row" style="margin-top:8px">
+      <button class="b primary" id="goB">출발</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label style="font-size:15px">재생 속도
+        <select id="speedS"><option value="1">1배</option><option value="0.5">0.5배</option><option value="0.25">0.25배</option></select>
+      </label>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">A의 속도</div><div class="val" id="sVa" style="color:var(--a)">-</div></div>
+      <div class="stat"><div class="k">B의 속도</div><div class="val" id="sVb" style="color:var(--b)">-</div></div>
+      <div class="stat"><div class="k">운동량의 합 (처음 → 지금)</div><div class="val" id="sP">-</div></div>
+      <div class="stat"><div class="k">운동 에너지의 합 (처음 → 지금)</div><div class="val" id="sK">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="mom"></canvas>
+    <canvas id="force"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <div class="sl ca"><div class="top"><span>A의 질량 m<sub>A</sub></span><b id="maV"></b></div>
+        <input type="range" id="maS" min="0.5" max="4" step="0.1" value="1"><div class="range"><span>0.5 kg</span><span>4.0 kg</span></div></div>
+      <div class="sl cb"><div class="top"><span>B의 질량 m<sub>B</sub></span><b id="mbV"></b></div>
+        <input type="range" id="mbS" min="0.5" max="4" step="0.1" value="2"><div class="range"><span>0.5 kg</span><span>4.0 kg</span></div></div>
+      <div class="sl ca hitOnly"><div class="top"><span>A의 처음 속도</span><b id="vaV"></b></div>
+        <input type="range" id="vaS" min="-3" max="3" step="0.1" value="2"><div class="range"><span>−3 m/s (왼쪽)</span><span>3 m/s (오른쪽)</span></div></div>
+      <div class="sl cb hitOnly"><div class="top"><span>B의 처음 속도</span><b id="vbV"></b></div>
+        <input type="range" id="vbS" min="-3" max="3" step="0.1" value="0"><div class="range"><span>−3 m/s (왼쪽)</span><span>3 m/s (오른쪽)</span></div></div>
+      <div class="sl cc hitOnly"><div class="top"><span>충돌 종류</span><b id="eV"></b></div>
+        <input type="range" id="eS" min="0" max="1" step="0.05" value="1"><div class="range"><span>한 덩어리로 붙음</span><span>탄성 충돌</span></div></div>
+      <div class="sl cc splitOnly hide"><div class="top"><span>압축된 용수철의 에너지</span><b id="esV"></b></div>
+        <input type="range" id="esS" min="1" max="10" step="0.5" value="4"><div class="range"><span>1 J</span><span>10 J</span></div></div>
+    </div>
+    <p class="note" id="noteTxt">오른쪽 방향을 (+)로 정합니다. 마찰은 없다고 가정합니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+  const $ = id => document.getElementById(id);
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const CA = '#2f6fdf', CB = '#e0782f', INK = '#1d2330';
+  const simC = $('sim'), sctx = simC.getContext('2d');
+  const mC = $('mom'), mctx = mC.getContext('2d');
+  const fC = $('force'), fctx = fC.getContext('2d');
+
+  const TRACK = 4, DT_HIT = 0.08;
+  let CART = 0.36;   // 화면이 좁으면 수레를 조금 크게 (글자가 들어가도록)   // 트랙 길이(m), 수레 길이(m), 충돌 시간(s)
+  let mode = 'hit';
+  let mA, mB, xA, xB, vA, vB, vA0, vB0, p0, K0;
+  let running = false, done = false, speed = 1;
+  let contact = null;            // {t:경과, J:충격량 크기, dir}
+  let t = 0, forceLog = [], hitT0 = null, ended = '';
+
+  const fmt = (v, d) => { const s = v.toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+
+  function setup(){
+    mA = +$('maS').value; mB = +$('mbS').value;
+    if (mode === 'hit'){ vA0 = +$('vaS').value; vB0 = +$('vbS').value; xA = 1.0; xB = 2.8; }
+    else { vA0 = 0; vB0 = 0; xA = TRACK / 2 - CART / 2; xB = TRACK / 2 + CART / 2; }
+    vA = vA0; vB = vB0; p0 = mA * vA0 + mB * vB0; K0 = 0.5 * mA * vA0 ** 2 + 0.5 * mB * vB0 ** 2;
+    running = false; done = false; contact = null; t = 0; forceLog = []; hitT0 = null; ended = '';
+    stuckTogether = false;
+    $('goB').textContent = mode === 'hit' ? '출발' : '분리';
+    labels();
+  }
+  let stuckTogether = false;
+
+  function labels(){
+    $('maV').textContent = (+$('maS').value).toFixed(1) + ' kg';
+    $('mbV').textContent = (+$('mbS').value).toFixed(1) + ' kg';
+    $('vaV').textContent = fmt(+$('vaS').value, 1) + ' m/s';
+    $('vbV').textContent = fmt(+$('vbS').value, 1) + ' m/s';
+    const e = +$('eS').value;
+    $('eV').textContent = e === 1 ? '탄성 (e = 1)' : e === 0 ? '완전 비탄성 (e = 0)' : '비탄성 (e = ' + e.toFixed(2) + ')';
+    $('esV').textContent = (+$('esS').value).toFixed(1) + ' J';
+  }
+
+  function startContact(){
+    const mu = 1 / (1 / mA + 1 / mB);
+    let J;
+    if (mode === 'hit'){ const e = +$('eS').value; J = (1 + e) * mu * (vA - vB); }
+    else { const E = +$('esS').value; J = Math.sqrt(2 * E * mu); }
+    contact = { t: 0, J, stick: mode === 'hit' && +$('eS').value === 0 };
+    hitT0 = t;
+  }
+  // 반사인 모양의 힘: F(τ) = J·π/(2Δt)·sin(πτ/Δt), 0 ≤ τ ≤ Δt 동안 적분하면 J
+  function contactForce(tau){ return contact.J * Math.PI / (2 * DT_HIT) * Math.sin(Math.PI * tau / DT_HIT); }
+
+  function step(dt){
+    if (!running || done) return;
+    let F = 0;                                 // A가 B에 작용하는 힘 (+ 방향)
+    if (!contact && mode === 'hit' && !stuckTogether){
+      const gap = (xB - CART / 2) - (xA + CART / 2);
+      if (gap <= 0 && vA - vB > 0) startContact();
+    }
+    if (contact){
+      const tau = contact.t + dt / 2;
+      F = tau < DT_HIT ? contactForce(tau) : 0;
+      contact.t += dt;
+      if (contact.t >= DT_HIT){
+        if (contact.stick){ const v = (mA * vA + mB * vB) / (mA + mB); vA = vB = v; stuckTogether = true; }
+        contact.finished = true;
+      }
+    }
+    vA += -F / mA * dt; vB += F / mB * dt;
+    if (stuckTogether){ const v = (mA * vA + mB * vB) / (mA + mB); vA = vB = v; }
+    xA += vA * dt; xB += vB * dt;
+    if (contact && contact.finished) contact = null, contactDone = true;
+    t += dt;
+    forceLog.push({ t, F });
+    if (xA - CART / 2 <= 0 || xB + CART / 2 >= TRACK){
+      xA = Math.max(CART / 2, xA); xB = Math.min(TRACK - CART / 2, xB);
+      done = true; ended = '수레가 트랙 끝에 닿아 멈췄습니다';
+    }
+    if (!done && t > 12){ done = true; }
+  }
+  let contactDone = false;
+
+  // ---------- 크기 ----------
+  let W, H, MW, MH, FW, FH;
+  function fit(c, ctx){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * d; c.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+  function resize(){ [W, H] = fit(simC, sctx); CART = Math.max(0.36, 54 / ((W - 28) / TRACK)); [MW, MH] = fit(mC, mctx); [FW, FH] = fit(fC, fctx); }
+  window.addEventListener('resize', resize);
+
+  function arrow(ctx, x1, y, x2, color, lw){
+    if (Math.abs(x2 - x1) < 2) return;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+    const d = Math.sign(x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x2 + d * 2, y); ctx.lineTo(x2 - d * 9, y - 6); ctx.lineTo(x2 - d * 9, y + 6); ctx.closePath(); ctx.fill();
+  }
+
+  function drawSim(){
+    sctx.clearRect(0, 0, W, H);
+    const pad = 14, sc = (W - 2 * pad) / TRACK, X = x => pad + x * sc, floor = H - 40;
+    // 트랙
+    sctx.fillStyle = '#e6e9ef'; sctx.fillRect(pad, floor, W - 2 * pad, 8);
+    sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5;
+    sctx.beginPath(); sctx.moveTo(pad, floor); sctx.lineTo(W - pad, floor); sctx.stroke();
+    sctx.fillStyle = '#5b6475'; sctx.font = '11px ' + FONT; sctx.textAlign = 'center'; sctx.textBaseline = 'top';
+    for (let i = 0; i <= TRACK * 2; i++){ const xx = X(i / 2);
+      sctx.beginPath(); sctx.moveTo(xx, floor + 8); sctx.lineTo(xx, floor + (i % 2 ? 12 : 16)); sctx.stroke();
+      if (i % 2 === 0) sctx.fillText(i / 2 + ' m', xx, floor + 18); }
+    // 수레
+    const drawCart = (x, m, color, name) => {
+      const w = CART * sc, hgt = 22 + 8 * Math.cbrt(m), left = X(x) - w / 2, top = floor - 8 - hgt;
+      sctx.fillStyle = color; sctx.globalAlpha = 0.9;
+      sctx.beginPath(); sctx.roundRect ? sctx.roundRect(left, top, w, hgt, 4) : sctx.rect(left, top, w, hgt); sctx.fill();
+      sctx.globalAlpha = 1; sctx.strokeStyle = '#2f3542'; sctx.lineWidth = 1.2; sctx.stroke();
+      sctx.fillStyle = '#3a4252';
+      [left + w * 0.25, left + w * 0.75].forEach(cx => { sctx.beginPath(); sctx.arc(cx, floor - 4, 4.5, 0, 7); sctx.fill(); });
+      sctx.fillStyle = '#fff'; sctx.font = 'bold 13px ' + FONT; sctx.textBaseline = 'middle';
+      sctx.fillText(name, X(x), top + hgt / 2 - 6);
+      sctx.font = '10px ' + FONT; sctx.fillText(m.toFixed(1) + ' kg', X(x), top + hgt / 2 + 8);
+      return top;
+    };
+    const tA = drawCart(xA, mA, CA, 'A'), tB = drawCart(xB, mB, CB, 'B');
+    // 분리 모드: 압축 용수철
+    if (mode === 'split' && !running){
+      sctx.strokeStyle = INK; sctx.lineWidth = 2; const yy = floor - 22, x0 = X(TRACK / 2) - 6;
+      sctx.beginPath(); sctx.moveTo(x0, yy);
+      for (let i = 0; i < 6; i++) sctx.lineTo(x0 + 2 * i + 1, yy + (i % 2 ? 5 : -5));
+      sctx.stroke();
+    }
+    // 속도 화살표 (1 m/s = 0.25 트랙 비율)
+    const vs = sc * 0.22;
+    const ay = Math.min(tA, tB) - 18;
+    arrow(sctx, X(xA), ay, X(xA) + vA * vs, CA);
+    arrow(sctx, X(xB), ay - (Math.abs(xA - xB) < 0.7 ? 18 : 0), X(xB) + vB * vs, CB);
+    // 충돌 중 서로 주는 힘
+    if (contact){
+      const F = contactForce(Math.min(contact.t, DT_HIT)), fy = floor - 60, xm = (X(xA) + X(xB)) / 2, len = Math.min(70, 8 + F / 4);
+      arrow(sctx, xm + 2, fy, xm + 2 + len, CB, 3); arrow(sctx, xm - 2, fy, xm - 2 - len, CA, 3);
+    }
+    sctx.textAlign = 'center'; sctx.font = 'bold 13px ' + FONT; sctx.textBaseline = 'top';
+    if (ended){ sctx.fillStyle = '#5b6475'; sctx.fillText(ended, W / 2, 6); }
+    else if (!running){ sctx.fillStyle = '#2f6fdf'; sctx.fillText(mode === 'hit' ? '값을 정하고 [출발]을 누르세요' : '[분리]를 누르면 용수철이 두 수레를 밀어냅니다', W / 2, 6); }
+  }
+
+  const NICE = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  const nice = v => { for (const n of NICE) if (n >= v * 1.001) return n; return 2000; };
+
+  function drawMom(){
+    mctx.clearRect(0, 0, MW, MH);
+    const pA = mA * vA, pB = mB * vB, rows = [
+      { n:'A의 운동량', v:pA, c:CA }, { n:'B의 운동량', v:pB, c:CB },
+      { n:'합 (지금)', v:pA + pB, c:INK }, { n:'합 (처음)', v:p0, c:'#9aa3b2' } ];
+    const max = nice(Math.max(1, Math.abs(mA * vA0), Math.abs(mB * vB0), Math.abs(pA), Math.abs(pB), Math.abs(p0), mode === 'split' ? Math.sqrt(2 * (+$('esS').value) / (1 / mA + 1 / mB)) : 0));
+    const L = 92, R = 12, top = 26, rowH = (MH - top - 22) / rows.length, mid = L + (MW - L - R) / 2, half = (MW - L - R) / 2;
+    mctx.font = '12px ' + FONT; mctx.fillStyle = '#5b6475'; mctx.textAlign = 'left'; mctx.textBaseline = 'top';
+    mctx.fillText('운동량 (kg·m/s), 오른쪽이 (+)', 0, 2);
+    mctx.strokeStyle = '#9aa3b2'; mctx.lineWidth = 1;
+    mctx.beginPath(); mctx.moveTo(mid, top); mctx.lineTo(mid, MH - 20); mctx.stroke();
+    mctx.textAlign = 'center';
+    mctx.fillText('0', mid, MH - 16); mctx.fillText('−' + max, L, MH - 16); mctx.fillText('+' + max, MW - R, MH - 16);
+    rows.forEach((r, i) => {
+      const y = top + rowH * i + rowH * 0.2, h = rowH * 0.6, w = r.v / max * half;
+      mctx.fillStyle = r.c; mctx.fillRect(Math.min(mid, mid + w), y, Math.abs(w), h);
+      mctx.fillStyle = r.c === '#9aa3b2' ? '#5b6475' : r.c; mctx.textAlign = 'right'; mctx.textBaseline = 'middle'; mctx.font = '12px ' + FONT;
+      mctx.fillText(r.n, L - 8, y + h / 2);
+      mctx.fillStyle = INK; mctx.font = 'bold 12px ' + FONT;
+      mctx.textAlign = w >= 0 ? 'left' : 'right';
+      mctx.fillText(fmt(r.v, 2), mid + w + (w >= 0 ? 5 : -5), y + h / 2);
+    });
+  }
+
+  function drawForce(){
+    fctx.clearRect(0, 0, FW, FH);
+    const L = 48, R = 14, top = 22, h = FH - 50, pw = FW - L - R, mid = top + h / 2;
+    fctx.font = '12px ' + FONT; fctx.fillStyle = '#5b6475'; fctx.textAlign = 'left'; fctx.textBaseline = 'top';
+    fctx.fillText('충돌 순간 확대: 서로에게 작용하는 힘 (N)', 0, 2);
+    fctx.strokeStyle = '#d9dde4'; fctx.strokeRect(L, top, pw, h);
+    fctx.strokeStyle = '#9aa3b2'; fctx.beginPath(); fctx.moveTo(L, mid); fctx.lineTo(L + pw, mid); fctx.stroke();
+    if (hitT0 === null){ fctx.textAlign = 'center'; fctx.textBaseline = 'middle'; fctx.fillStyle = '#9aa3b2';
+      fctx.fillText('충돌이 일어나면 그래프가 나타납니다', L + pw / 2, mid - 16); return; }
+    const t0 = hitT0 - 0.04, t1 = hitT0 + DT_HIT + 0.04;
+    let mx = 1; for (const p of forceLog) mx = Math.max(mx, p.F);
+    const Y = nice(mx);
+    fctx.textAlign = 'right'; fctx.textBaseline = 'middle';
+    fctx.fillText('+' + Y, L - 5, top + 4); fctx.fillText('0', L - 5, mid); fctx.fillText('−' + Y, L - 5, top + h - 4);
+    fctx.textAlign = 'center'; fctx.textBaseline = 'top';
+    fctx.fillText('충돌 시간 ' + (DT_HIT * 1000).toFixed(0) + ' ms', L + pw / 2, top + h + 6);
+    const plot = (sign, color) => {
+      fctx.strokeStyle = color; fctx.lineWidth = 2.5; fctx.beginPath(); let st = false;
+      for (const p of forceLog){ if (p.t < t0 || p.t > t1) continue;
+        const X = L + (p.t - t0) / (t1 - t0) * pw, Yp = mid - sign * p.F / Y * (h / 2);
+        st ? fctx.lineTo(X, Yp) : (fctx.moveTo(X, Yp), st = true); }
+      fctx.stroke();
+    };
+    plot(1, CB); plot(-1, CA);
+    fctx.font = 'bold 12px ' + FONT; fctx.textAlign = 'left';
+    fctx.fillStyle = CB; fctx.textBaseline = 'top'; fctx.fillText('A가 B에 작용하는 힘', L + 6, top + 4);
+    fctx.fillStyle = CA; fctx.textBaseline = 'bottom'; fctx.fillText('B가 A에 작용하는 힘', L + 6, top + h - 4);
+  }
+
+  function stats(){
+    $('sVa').textContent = fmt(vA, 2) + ' m/s';
+    $('sVb').textContent = fmt(vB, 2) + ' m/s';
+    $('sP').textContent = fmt(p0, 2) + ' → ' + fmt(mA * vA + mB * vB, 2);
+    $('sK').textContent = K0.toFixed(2) + ' → ' + (0.5 * mA * vA * vA + 0.5 * mB * vB * vB).toFixed(2) + ' J';
+  }
+
+  // ---------- 조작 ----------
+  function setMode(m){
+    mode = m;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('.hitOnly').forEach(e => e.classList.toggle('hide', m !== 'hit'));
+    document.querySelectorAll('.splitOnly').forEach(e => e.classList.toggle('hide', m !== 'split'));
+    $('noteTxt').textContent = m === 'hit' ? '오른쪽 방향을 (+)로 정합니다. 마찰은 없다고 가정합니다.'
+      : '처음에 정지해 있던 두 수레를 압축된 용수철이 밀어냅니다. 로켓이 가스를 뒤로 밀어낼 때도 운동량의 합은 0으로 유지됩니다.';
+    setup();
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  ['maS', 'mbS', 'vaS', 'vbS', 'eS', 'esS'].forEach(id => $(id).addEventListener('input', () => setup()));
+  $('goB').addEventListener('click', () => {
+    if (running || done) setup();
+    running = true;
+    if (mode === 'split') startContact();
+  });
+  $('resetB').addEventListener('click', setup);
+  $('speedS').addEventListener('change', () => { speed = +$('speedS').value; });
+
+  let last = performance.now();
+  function frame(now){
+    let dt = Math.max(0, Math.min((now - last) / 1000, 0.05)) * speed; last = now;
+    const n = Math.ceil(dt / 0.0005);
+    for (let i = 0; i < n; i++) step(dt / n);
+    drawSim(); drawMom(); drawForce(); stats();
+    requestAnimationFrame(frame);
+  }
+  resize(); setup(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

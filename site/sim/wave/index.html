@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>탄성파의 진행, 반사, 투과</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>탄성파의 진행, 반사, 투과</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="kind">횡파와 종파</button>
+      <button data-m="refl">끝에서의 반사</button>
+      <button data-m="trans">두 매질의 경계</button>
+    </div>
+    <canvas id="sim" style="height:260px;border-radius:8px"></canvas>
+    <div class="row m-kind"><select id="kindS"><option value="t">횡파 (줄의 파동)</option><option value="l">종파 (용수철의 파동)</option></select></div>
+    <div class="row m-refl m-trans">
+      <button class="b primary" id="pulseB">펄스 보내기</button>
+      <select id="endS" class="m-refl"><option value="fixed">고정단 (벽에 묶음)</option><option value="free">자유단 (고리에 걸어 자유롭게)</option></select>
+      <select id="medS" class="m-trans"><option value="slow">가벼운 줄 → 무거운 줄 (느려짐)</option><option value="fast">무거운 줄 → 가벼운 줄 (빨라짐)</option></select>
+      <button class="b" id="slowB">느리게</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls m-kind">
+      <div class="sl"><div class="top"><span>진동수 f</span><b id="fV"></b></div>
+        <input type="range" id="fS" min="0.5" max="3" step="0.1" value="1"><div class="range"><span>0.5 Hz</span><span>3 Hz</span></div></div>
+      <div class="sl"><div class="top"><span>파동의 속력 v</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0.5" max="2" step="0.1" value="1"><div class="range"><span>0.5 m/s</span><span>2 m/s</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, t = 0, slow = 1;
+bindLabels({ fS: ['fV', v => v.toFixed(1) + ' Hz'], vS: ['vV', v => v.toFixed(1) + ' m/s'] });
+// ---------- 횡파와 종파 ----------
+function kind(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  t += dt; const f = +$('fS').value, v = +$('vS').value, lam = v / f, Lm = 3, X = x => 20 + x / Lm * (W - 40), cy = H / 2, A = 36, tr = $('kindS').value === 't';
+  const N = tr ? 46 : 70;
+  // 파장 표시
+  const x0 = (Math.ceil((v * t) / lam) * lam - v * t) % lam + lam * 0.25;
+  if (lam < Lm){ const xa = X(x0), xb = X(x0 + lam); line(ctx, [[xa, 26], [xb, 26]], PURPLE, 1.5); line(ctx, [[xa, 20], [xa, 32]], PURPLE, 1.5); line(ctx, [[xb, 20], [xb, 32]], PURPLE, 1.5); T(ctx, '파장 λ = ' + lam.toFixed(2) + ' m', (xa + xb) / 2, 12, { color: PURPLE, bold: true, size: 11 }); }
+  for (let i = 0; i < N; i++){
+    const x = Lm * i / (N - 1), ph = 2 * Math.PI * (f * t - x / lam), d = Math.max(0, Math.min(1, (v * t - x) * 4)) * Math.sin(ph);
+    const px = tr ? X(x) : X(x) + d * 14, py = tr ? cy - d * A : cy;
+    if (tr && i > 0){ const xp = Lm * (i - 1) / (N - 1), php = 2 * Math.PI * (f * t - xp / lam), dp = Math.max(0, Math.min(1, (v * t - xp) * 4)) * Math.sin(php); line(ctx, [[X(xp), cy - dp * A], [px, py]], GRAY, 1.2); }
+    ctx.fillStyle = i === Math.round(N * 0.45) ? RED : BLUE; ctx.beginPath(); ctx.arc(px, py, tr ? 4.5 : 3.5, 0, 7); ctx.fill();
+    if (!tr){ ctx.strokeStyle = 'rgba(47,111,223,0.25)'; ctx.beginPath(); ctx.moveTo(px, cy - 30); ctx.lineTo(px, cy + 30); ctx.stroke(); }
+  }
+  T(ctx, tr ? '매질의 진동 방향 ↕, 파동의 진행 방향 →' : '매질의 진동 방향 ↔, 파동의 진행 방향 →', W / 2, H - 14, { bold: true, color: INK, size: 12 });
+  T(ctx, '빨간 점: 매질의 한 점 (제자리에서 진동만 함)', W / 2, H - 32, { color: RED, size: 11 });
+  setStats([['진동수 f', f.toFixed(1) + ' Hz'], ['주기 T = 1/f', (1 / f).toFixed(2) + ' s'], ['파장 λ = v/f', lam.toFixed(2) + ' m', PURPLE], ['속력 v', v.toFixed(1) + ' m/s']]);
+}
+// ---------- 1차원 파동 방정식 (반사·투과) ----------
+const N = 400; let y = new Float32Array(N), yp = new Float32Array(N), c = new Float32Array(N), pulseT = -1, info = '';
+function setupMedium(){ for (let i = 0; i < N; i++){ if (mode === 'trans'){ const fast = $('medS').value === 'fast'; c[i] = i < N / 2 ? (fast ? 0.5 : 1) : (fast ? 1 : 0.5); } else c[i] = 1; } y.fill(0); yp.fill(0); pulseT = -1; }
+function stepWave(){
+  const yn = new Float32Array(N), r = 1;   // Courant 수 (빠른 매질에서 1이면 파형이 퍼지지 않음)
+  for (let i = 1; i < N - 1; i++){ const k = (c[i] * r) ** 2; yn[i] = 2 * y[i] - yp[i] + k * (y[i + 1] - 2 * y[i] + y[i - 1]); }
+  // 왼쪽 끝: 펄스 발생기
+  if (pulseT >= 0 && pulseT < 60){ pulseT += 1; yn[0] = Math.sin(Math.PI * pulseT / 60) ** 2; }
+  else { const k = c[0] * r; yn[0] = y[1] + (k - 1) / (k + 1) * (yn[1] - y[0]); if (pulseT >= 0) pulseT += 1; }   // 펄스를 보낸 뒤 왼쪽 끝은 흡수 경계
+  // 오른쪽 끝
+  if (mode === 'refl' && $('endS').value === 'free') yn[N - 1] = yn[N - 2]; else if (mode === 'refl') yn[N - 1] = 0;
+  else { const k = c[N - 1] * r; yn[N - 1] = y[N - 2] + (k - 1) / (k + 1) * (yn[N - 2] - y[N - 1]); }   // 흡수 경계
+  yp = y; y = yn;
+}
+function waveDraw(dt){
+  const steps = Math.round(dt * 220 * slow); for (let k = 0; k < steps; k++) stepWave();
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const X = i => 20 + i / (N - 1) * (W - 50), cy = H / 2, A = H * 0.3;
+  if (mode === 'trans'){ const fast = $('medS').value === 'fast';
+    ctx.fillStyle = 'rgba(47,111,223,0.06)'; ctx.fillRect(X(fast ? 0 : N / 2), 0, X(N / 2) - X(0), H);
+    T(ctx, fast ? '무거운 줄 (느림)' : '가벼운 줄 (빠름)', X(N / 4), 16, { bold: true, color: INK }); T(ctx, fast ? '가벼운 줄 (빠름)' : '무거운 줄 (느림)', X(3 * N / 4), 16, { bold: true, color: INK });
+    line(ctx, [[X(N / 2), 30], [X(N / 2), H - 30]], GRAY, 1, true); }
+  ctx.strokeStyle = INK; ctx.beginPath();
+  for (let i = 0; i < N; i++){ const px = X(i), py = cy - y[i] * A; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+  ctx.lineWidth = 1.5; ctx.stroke();
+  if (mode === 'trans'){ ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); const fast = $('medS').value === 'fast'; for (let i = fast ? 0 : N / 2; i < (fast ? N / 2 : N); i++){ const px = X(i), py = cy - y[i] * A; i === (fast ? 0 : N / 2) ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke(); }
+  if (mode === 'refl'){ const fixed = $('endS').value === 'fixed', ex = X(N - 1);
+    if (fixed){ ctx.fillStyle = '#9aa3b2'; ctx.fillRect(ex, 30, 14, H - 60); for (let k = 30; k < H - 30; k += 10) line(ctx, [[ex + 14, k], [ex + 4, k + 8]], WIRE, 1); }
+    else { line(ctx, [[ex + 6, 30], [ex + 6, H - 30]], WIRE, 3); ctx.strokeStyle = ORANGE; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ex + 6, cy - y[N - 1] * A, 6, 0, 7); ctx.stroke(); } }
+  ctx.fillStyle = BLUE; ctx.fillRect(4, cy - y[0] * A - 10, 12, 20);
+  T(ctx, '손', 10, cy + 24, { size: 10 });
+  if (pulseT < 0) T(ctx, '[펄스 보내기]를 누르세요', W / 2, H - 14, { bold: true, color: BLUE });
+  const items = mode === 'refl' ? [['끝의 종류', $('endS').value === 'fixed' ? '고정단' : '자유단'], ['반사파', $('endS').value === 'fixed' ? '뒤집혀서 돌아옴 (위상 반대)' : '그대로 돌아옴 (위상 같음)', ORANGE]]
+    : [['경계에서 반사파', $('medS').value === 'slow' ? '뒤집혀서 돌아옴' : '그대로 돌아옴', ORANGE], ['투과파', '뒤집히지 않음, ' + ($('medS').value === 'slow' ? '느려지고 폭이 좁아짐' : '빨라지고 폭이 넓어짐')]];
+  setStats(items);
+}
+const TEXT = {
+  kind: ['파동이 진행할 때 매질은 제자리에서 진동할 뿐 파동과 함께 이동하지 않습니다. 횡파와 종파를 비교하고, 진동수와 속력을 바꾸며 파장의 변화를 관찰하세요.',
+    '매질의 진동 방향이 파동의 진행 방향과 수직이면 횡파, 나란하면 종파입니다. 소리는 공기의 종파이고, 지진파의 P파는 종파, S파는 횡파입니다. 파동의 속력, 진동수, 파장 사이에는 v = fλ의 관계가 있습니다. 같은 매질에서는 속력이 일정하므로 진동수가 커지면 파장이 짧아집니다.'],
+  refl: ['줄의 끝을 벽에 묶었을 때(고정단)와 자유롭게 움직이게 했을 때(자유단), 반사된 펄스의 모양을 비교하세요.',
+    '고정단에서는 줄이 움직이지 못하므로 반사파의 위상이 반대로 바뀌어 뒤집힌 펄스가 돌아옵니다. 자유단에서는 위상이 바뀌지 않아 같은 모양의 펄스가 돌아옵니다.'],
+  trans: ['파동이 속력이 다른 매질로 넘어갈 때 경계에서 일부는 반사되고 일부는 투과합니다. 반사파와 투과파의 모양과 폭을 비교하세요.',
+    '파동이 느린 매질(무거운 줄)로 들어갈 때 반사파는 위상이 반대로 바뀌고, 빠른 매질로 들어갈 때는 위상이 바뀌지 않습니다. 투과파는 항상 위상이 그대로이며, 진동수는 변하지 않고 속력에 따라 파장(펄스의 폭)이 달라집니다. 초음파 영상 장치와 비파괴 검사는 경계에서 반사되는 탄성파를 이용합니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); setupMedium(); });
+$('pulseB').addEventListener('click', () => { setupMedium(); pulseT = 0; });
+$('endS').addEventListener('change', setupMedium); $('medS').addEventListener('change', setupMedium);
+$('slowB').addEventListener('click', () => { slow = slow === 1 ? 0.35 : 1; $('slowB').classList.toggle('on', slow < 1); });
+loop(dt => mode === 'kind' ? kind(dt) : waveDraw(dt));
+})();
+</script>
+</body>
+</html>

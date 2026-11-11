@@ -1,0 +1,92 @@
+빛의 편광
+  <h1>빛의 편광</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="pol">편광판</button>
+      <button data-m="lcd">액정 화면 (LCD)</button>
+    </div>
+    <canvas id="sim" style="height:270px;background:#1c2230;border-radius:8px"></canvas>
+    <div class="row m-pol"><label class="chk"><input type="checkbox" id="cMid"> 가운데에 편광판 하나 더 넣기</label></div>
+    <div class="row m-lcd"><button class="b primary" id="vB">전압 걸기</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls m-pol">
+      <div class="sl"><div class="top"><span>두 번째(마지막) 편광판의 각도</span><b id="aV"></b></div>
+        <input type="range" id="aS" min="0" max="180" step="5" value="90"><div class="range"><span>0°</span><span>180°</span></div></div>
+      <div class="sl" id="midSl"><div class="top"><span>가운데 편광판의 각도</span><b id="mV"></b></div>
+        <input type="range" id="mS" min="0" max="180" step="5" value="45"><div class="range"><span>0°</span><span>180°</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, volt = false, lc = 0, t = 0;
+bindLabels({ aS: ['aV', v => v + '°'], mS: ['mV', v => v + '°'] });
+const D = Math.PI / 180;
+// 원근감을 준 편광판 (θ: 투과축이 연직선과 이루는 각)
+function filter(ctx, x, y, r, th, lab){
+  ctx.fillStyle = 'rgba(160,175,200,0.28)'; ctx.strokeStyle = '#c9d2e3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, r * 0.42, r, 0, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(x, y, r * 0.42, r, 0, 0, 7); ctx.clip(); ctx.strokeStyle = 'rgba(230,236,245,0.35)'; ctx.lineWidth = 1;
+  for (let k = -6; k <= 6; k++){ const ox = Math.cos(th) * k * r / 6 * 0.42, oy = Math.sin(th) * k * r / 6; const ddx = Math.sin(th) * r * 0.42, ddy = -Math.cos(th) * r; ctx.beginPath(); ctx.moveTo(x + ox - ddx, y + oy - ddy); ctx.lineTo(x + ox + ddx, y + oy + ddy); ctx.stroke(); }
+  ctx.restore();
+  const dx = Math.sin(th) * r * 0.42, dy = -Math.cos(th) * r; line(ctx, [[x - dx, y - dy], [x + dx, y + dy]], YELLOW, 2.5);
+  T(ctx, lab, x, y + r + 16, { color: '#dfe5ef', size: 11, bold: true });
+}
+function pArrow(ctx, x, y, th, a, len){ const dx = Math.sin(th) * len * 0.42, dy = -Math.cos(th) * len, c = `rgba(255,214,90,${0.35 + 0.65 * a})`;
+  arrow(ctx, x, y, x + dx, y + dy, c, 2, 6); arrow(ctx, x, y, x - dx, y - dy, c, 2, 6); }
+function beam(ctx, x0, x1, y, I){ ctx.fillStyle = `rgba(255,236,150,${0.06 + 0.6 * I})`; ctx.fillRect(x0, y - 9, x1 - x0, 18); }
+function lamp(ctx, x, y){ ctx.fillStyle = '#ffe58a'; ctx.beginPath(); ctx.arc(x, y, 13, 0, 7); ctx.fill(); T(ctx, '광원', x, y + 30, { color: '#dfe5ef', size: 11, bold: true }); }
+function screen(ctx, x, y, I){ ctx.fillStyle = `rgb(${40 + 215 * I},${44 + 200 * I},${52 + 150 * I})`; ctx.fillRect(x - 10, y - 34, 20, 68); ctx.strokeStyle = '#8b94a5'; ctx.strokeRect(x - 10, y - 34, 20, 68); T(ctx, '스크린', x, y + 50, { color: '#dfe5ef', size: 11, bold: true }); }
+function drawPol(){
+  const { ctx, W, H } = s, cy = H * 0.45, r = Math.min(W * 0.09, 44), mid = $('cMid').checked;
+  const a3 = +$('aS').value * D, a2 = +$('mS').value * D, a1 = 0;
+  const xs = mid ? [0.07, 0.3, 0.55, 0.8, 0.95] : [0.07, 0.36, 0.0, 0.72, 0.95];
+  const X = i => xs[i] * W;
+  const I1 = 0.5, I2 = mid ? I1 * Math.cos(a2 - a1) ** 2 : I1, I3 = I2 * Math.cos(a3 - (mid ? a2 : a1)) ** 2;
+  beam(ctx, X(0), X(1), cy, 1); beam(ctx, X(1), mid ? X(2) : X(3), cy, I1); if (mid) beam(ctx, X(2), X(3), cy, I2); beam(ctx, X(3), X(4), cy, I3);
+  lamp(ctx, X(0), cy);
+  // 편광 상태 화살표
+  const m01 = (X(0) + X(1)) / 2; for (let k = 0; k < 4; k++) pArrow(ctx, m01, cy, k * 45 * D, 1, 22);
+  const nx = mid ? (X(1) + X(2)) / 2 : (X(1) + X(3)) / 2; pArrow(ctx, nx, cy, a1, I1 * 2, 22);
+  if (mid) pArrow(ctx, (X(2) + X(3)) / 2, cy, a2, I2 * 2, 22);
+  if (I3 > 0.003) pArrow(ctx, (X(3) + X(4)) / 2, cy, a3, I3 * 2, 22);
+  filter(ctx, X(1), cy, r, a1, '편광판 1 (0°)'); if (mid) filter(ctx, X(2), cy, r, a2, `가운데 (${$('mS').value}°)`); filter(ctx, X(3), cy, r, a3, `편광판 2 (${$('aS').value}°)`);
+  screen(ctx, X(4), cy, I3 * 2);
+  T(ctx, '노란 선: 편광판의 투과축   ↕: 빛의 진동 방향', W / 2, 16, { color: '#aeb7c7', size: 11 });
+  const pc = v => (v * 100).toFixed(0) + ' %';
+  setStats([['편광판 1 통과 후', pc(I1)], ...(mid ? [['가운데 통과 후', pc(I2)]] : []), ['스크린에 도달', pc(I3), ORANGE], ['두 투과축 사이 각', (mid ? '' : (Math.abs(+$('aS').value) % 180) + '°')]].filter(e => e[1] !== ''));
+}
+function drawLcd(dt){
+  const { ctx, W, H } = s, cy = H * 0.45, r = Math.min(W * 0.085, 42);
+  lc += ((volt ? 1 : 0) - lc) * Math.min(1, dt * 5);   // 0: 비틀림, 1: 똑바로 섬
+  const X = [0.06, 0.24, 0.38, 0.62, 0.78, 0.94].map(v => v * W);
+  const out = 0.5 * (1 - lc) ** 2;   // 근사: 전압이 클수록 편광 회전이 사라짐
+  beam(ctx, X[0], X[1], cy, 1); beam(ctx, X[1], X[4], cy, 0.5); beam(ctx, X[4], X[5], cy, out);
+  lamp(ctx, X[0], cy); T(ctx, '(백라이트)', X[0], cy + 44, { color: '#aeb7c7', size: 10 });
+  filter(ctx, X[1], cy, r, 0, '편광판 (0°)');
+  // 액정 분자
+  ctx.fillStyle = 'rgba(120,200,255,0.10)'; ctx.fillRect(X[2], cy - r, X[3] - X[2], 2 * r); ctx.strokeStyle = '#7aa7d9'; ctx.strokeRect(X[2], cy - r, X[3] - X[2], 2 * r);
+  const nM = 7; for (let i = 0; i < nM; i++){ const u = i / (nM - 1), x = X[2] + 10 + (X[3] - X[2] - 20) * u;
+    for (const yy of [-0.55, 0, 0.55]){ const y = cy + yy * r; ctx.save(); ctx.translate(x, y);
+      if (lc > 0.5){ ctx.fillStyle = '#9fd3ff'; ctx.beginPath(); ctx.ellipse(0, 0, 9 * (lc) + 3 * (1 - lc), 3, 0, 0, 7); ctx.fill(); }
+      else { const th = u * Math.PI / 2; ctx.fillStyle = '#9fd3ff'; ctx.beginPath(); ctx.ellipse(0, 0, 3 + 0.42 * 7 * Math.sin(th), 3 + 7 * Math.cos(th), 0, 0, 7); ctx.fill(); }
+      ctx.restore(); } }
+  T(ctx, '액정', (X[2] + X[3]) / 2, cy + r + 16, { color: '#dfe5ef', size: 11, bold: true });
+  pArrow(ctx, (X[1] + X[2]) / 2, cy, 0, 1, 20);
+  pArrow(ctx, (X[3] + X[4]) / 2, cy, (1 - lc) * Math.PI / 2, 1, 20);
+  filter(ctx, X[4], cy, r, Math.PI / 2, '편광판 (90°)');
+  screen(ctx, X[5], cy, out * 2);
+  T(ctx, volt ? '전압 ON: 액정 분자가 전기장 방향으로 정렬' : '전압 OFF: 액정 분자가 90° 비틀려 있음', W / 2, 16, { color: volt ? ORANGE : '#9fd3ff', bold: true, size: 12 });
+  setStats([['전압', volt ? '걸림' : '안 걸림'], ['빛의 진동 방향 회전', ((1 - lc) * 90).toFixed(0) + '°'], ['화소', out > 0.25 ? '밝음' : out < 0.05 ? '어두움' : '중간', ORANGE]]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'pol') drawPol(); else drawLcd(dt); $('midSl').classList.toggle('hide', !$('cMid').checked); }
+const TEXT = {
+  pol: ['광원에서 나온 빛은 모든 방향으로 진동하지만, 편광판을 지나면 투과축 방향으로만 진동합니다. 두 번째 편광판을 돌리며 스크린의 밝기를 관찰하고, 가운데에 편광판을 하나 더 넣어 보세요.',
+    '편광판은 투과축과 나란한 방향으로 진동하는 빛만 통과시킵니다. 두 편광판의 투과축이 나란하면 빛이 가장 많이 통과하고, 수직이면 빛이 통과하지 못합니다. 그런데 수직인 두 편광판 사이에 기울어진 편광판을 넣으면 오히려 빛이 통과합니다. 빛의 편광 현상은 빛이 횡파임을 보여 줍니다. 편광 선글라스, 3D 안경, 카메라 편광 필터에 이용됩니다.'],
+  lcd: ['액정 디스플레이 화소 하나의 구조입니다. 투과축이 수직인 두 편광판 사이에 액정이 들어 있습니다. 전압을 걸었다 끄며 화소의 밝기를 확인하세요.',
+    '전압이 걸리지 않으면 비틀린 액정 분자를 따라 빛의 진동 방향이 90° 회전하므로 빛이 두 번째 편광판을 통과해 화소가 밝습니다. 전압을 걸면 액정 분자가 전기장 방향으로 나란히 서서 진동 방향이 회전하지 않으므로 빛이 차단되어 화소가 어둡습니다. 각 화소에 거는 전압과 색 필터(빨강·초록·파랑)로 영상을 표현합니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('vB').addEventListener('click', () => { volt = !volt; $('vB').textContent = volt ? '전압 끄기' : '전압 걸기'; });
+loop(draw);

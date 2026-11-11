@@ -1,0 +1,100 @@
+전동기와 스피커
+  <h1>전동기와 스피커</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="motor">전동기</button>
+      <button data-m="spk">스피커</button>
+    </div>
+    <canvas id="sim" style="height:320px;border-radius:8px"></canvas>
+    <div class="row m-motor">
+      <button class="b" id="revB">전류 방향 바꾸기</button>
+      <label class="chk"><input type="checkbox" id="cComm" checked> 정류자 사용</label>
+    </div>
+    <div class="row m-spk">
+      <button class="b primary" id="sndB">소리 켜기</button>
+      <label class="chk"><input type="checkbox" id="cSlow" checked> 아주 느리게 보기</label>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-motor"><div class="top"><span>전류의 세기</span><b id="iV"></b></div>
+        <input type="range" id="iS" min="0" max="3" step="0.1" value="1.5"><div class="range"><span>0 A</span><span>3 A</span></div></div>
+      <div class="sl m-spk"><div class="top"><span>소리 신호의 진동수</span><b id="fV"></b></div>
+        <input type="range" id="fS" min="100" max="1000" step="10" value="300"><div class="range"><span>100 Hz (낮은 소리)</span><span>1000 Hz (높은 소리)</span></div></div>
+      <div class="sl m-spk"><div class="top"><span>신호의 세기 (전류의 진폭)</span><b id="aV"></b></div>
+        <input type="range" id="aS" min="0" max="1" step="0.05" value="0.6"><div class="range"><span>0</span><span>최대</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, th = 0.3, om = 0, rev = 1, tone1 = null, ph = 0, waves = [];
+bindLabels({ iS: ['iV', v => v.toFixed(1) + ' A'], fS: ['fV', v => v + ' Hz'], aS: ['aV', v => Math.round(v * 100) + '%'] });
+function motor(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const I = +$('iS').value * rev, comm = $('cComm').checked;
+  // 코일 면이 x축과 이루는 각 th. 정류자가 있으면 cos(th)의 부호에 맞춰 전류를 뒤집는다
+  const sgn = comm ? Math.sign(Math.cos(th)) || 1 : 1, Ieff = I * sgn, tau = 1.2 * Ieff * Math.cos(th);
+  om += (tau - 0.35 * om) * dt * 3; th += om * dt;
+  const cx = W / 2, cy = H / 2, a = Math.min(W * 0.24, H * 0.3), gap = Math.min(a + 40, W / 2 - 40);
+  // 자석
+  ctx.fillStyle = RED; ctx.fillRect(cx - gap - 34, cy - 70, 34, 140); T(ctx, 'N', cx - gap - 17, cy, { color: '#fff', bold: true, size: 20 });
+  ctx.fillStyle = BLUE; ctx.fillRect(cx + gap, cy - 70, 34, 140); T(ctx, 'S', cx + gap + 17, cy, { color: '#fff', bold: true, size: 20 });
+  for (let y = -50; y <= 50; y += 25) arrow(ctx, cx - gap + 4, cy + y, cx + gap - 4, cy + y, 'rgba(142,68,173,0.25)', 1.2, 7);
+  T(ctx, '자기장 B →', cx, H - 32, { color: PURPLE, bold: true, size: 11 });
+  // 코일 (위에서 본 모습: 선분, 양 끝이 도선의 단면)
+  const ex = a * Math.cos(th), ey = a * Math.sin(th);
+  line(ctx, [[cx - ex, cy + ey], [cx + ex, cy - ey]], '#c9a227', 6);
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, 7); ctx.fill();
+  const ends = [{ x: cx + ex, y: cy - ey, out: Ieff > 0 }, { x: cx - ex, y: cy + ey, out: Ieff < 0 }];
+  ends.forEach(e => { ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(e.x, e.y, 11, 0, 7); ctx.fill(); ctx.stroke();
+    if (Math.abs(I) < 1e-6) return;
+    if (e.out){ ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(e.x, e.y, 3, 0, 7); ctx.fill(); } else { line(ctx, [[e.x - 7, e.y - 7], [e.x + 7, e.y + 7]], INK, 1.5); line(ctx, [[e.x - 7, e.y + 7], [e.x + 7, e.y - 7]], INK, 1.5); }
+    // 힘: 나오는 전류(⊙) × B(+x) = 화면 위쪽
+    const L = 18 + Math.abs(I) * 14; arrow(ctx, e.x, e.y, e.x, e.y + (e.out ? -L : L), ORANGE, 3); });
+  T(ctx, '위에서 내려다본 코일 (⊙ 나오는 전류, ⊗ 들어가는 전류)', W / 2, H - 12, { size: 11 });
+  if (!comm) T(ctx, '정류자가 없으면 코일이 앞뒤로 흔들리다 멈춥니다', W / 2, 14, { bold: true, color: RED });
+  else T(ctx, '정류자가 반 바퀴마다 전류의 방향을 바꿔 한 방향으로 계속 돕니다', W / 2, 14, { bold: true, color: GREEN, size: 12 });
+  setStats([['회전 속력', Math.abs(om * 60 / (2 * Math.PI)).toFixed(0) + ' rpm (상대값)'], ['회전 방향', Math.abs(om) < 0.05 ? '-' : om > 0 ? '시계 반대 방향' : '시계 방향'], ['에너지 전환', '전기 에너지 → 운동 에너지']]);
+}
+function speaker(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H);
+  const f = +$('fS').value, A = +$('aS').value, slow = $('cSlow').checked, fvis = slow ? 0.8 : Math.min(12, f / 40);
+  ph += 2 * Math.PI * fvis * dt; const cur = A * Math.sin(ph), disp = cur * 14;
+  const mx = W * 0.22, cy = H / 2;
+  // 자석 (단면): 가운데 N극 기둥, 바깥 S극
+  ctx.fillStyle = '#9aa3b2'; ctx.fillRect(mx - 70, cy - 60, 30, 120);
+  ctx.fillStyle = RED; ctx.fillRect(mx - 40, cy - 14, 44, 28); T(ctx, 'N', mx - 18, cy, { color: '#fff', bold: true });
+  ctx.fillStyle = BLUE; ctx.fillRect(mx - 40, cy - 60, 52, 20); ctx.fillRect(mx - 40, cy + 40, 52, 20); T(ctx, 'S', mx - 14, cy - 50, { color: '#fff', bold: true, size: 11 }); T(ctx, 'S', mx - 14, cy + 50, { color: '#fff', bold: true, size: 11 });
+  // 코일 (단면) - 진동판과 함께 움직임
+  const cxl = mx + 14 + disp;
+  [-30, 30].forEach((dy, i) => { ctx.fillStyle = '#c9a227'; ctx.fillRect(cxl - 8, cy + dy - 8, 16, 16);
+    const out = (cur > 0) === (i === 1);   // 위쪽 ⊗, 아래쪽 ⊙일 때 앞쪽으로 힘
+    if (Math.abs(cur) > 0.05){ T(ctx, out ? '⊙' : '⊗', cxl, cy + dy, { color: INK, bold: true, size: 13 }); } });
+  // 진동판 (콘)
+  ctx.strokeStyle = INK; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cxl + 8, cy - 26); ctx.lineTo(cxl + 70, cy - 100); ctx.moveTo(cxl + 8, cy + 26); ctx.lineTo(cxl + 70, cy + 100); ctx.stroke();
+  line(ctx, [[cxl + 70, cy - 100], [cxl + 70, cy + 100]], GRAY, 1.5, true);
+  if (Math.abs(cur) > 0.05) arrow(ctx, cxl + 24, cy, cxl + 24 + Math.sign(cur) * (18 + Math.abs(cur) * 30), cy, ORANGE, 3);
+  T(ctx, '코일', cxl, cy - 72, { size: 11 }); T(ctx, '진동판', cxl + 70, cy + 114, { size: 11 }); T(ctx, '영구 자석', mx - 30, cy + 76, { size: 11 });
+  // 음파: 진동판이 앞으로 갈 때 생기는 밀한 부분
+  if (Math.abs(cur) > 0.95 * A && cur > 0 && (!waves.length || ph - waves[waves.length - 1].ph > Math.PI)) waves.push({ x: cxl + 70, ph, a: A });
+  waves.forEach(w => { w.x += dt * (slow ? 60 : 180); }); waves = waves.filter(w => w.x < W + 30);
+  waves.forEach(w => { ctx.strokeStyle = 'rgba(47,111,223,' + (0.2 + 0.6 * w.a) + ')'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(w.x - 90, cy, 90, -0.6, 0.6); ctx.stroke(); });
+  // 전류 그래프 (작게)
+  const gx = W * 0.62, gw = W - gx - 10, gy = 22, gh = 60; ctx.strokeStyle = '#d9dde4'; ctx.strokeRect(gx, gy, gw, gh); line(ctx, [[gx, gy + gh / 2], [gx + gw, gy + gh / 2]], GRAY, 1);
+  ctx.strokeStyle = ORANGE; ctx.lineWidth = 2; ctx.beginPath(); for (let i = 0; i <= gw; i++){ const p = ph - (gw - i) * 0.05; const y = gy + gh / 2 - A * Math.sin(p) * gh * 0.45; i ? ctx.lineTo(gx + i, y) : ctx.moveTo(gx + i, y); } ctx.stroke();
+  T(ctx, '코일의 전류 (소리 신호)', gx, gy - 9, { align: 'left', size: 11, color: ORANGE, bold: true });
+  if (tone1) tone1.set(f, 0.12 * A);
+  setStats([['진동수', f + ' Hz'], ['진동판이 받는 힘', Math.abs(cur) < 0.05 ? '-' : cur > 0 ? '앞쪽' : '뒤쪽', ORANGE], ['에너지 전환', '전기 → 운동 → 소리']]);
+}
+const TEXT = {
+  motor: ['자석 사이에 놓인 코일에 전류가 흐르면 코일의 두 변이 서로 반대 방향의 힘을 받아 회전합니다. 정류자를 끄고 켜 보며 그 역할을 비교하세요.',
+    '자기장 속 도선이 받는 힘으로 전기 에너지를 운동 에너지로 바꾸는 장치가 전동기입니다. 코일이 반 바퀴 돌 때마다 정류자가 전류 방향을 바꿔 주어야 같은 방향으로 계속 돌 수 있습니다. 전류가 셀수록, 자석이 셀수록, 코일을 많이 감을수록 더 강하게 돕니다. 선풍기, 세탁기, 전기 자동차 등에 쓰입니다.'],
+  spk: ['소리 신호에 따라 세기와 방향이 바뀌는 전류가 코일에 흐르면, 코일이 자석의 자기장 속에서 앞뒤로 힘을 받아 진동판을 흔듭니다. [소리 켜기]로 실제 소리도 들어 보세요.',
+    '스피커는 전류의 자기 작용으로 전기 에너지를 진동판의 운동 에너지로, 다시 공기의 진동인 소리 에너지로 바꿉니다. 전류의 진동수가 소리의 높이를, 전류의 세기가 소리의 크기를 정합니다. 종이컵, 에나멜선, 네오디뮴 자석으로 직접 스피커를 만들 수 있습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); if (m !== 'spk' && tone1){ tone1.stop(); tone1 = null; $('sndB').textContent = '소리 켜기'; } });
+$('revB').addEventListener('click', () => { rev = -rev; });
+$('sndB').addEventListener('click', () => { if (tone1){ tone1.stop(); tone1 = null; $('sndB').textContent = '소리 켜기'; } else { tone1 = tone(); $('sndB').textContent = '소리 끄기'; } });
+loop(dt => mode === 'motor' ? motor(dt) : speaker(dt));

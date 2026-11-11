@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>인공위성과 탈출 속도</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+#tbl th,#tbl td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:right} #tbl th:first-child,#tbl td:first-child{text-align:left}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>인공위성과 탈출 속도</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="orbit">원궤도 위성 (케플러 법칙)</button>
+      <button data-m="esc">탈출 속도</button>
+    </div>
+    <canvas id="sim" style="height:330px"></canvas>
+    <div class="row m-orbit">
+      <button class="b primary" id="addB">비교할 위성으로 남기기</button>
+      <button class="b" id="clrB">비교 위성 지우기</button>
+      <select id="preS"><option value="">예시 궤도 고르기</option><option value="1.06">국제 우주 정거장 (약 400 km)</option><option value="4.17">GPS 위성 (약 20 200 km)</option><option value="6.62">정지 궤도 위성 (약 35 800 km)</option><option value="60.3">달</option></select>
+    </div>
+    <div class="row m-esc">
+      <button class="b primary" id="fireB">발사</button>
+      <select id="planetS"><option value="earth">지구</option><option value="moon">달</option><option value="mars">화성</option><option value="jupiter">목성</option></select>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-orbit"><table id="tbl" style="width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums"></table></div>
+  <div class="card">
+    <div class="controls m-orbit">
+      <div class="sl"><div class="top"><span>궤도 반지름 r (지구 반지름 R의 배수)</span><b id="rV"></b></div>
+        <input type="range" id="rS" min="1.05" max="10" step="0.05" value="2"><div class="range"><span>1.05 R</span><span>10 R</span></div></div>
+    </div>
+    <div class="controls m-esc">
+      <div class="sl"><div class="top"><span>연직 위로 발사하는 속력</span><b id="vV"></b></div>
+        <input type="range" id="vS" min="0.3" max="1.3" step="0.01" value="0.8"><div class="range"><span>탈출 속도의 30%</span><span>130%</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const GM = 3.986e14, RE = 6.371e6, S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+const PL = { earth: { n: '지구', GM: 3.986e14, R: 6.371e6, c: '#3c7fd1' }, moon: { n: '달', GM: 4.905e12, R: 1.737e6, c: '#b9b9b9' }, mars: { n: '화성', GM: 4.283e13, R: 3.390e6, c: '#c8643c' }, jupiter: { n: '목성', GM: 1.267e17, R: 6.991e7, c: '#d4a373' } };
+let mode, sats = [], th = 0, simT = 0, rocket = null;
+const lab = bindLabels({ rS: ['rV', v => v.toFixed(2) + ' R (고도 ' + Math.round((v - 1) * 6371).toLocaleString('ko-KR') + ' km)'], vS: ['vV', v => (v * Math.sqrt(2 * PL[$('planetS').value].GM / PL[$('planetS').value].R) / 1000).toFixed(1) + ' km/s (' + Math.round(v * 100) + '%)'] });
+const period = r => 2 * Math.PI * Math.sqrt(Math.pow(r * RE, 3) / GM);
+const fmtT = T => T < 7200 ? (T / 60).toFixed(0) + '분' : T < 172800 ? (T / 3600).toFixed(1) + '시간' : (T / 86400).toFixed(1) + '일';
+function table(){
+  const rows = sats.concat([{ r: +$('rS').value, now: true }]);
+  $('tbl').innerHTML = '<tr><th>위성</th><th>반지름 r (R)</th><th>속력 (km/s)</th><th>주기 T</th><th>T²/r³ (일²/R³)</th></tr>' +
+    rows.map((x, i) => { const T = period(x.r), v = Math.sqrt(GM / (x.r * RE)) / 1000; return `<tr><td>${x.now ? '<b>지금</b>' : '위성 ' + (i + 1)}</td><td>${x.r.toFixed(2)}</td><td>${v.toFixed(2)}</td><td>${fmtT(T)}</td><td>${((T / 86400) ** 2 / x.r ** 3).toFixed(5)}</td></tr>`; }).join('');
+}
+function drawOrbit(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  const r = +$('rS').value, maxR = Math.max(r, ...sats.map(x => x.r), 2.5), k = (Math.min(W, H) / 2 - 18) / maxR, cx = W / 2, cy = H / 2;
+  // 시간 배율: 지금 위성이 약 6초에 한 바퀴
+  const scale = period(r) / 6; simT += dt * scale;
+  ctx.fillStyle = '#3c7fd1'; ctx.beginPath(); ctx.arc(cx, cy, k, 0, 7); ctx.fill(); T(ctx, '지구', cx, cy, { color: '#fff', bold: true });
+  const all = sats.map((x, i) => ({ ...x, c: ['#9aa3b2', '#b7a0d8', '#8cc0a8', '#d8b08c'][i % 4] })).concat([{ r, c: '#ffd34d', now: true }]);
+  all.forEach(x => {
+    ctx.setLineDash([3, 4]); ctx.strokeStyle = x.c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, x.r * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    const a = 2 * Math.PI * simT / period(x.r), px = cx + x.r * k * Math.cos(a), py = cy - x.r * k * Math.sin(a);
+    ctx.fillStyle = x.c; ctx.beginPath(); ctx.arc(px, py, x.now ? 6 : 4.5, 0, 7); ctx.fill();
+    if (x.now){ const v = 26; arrow(ctx, px, py, px - v * Math.sin(a), py - v * Math.cos(a), '#7fd3ff', 2.5); arrow(ctx, px, py, px - 22 * Math.cos(a), py + 22 * Math.sin(a), '#ff8a80', 2.5); }
+  });
+  T(ctx, '화면 1초 = 실제 ' + fmtT(scale), 8, H - 12, { align: 'left', color: '#c9d1d9', size: 11 });
+  T(ctx, '하늘색: 속도, 빨강: 중력(구심력)', W - 8, H - 12, { align: 'right', color: '#c9d1d9', size: 11 });
+  const T0 = period(r), v = Math.sqrt(GM / (r * RE));
+  setStats([['속력', (v / 1000).toFixed(2) + ' km/s'], ['주기', fmtT(T0)], ['구심 가속도 (중력 가속도)', (GM / (r * RE) ** 2).toFixed(2) + ' m/s²']]);
+}
+function drawEsc(dt){
+  const P = PL[$('planetS').value], vesc = Math.sqrt(2 * P.GM / P.R);
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  const maxH = 8;   // 화면에 보이는 높이 (행성 반지름의 8배)
+  const cx = W * 0.22, base = H - 20, k = (H - 40) / (maxH + 1);
+  ctx.fillStyle = P.c; ctx.beginPath(); ctx.arc(cx, base + 0, k, Math.PI, 2 * Math.PI); ctx.fill();
+  T(ctx, P.n, cx, base - k / 2, { color: '#fff', bold: true });
+  if (rocket){
+    const n = 40; for (let i = 0; i < n; i++){ const h = dt * rocket.sc / n; const a = -P.GM / (rocket.r * rocket.r); rocket.v += a * h; rocket.r += rocket.v * h; rocket.t += h;
+      if (rocket.r < P.R){ rocket.r = P.R; rocket.v = 0; rocket.done = '다시 떨어졌습니다'; } }
+    rocket.maxr = Math.max(rocket.maxr, rocket.r);
+    if (rocket.r / P.R - 1 > maxH && rocket.v > 0) rocket.done = rocket.v >= 0 && 0.5 * rocket.v * rocket.v - P.GM / rocket.r >= 0 ? '탈출합니다 (다시 돌아오지 않음)' : '아주 높이 올라갔다가 언젠가 돌아옵니다';
+    const y = base - k - (rocket.r / P.R - 1) * k;
+    if (y > 10){ ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx, y - 10); ctx.lineTo(cx - 5, y + 4); ctx.lineTo(cx + 5, y + 4); ctx.closePath(); ctx.fill(); }
+    if (!rocket.done || rocket.sc) rocket.trace.push([rocket.t, rocket.r / P.R - 1]);
+    if (rocket.done){ T(ctx, rocket.done, W / 2 + 40, 18, { color: '#ffd34d', bold: true, size: 14 }); rocket.sc = 0; }
+  } else T(ctx, '[발사]를 누르세요', W / 2 + 40, 18, { color: '#7fd3ff', bold: true, size: 14 });
+  // 높이–시간 그래프
+  const gx = W * 0.42, gw = W - gx - 12, gy = 40, gh = H - 70;
+  ctx.strokeStyle = '#3a4252'; ctx.strokeRect(gx, gy, gw, gh); T(ctx, '높이 (행성 반지름의 배수)', gx, gy - 10, { color: '#c9d1d9', align: 'left', size: 11 });
+  for (let i = 0; i <= maxH; i += 2) T(ctx, String(i), gx - 4, gy + gh - i / maxH * gh, { color: '#c9d1d9', align: 'right', size: 10 });
+  if (rocket && rocket.trace.length > 1){ const tmax = Math.max(rocket.trace[rocket.trace.length - 1][0], 1);
+    ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2; ctx.beginPath(); rocket.trace.forEach(([tt, h], i) => { const X = gx + tt / tmax * gw, Y = gy + gh - Math.min(maxH, h) / maxH * gh; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke();
+    T(ctx, '시간 →', gx + gw, gy + gh + 12, { color: '#c9d1d9', align: 'right', size: 10 }); }
+  const v0 = +$('vS').value * vesc;
+  setStats([[P.n + '의 탈출 속도', (vesc / 1000).toFixed(1) + ' km/s'], ['발사 속력', (v0 / 1000).toFixed(1) + ' km/s'], ['최고 높이', rocket ? (rocket.v > 0 && 0.5 * v0 * v0 >= P.GM / P.R ? '무한히 멀리' : ((1 / (1 / P.R - v0 * v0 / (2 * P.GM)) / P.R - 1).toFixed(2) + ' R')) : '-']]);
+}
+const TEXT = {
+  orbit: ['궤도 반지름을 바꾸며 위성의 속력과 주기가 어떻게 달라지는지 보세요. 여러 위성을 남겨 두고 비교할 수 있습니다.',
+    '지구의 중력이 위성의 구심력 역할을 하므로 GMm/r² = mv²/r, 즉 v = √(GM/r)입니다. 멀리 있는 위성일수록 느리고 주기가 깁니다. 표에서 T²/r³의 값이 모든 위성에서 같은 것을 확인하세요(케플러 제3법칙). 정지 궤도 위성은 주기가 하루라서 지구에서 보면 멈춰 있는 것처럼 보입니다.'],
+  esc: ['행성을 고르고 발사 속력을 바꾸며 물체가 다시 떨어지는지, 중력을 벗어나는지 확인하세요. (공기 저항과 행성의 자전은 무시)',
+    '물체의 역학적 에너지 ½mv² − GMm/r가 0 이상이면 다시 돌아오지 않습니다. 따라서 탈출 속도는 √(2GM/R)이고 행성마다 다릅니다. 기체 분자는 가벼울수록 빠르게 움직이므로, 탈출 속도가 작은 달은 대기를 붙잡아 두지 못하고, 탈출 속도가 큰 목성은 가벼운 수소와 헬륨까지 붙잡고 있습니다. 실제 로켓은 연료를 뒤로 내뿜는 반작용(운동량 보존)으로 조금씩 속력을 높이며 궤도에 오릅니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); table(); });
+$('addB').addEventListener('click', () => { if (sats.length < 4) sats.push({ r: +$('rS').value }); table(); });
+$('clrB').addEventListener('click', () => { sats = []; table(); });
+$('rS').addEventListener('input', table);
+$('preS').addEventListener('change', () => { const v = +$('preS').value; if (!v) return; if (v > 10){ $('rS').max = 61; } $('rS').value = v; $('rS').dispatchEvent(new Event('input')); $('preS').value = ''; });
+$('fireB').addEventListener('click', () => { const P = PL[$('planetS').value], vesc = Math.sqrt(2 * P.GM / P.R), v0 = +$('vS').value * vesc;
+  rocket = { r: P.R, v: v0, t: 0, maxr: P.R, trace: [], sc: (P.R / vesc) * 1.2, done: null }; });
+$('planetS').addEventListener('change', () => { rocket = null; lab(); });
+$('vS').addEventListener('input', () => { rocket = null; });
+loop(dt => mode === 'orbit' ? drawOrbit(dt) : drawEsc(dt));
+})();
+</script>
+</body>
+</html>

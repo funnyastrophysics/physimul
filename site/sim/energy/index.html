@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>역학적 에너지 보존</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf;
+         --ek:#e0782f; --ep:#2f6fdf; --es:#2e9e6a; --q:#c0392b; --tot:#1d2330; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  .back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-size:15px;padding:10px 4px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+  #sim{height:300px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+  .sl .top b{font-variant-numeric:tabular-nums;color:var(--accent)}
+  .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+  button.b,select{font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .hide{display:none!important}
+  #bars{height:220px}
+  #graph{height:170px;margin-top:8px}
+  .note{font-size:13px;color:var(--sub);margin-top:6px}
+  @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+  <h1>역학적 에너지 보존</h1>
+  <p class="hint">물체를 끌어 높이를 정한 뒤 놓으면 운동이 시작됩니다. 마찰을 켜면 줄어든 역학적 에너지만큼 열에너지가 생깁니다.</p>
+
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="track" class="on">곡면</button>
+      <button data-m="pend">진자</button>
+      <button data-m="spring">용수철</button>
+    </div>
+    <canvas id="sim"></canvas>
+    <div class="stats">
+      <div class="stat"><div class="k">속력 v</div><div class="val" id="sV">-</div></div>
+      <div class="stat" id="stH"><div class="k">높이 h</div><div class="val" id="sH">-</div></div>
+      <div class="stat hide" id="stX"><div class="k">변형 x</div><div class="val" id="sX">-</div></div>
+      <div class="stat"><div class="k">역학적 에너지</div><div class="val" id="sE">-</div></div>
+      <div class="stat"><div class="k">열에너지</div><div class="val" id="sQ" style="color:var(--q)">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="bars"></canvas>
+    <canvas id="graph"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <div class="sl">
+        <div class="top"><span>질량 m</span><b id="mVal"></b></div>
+        <input type="range" id="mS" min="0.5" max="5" step="0.1" value="1">
+        <div class="range"><span>0.5 kg</span><span>5.0 kg</span></div>
+      </div>
+      <div class="sl">
+        <div class="top"><span id="fLabel">마찰 계수 μ</span><b id="fVal"></b></div>
+        <input type="range" id="fS" min="0" max="0.3" step="0.01" value="0">
+        <div class="range"><span>0 (마찰 없음)</span><span>0.30</span></div>
+      </div>
+      <div class="sl" id="ctlShape">
+        <div class="top"><span>곡면 모양</span></div>
+        <select id="shapeS" style="width:100%;margin-top:8px">
+          <option value="valley">골짜기</option>
+          <option value="coaster">롤러코스터 (가운데 언덕)</option>
+        </select>
+      </div>
+      <div class="sl hide" id="ctlL">
+        <div class="top"><span>진자 길이 L</span><b id="lVal"></b></div>
+        <input type="range" id="lS" min="0.5" max="2" step="0.1" value="1.5">
+        <div class="range"><span>0.5 m</span><span>2.0 m</span></div>
+      </div>
+      <div class="sl hide" id="ctlK">
+        <div class="top"><span>용수철 상수 k</span><b id="kVal"></b></div>
+        <input type="range" id="kS" min="10" max="100" step="1" value="40">
+        <div class="range"><span>10 N/m</span><span>100 N/m</span></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="b primary" id="pauseB">일시 정지</button>
+      <button class="b" id="resetB">처음으로</button>
+      <label style="font-size:15px">재생 속도
+        <select id="speedS"><option value="1">1배</option><option value="0.5">0.5배</option><option value="0.25">0.25배</option></select>
+      </label>
+    </div>
+    <p class="note" id="noteTxt">중력 가속도 g = 9.8 m/s², 높이의 기준(h = 0)은 곡면의 가장 낮은 곳입니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
+
+  const g = 9.8;
+  const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+  const C = { ek:'#e0782f', ep:'#2f6fdf', es:'#2e9e6a', q:'#c0392b', tot:'#1d2330' };
+  const $ = id => document.getElementById(id);
+  const simC = $('sim'), sctx = simC.getContext('2d');
+  const barC = $('bars'), bctx = barC.getContext('2d');
+  const gC = $('graph'), gctx = gC.getContext('2d');
+
+  let mode = 'track', shape = 'valley';
+  let m = 1, mu = 0, L = 1.5, k = 40;
+  let paused = false, speed = 1, dragging = false;
+  // 상태: s = 위치(곡면: x[m], 진자: θ[rad], 용수철: x[m]), v = 속도(곡면: 접선 속력, 진자: 각속도, 용수철: 속도)
+  let s = 0, v = 0, E0 = 0, heat = 0, stuck = true, simTime = 0, buf = [];
+
+  // ---------- 곡면 ----------
+  const XMAX = 4;
+  function h(x){ return shape === 'valley' ? 0.22 * x * x : 0.04 * x ** 4 - 0.5 * x * x + 1.5625; }
+  function dh(x){ return shape === 'valley' ? 0.44 * x : 0.16 * x ** 3 - x; }
+
+  // ---------- 에너지 ----------
+  function parts(){
+    if (mode === 'track') return { K: 0.5 * m * v * v, Ug: m * g * h(s), Us: 0 };
+    if (mode === 'pend')  return { K: 0.5 * m * (L * v) ** 2, Ug: m * g * L * (1 - Math.cos(s)), Us: 0 };
+    return { K: 0.5 * m * v * v, Ug: 0, Us: 0.5 * k * s * s };
+  }
+  function potential(pos){
+    if (mode === 'track') return m * g * h(pos);
+    if (mode === 'pend') return m * g * L * (1 - Math.cos(pos));
+    return 0.5 * k * pos * pos;
+  }
+  function startAt(pos){ s = pos; v = 0; heat = 0; E0 = potential(pos); stuck = false; simTime = 0; buf = []; }
+
+  // 힘을 따라 적분하되, 속력의 크기는 에너지(초기 에너지 - 열)로 맞춰 수치 오차가 쌓이지 않게 한다.
+  function step(dt){
+    if (stuck) return;
+    let a, ds, fr;
+    if (mode === 'track'){
+      const d = dh(s), n = Math.sqrt(1 + d * d), sin = d / n, cos = 1 / n;
+      fr = mu * g * cos;                                     // 마찰에 의한 감속 크기
+      if (v === 0){
+        if (Math.abs(g * sin) <= fr){ stuck = true; v = 0; return; }
+        v = -Math.sign(sin) * 1e-6;
+      }
+      a = -g * sin - fr * Math.sign(v);
+      const vNew = v + a * dt;
+      ds = Math.abs(v * dt);
+      heat += m * fr * ds;
+      s += vNew * cos * dt;
+      if (s > XMAX){ s = XMAX; }
+      if (s < -XMAX){ s = -XMAX; }
+      const Em = E0 - heat - m * g * h(s);
+      const vmag = Em > 0 ? Math.sqrt(2 * Em / m) : 0;
+      if (Math.sign(vNew) !== Math.sign(v) && mu > 0){ v = 0; return; }
+      v = Math.sign(vNew || -sin) * vmag;
+      if (vmag === 0) v = 0;
+    } else if (mode === 'pend'){
+      const gamma = mu * 3;                                  // 공기 저항 (속도에 비례)
+      a = -(g / L) * Math.sin(s) - gamma * v;
+      const vNew = v + a * dt;
+      heat += m * gamma * (L * v) ** 2 * dt;
+      s += vNew * dt;
+      const Em = E0 - heat - m * g * L * (1 - Math.cos(s));
+      const vmag = Em > 0 ? Math.sqrt(2 * Em / m) / L : 0;
+      v = Math.sign(vNew || -s) * vmag;
+      if (E0 - heat < 1e-4){ stuck = true; v = 0; }
+    } else {
+      fr = mu * g;
+      if (v === 0){
+        if (Math.abs(k * s / m) <= fr){ stuck = true; return; }
+        v = -Math.sign(s) * 1e-6;
+      }
+      a = -(k / m) * s - fr * Math.sign(v);
+      const vNew = v + a * dt;
+      heat += m * fr * Math.abs(v * dt);
+      s += vNew * dt;
+      const Em = E0 - heat - 0.5 * k * s * s;
+      const vmag = Em > 0 ? Math.sqrt(2 * Em / m) : 0;
+      if (Math.sign(vNew) !== Math.sign(v) && mu > 0){ v = 0; return; }
+      v = Math.sign(vNew || -s) * vmag;
+      if (vmag === 0) v = 0;
+    }
+  }
+
+  // ---------- 크기 ----------
+  let W, H, BW, BH, GW, GH;
+  function fit(c, ctx){
+    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, hh = c.clientHeight;
+    c.width = w * dpr; c.height = hh * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [w, hh];
+  }
+  function resize(){ [W, H] = fit(simC, sctx); [BW, BH] = fit(barC, bctx); [GW, GH] = fit(gC, gctx); }
+  window.addEventListener('resize', resize);
+
+  // 좌표 변환
+  function view(){
+    if (mode === 'track'){
+      const top = h(XMAX);
+      const sc = Math.min((W - 30) / (2 * XMAX + 0.4), (H - 50) / (top + 0.3));
+      return { sc, ox: W / 2, oy: H - Math.max(28, (H - top * sc) / 2) };
+    }
+    if (mode === 'pend'){
+      const sc = Math.min((H - 50) / 2.05, (W - 30) / 3.8);
+      return { sc, ox: W / 2, oy: Math.max(22, (H - 2.05 * sc) / 2) };
+    }
+    const sc = Math.min((W - 80) / 1.6, 300);
+    return { sc, ox: 40 + 0.7 * sc, oy: H / 2 + 60 };
+  }
+
+  // ---------- 그리기 ----------
+  function drawBall(x, y, r){
+    sctx.fillStyle = dragging ? '#46536b' : '#5a6478';
+    sctx.strokeStyle = dragging ? C.ep : '#2f3542'; sctx.lineWidth = dragging ? 2.5 : 1.5;
+    sctx.beginPath(); sctx.arc(x, y, r, 0, Math.PI * 2); sctx.fill(); sctx.stroke();
+  }
+  function label(t, x, y, color, align, base){
+    sctx.fillStyle = color || '#5b6475'; sctx.font = '12px ' + FONT;
+    sctx.textAlign = align || 'left'; sctx.textBaseline = base || 'middle'; sctx.fillText(t, x, y);
+  }
+  function hint(x, y){
+    if (!stuck || dragging || E0 > 0.001) return;
+    sctx.fillStyle = C.ep; sctx.font = 'bold 14px ' + FONT; sctx.textAlign = 'center'; sctx.textBaseline = 'bottom';
+    sctx.fillText('물체를 끌어 보세요', x, y);
+  }
+
+  function drawSim(){
+    sctx.clearRect(0, 0, W, H);
+    const V = view();
+    if (mode === 'track'){
+      const X = x => V.ox + x * V.sc, Y = y => V.oy - y * V.sc;
+      // 곡면
+      sctx.beginPath();
+      for (let i = 0; i <= 200; i++){ const x = -XMAX + 2 * XMAX * i / 200; i ? sctx.lineTo(X(x), Y(h(x))) : sctx.moveTo(X(x), Y(h(x))); }
+      sctx.lineTo(X(XMAX), H); sctx.lineTo(X(-XMAX), H); sctx.closePath();
+      sctx.fillStyle = '#e6e9ef'; sctx.fill();
+      sctx.beginPath();
+      for (let i = 0; i <= 200; i++){ const x = -XMAX + 2 * XMAX * i / 200; i ? sctx.lineTo(X(x), Y(h(x))) : sctx.moveTo(X(x), Y(h(x))); }
+      sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 2; sctx.stroke();
+      // 기준선 (h = 0)
+      sctx.setLineDash([5, 5]); sctx.strokeStyle = '#9aa3b2'; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(4, Y(0)); sctx.lineTo(W - 4, Y(0)); sctx.stroke(); sctx.setLineDash([]);
+      label('h = 0', W - 4, Y(0) - 9, null, 'right');
+      // 공
+      const r = 9 + 3 * Math.cbrt(m), d = dh(s), n = Math.sqrt(1 + d * d);
+      const bx = X(s) - (d / n) * r, by = Y(h(s)) - (1 / n) * r;
+      // 높이 표시
+      if (h(s) > 0.05){
+        sctx.strokeStyle = C.ep; sctx.lineWidth = 1.5; sctx.setLineDash([3, 3]);
+        sctx.beginPath(); sctx.moveTo(X(s), Y(h(s))); sctx.lineTo(X(s), Y(0)); sctx.stroke(); sctx.setLineDash([]);
+        label('h', X(s) + 5, (Y(h(s)) + Y(0)) / 2, C.ep);
+      }
+      drawBall(bx, by, r);
+      hint(bx, by - r - 8);
+    } else if (mode === 'pend'){
+      const px = V.ox, py = V.oy, len = L * V.sc;
+      const bx = px + len * Math.sin(s), by = py + len * Math.cos(s);
+      sctx.fillStyle = '#e6e9ef'; sctx.fillRect(px - 40, py - 10, 80, 10);
+      sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5;
+      sctx.beginPath(); sctx.moveTo(px - 40, py); sctx.lineTo(px + 40, py); sctx.stroke();
+      // 가장 낮은 위치 기준선
+      sctx.setLineDash([5, 5]); sctx.strokeStyle = '#9aa3b2'; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(20, py + len); sctx.lineTo(W - 20, py + len); sctx.stroke();
+      sctx.beginPath(); sctx.moveTo(px, py); sctx.lineTo(px, py + len); sctx.stroke(); sctx.setLineDash([]);
+      label('h = 0', 22, py + len + 12);
+      sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5;
+      sctx.beginPath(); sctx.moveTo(px, py); sctx.lineTo(bx, by); sctx.stroke();
+      if (py + len - by > 3){
+        sctx.strokeStyle = C.ep; sctx.setLineDash([3, 3]);
+        sctx.beginPath(); sctx.moveTo(bx, by); sctx.lineTo(bx, py + len); sctx.stroke(); sctx.setLineDash([]);
+        label('h', bx + 5, (by + py + len) / 2, C.ep);
+      }
+      const r = 9 + 3 * Math.cbrt(m);
+      drawBall(bx, by, r);
+      hint(bx, by + r + 30);
+    } else {
+      const floorY = V.oy, wallX = 26, eqX = V.ox, sc = V.sc;
+      sctx.fillStyle = '#e6e9ef'; sctx.fillRect(wallX, floorY, W - wallX, 6);
+      sctx.fillRect(wallX - 14, floorY - 110, 14, 116);
+      sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5;
+      sctx.beginPath(); sctx.moveTo(wallX, floorY - 110); sctx.lineTo(wallX, floorY); sctx.lineTo(W, floorY); sctx.stroke();
+      sctx.setLineDash([5, 5]); sctx.strokeStyle = '#9aa3b2'; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(eqX, floorY - 120); sctx.lineTo(eqX, floorY); sctx.stroke(); sctx.setLineDash([]);
+      label('평형 위치', eqX, floorY - 128, null, 'center');
+      const size = 34 + 10 * Math.cbrt(m), bx = eqX + s * sc, left = bx - size / 2, cy = floorY - size / 2;
+      // 용수철
+      const x1 = wallX, x2 = left, n = 12, amp = 10, lead = 8, len = x2 - x1 - 2 * lead;
+      sctx.beginPath(); sctx.moveTo(x1, cy); sctx.lineTo(x1 + lead, cy);
+      for (let i = 0; i < n; i++){ sctx.lineTo(x1 + lead + len * (i + 0.25) / n, cy - amp); sctx.lineTo(x1 + lead + len * (i + 0.75) / n, cy + amp); }
+      sctx.lineTo(x2 - lead, cy); sctx.lineTo(x2, cy);
+      sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.2 + k / 45; sctx.stroke();
+      sctx.fillStyle = dragging ? '#46536b' : '#5a6478'; sctx.strokeStyle = dragging ? C.ep : '#2f3542'; sctx.lineWidth = dragging ? 2.5 : 1.5;
+      sctx.beginPath(); sctx.rect(left, floorY - size, size, size); sctx.fill(); sctx.stroke();
+      if (Math.abs(s) > 0.005){
+        const ay = floorY - size - 14;
+        sctx.strokeStyle = C.es; sctx.fillStyle = C.es; sctx.lineWidth = 2;
+        sctx.beginPath(); sctx.moveTo(eqX, ay); sctx.lineTo(bx, ay); sctx.stroke();
+        const dd = Math.sign(bx - eqX);
+        sctx.beginPath(); sctx.moveTo(bx, ay); sctx.lineTo(bx - dd * 8, ay - 5); sctx.lineTo(bx - dd * 8, ay + 5); sctx.closePath(); sctx.fill();
+        label('x', (eqX + bx) / 2, ay - 9, C.es, 'center');
+      }
+      hint(bx, floorY - size - 10);
+    }
+  }
+
+  const NICE = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500];
+  const niceMax = v => { for (const n of NICE) if (n >= v * 1.001) return n; return 1000; };
+
+  function drawBars(P){
+    bctx.clearRect(0, 0, BW, BH);
+    const items = [
+      { n:'운동 에너지', v:P.K, c:C.ek },
+      mode === 'spring' ? { n:'탄성 퍼텐셜', v:P.Us, c:C.es } : { n:'중력 퍼텐셜', v:P.Ug, c:C.ep },
+      { n:'열에너지', v:heat, c:C.q },
+      { n:'합계', v:P.K + P.Ug + P.Us + heat, c:C.tot }
+    ];
+    const max = niceMax(Math.max(E0, 0.5));
+    const top = 26, bottom = BH - 40, hgt = bottom - top, L0 = 44, colW = (BW - L0 - 10) / items.length;
+    bctx.font = '11px ' + FONT; bctx.fillStyle = '#5b6475'; bctx.textAlign = 'right'; bctx.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++){
+      const y = bottom - hgt * i / 4;
+      bctx.strokeStyle = i ? '#eef0f4' : '#9aa3b2'; bctx.lineWidth = 1;
+      bctx.beginPath(); bctx.moveTo(L0, y); bctx.lineTo(BW - 6, y); bctx.stroke();
+      bctx.fillText(String(+(max * i / 4).toFixed(2)), L0 - 6, y);
+    }
+    bctx.textAlign = 'left'; bctx.textBaseline = 'top'; bctx.fillText('에너지 (J)', 2, 4);
+    items.forEach((it, i) => {
+      const bw = Math.min(56, colW * 0.6), x = L0 + colW * i + (colW - bw) / 2;
+      const bh = Math.max(0, it.v) / max * hgt;
+      bctx.fillStyle = it.c; bctx.fillRect(x, bottom - bh, bw, bh);
+      bctx.fillStyle = '#1d2330'; bctx.font = 'bold 12px ' + FONT; bctx.textAlign = 'center'; bctx.textBaseline = 'bottom';
+      bctx.fillText(Math.max(0, it.v).toFixed(2), x + bw / 2, bottom - bh - 3);
+      bctx.fillStyle = it.c; bctx.font = '12px ' + FONT; bctx.textBaseline = 'top';
+      bctx.fillText(it.n, x + bw / 2, bottom + 8);
+    });
+  }
+
+  const WINDOW = 10;
+  function drawGraph(){
+    gctx.clearRect(0, 0, GW, GH);
+    const Lm = 44, R = 40, top = 14, hgt = GH - 40, pw = GW - Lm - R;
+    const t1 = Math.max(simTime, WINDOW), t0 = t1 - WINDOW, max = niceMax(Math.max(E0, 0.5));
+    gctx.strokeStyle = '#d9dde4'; gctx.strokeRect(Lm, top, pw, hgt);
+    gctx.font = '11px ' + FONT; gctx.fillStyle = '#5b6475';
+    gctx.textAlign = 'center'; gctx.textBaseline = 'top';
+    for (let t = Math.ceil(t0); t <= t1 + 1e-9; t++){
+      const X = Lm + (t - t0) / WINDOW * pw;
+      gctx.strokeStyle = '#eef0f4'; gctx.beginPath(); gctx.moveTo(X, top); gctx.lineTo(X, top + hgt); gctx.stroke();
+      gctx.fillText(String(t), X, top + hgt + 4);
+    }
+    gctx.textAlign = 'right'; gctx.textBaseline = 'middle';
+    gctx.fillText(String(max), Lm - 6, top + 4); gctx.fillText('0', Lm - 6, top + hgt);
+    gctx.fillText('t (s)', GW - 2, top + hgt / 2);
+    const series = [['K', C.ek], ['U', mode === 'spring' ? C.es : C.ep], ['Q', C.q], ['T', C.tot]];
+    gctx.save(); gctx.beginPath(); gctx.rect(Lm, top - 2, pw, hgt + 4); gctx.clip();
+    for (const [key, col] of series){
+      gctx.strokeStyle = col; gctx.lineWidth = key === 'T' ? 2.5 : 2; gctx.beginPath(); let st = false;
+      for (const p of buf){ if (p.t < t0) continue;
+        const X = Lm + (p.t - t0) / WINDOW * pw, Y = top + hgt - p[key] / max * hgt;
+        st ? gctx.lineTo(X, Y) : (gctx.moveTo(X, Y), st = true); }
+      gctx.stroke();
+    }
+    gctx.restore();
+  }
+
+  function updateStats(P){
+    const spd = mode === 'pend' ? Math.abs(L * v) : Math.abs(v);
+    $('sV').textContent = spd.toFixed(2) + ' m/s';
+    if (mode === 'track') $('sH').textContent = h(s).toFixed(2) + ' m';
+    if (mode === 'pend') $('sH').textContent = (L * (1 - Math.cos(s))).toFixed(2) + ' m';
+    if (mode === 'spring') $('sX').textContent = s.toFixed(2).replace('-', '−') + ' m';
+    $('sE').textContent = (P.K + P.Ug + P.Us).toFixed(2) + ' J';
+    $('sQ').textContent = heat.toFixed(2) + ' J';
+  }
+
+  // ---------- 끌기 ----------
+  function local(e){ const r = simC.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function posFromPointer(p){
+    const V = view();
+    if (mode === 'track') return Math.max(-XMAX + 0.1, Math.min(XMAX - 0.1, (p.x - V.ox) / V.sc));
+    if (mode === 'pend'){ const a = Math.atan2(p.x - V.ox, p.y - V.oy); return Math.max(-1.22, Math.min(1.22, a)); }
+    return Math.max(-0.5, Math.min(0.5, (p.x - V.ox) / V.sc));
+  }
+  function objPos(){
+    const V = view();
+    if (mode === 'track') return { x: V.ox + s * V.sc, y: V.oy - h(s) * V.sc };
+    if (mode === 'pend') return { x: V.ox + L * V.sc * Math.sin(s), y: V.oy + L * V.sc * Math.cos(s) };
+    return { x: V.ox + s * V.sc, y: V.oy - 25 };
+  }
+  simC.addEventListener('pointerdown', e => {
+    const p = local(e), o = objPos();
+    if (Math.hypot(p.x - o.x, p.y - o.y) > 50) return;
+    dragging = true; simC.setPointerCapture(e.pointerId); e.preventDefault();
+    s = posFromPointer(p); v = 0; stuck = true; heat = 0; E0 = potential(s);
+  });
+  simC.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    s = posFromPointer(local(e)); v = 0; heat = 0; E0 = potential(s); simTime = 0; buf = [];
+  });
+  function release(){ if (!dragging) return; dragging = false; startAt(s); paused = false; $('pauseB').textContent = '일시 정지'; }
+  simC.addEventListener('pointerup', release);
+  simC.addEventListener('pointercancel', release);
+
+  // ---------- 조작 ----------
+  function setMode(md){
+    mode = md;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.m === md));
+    $('ctlShape').classList.toggle('hide', md !== 'track');
+    $('ctlL').classList.toggle('hide', md !== 'pend');
+    $('ctlK').classList.toggle('hide', md !== 'spring');
+    $('stH').classList.toggle('hide', md === 'spring');
+    $('stX').classList.toggle('hide', md !== 'spring');
+    $('fLabel').textContent = md === 'pend' ? '공기 저항' : '마찰 계수 μ';
+    $('noteTxt').textContent = md === 'track' ? '중력 가속도 g = 9.8 m/s², 높이의 기준(h = 0)은 곡면의 가장 낮은 곳입니다. 마찰력은 곡면에 수직인 중력 성분만으로 단순화했습니다.'
+      : md === 'pend' ? '중력 가속도 g = 9.8 m/s², 높이의 기준(h = 0)은 진자가 가장 낮을 때의 위치입니다.'
+      : '수평면 위의 용수철이므로 중력 퍼텐셜 에너지는 변하지 않습니다. 탄성 퍼텐셜 에너지 = ½kx²';
+    reset0();
+  }
+  function reset0(){ s = mode === 'track' ? (shape === 'valley' ? 0 : 2.5) : 0; v = 0; heat = 0; E0 = 0; stuck = true; simTime = 0; buf = []; }
+  document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  function labels(){ $('mVal').textContent = m.toFixed(1) + ' kg'; $('fVal').textContent = mode === 'pend' ? (mu === 0 ? '없음' : mu.toFixed(2)) : mu.toFixed(2);
+    $('lVal').textContent = L.toFixed(1) + ' m'; $('kVal').textContent = k + ' N/m'; }
+  // 질량·길이·k를 바꾸면 현재 위치에서 다시 출발 (에너지 기준이 바뀌므로)
+  $('mS').addEventListener('input', () => { m = +$('mS').value; if (!stuck) startAt(s); else E0 = potential(s); labels(); });
+  $('fS').addEventListener('input', () => { mu = +$('fS').value; labels(); });
+  $('lS').addEventListener('input', () => { L = +$('lS').value; if (!stuck) startAt(s); else E0 = potential(s); labels(); });
+  $('kS').addEventListener('input', () => { k = +$('kS').value; if (!stuck) startAt(s); else E0 = potential(s); labels(); });
+  $('shapeS').addEventListener('change', () => { shape = $('shapeS').value; reset0(); });
+  $('pauseB').addEventListener('click', () => { paused = !paused; $('pauseB').textContent = paused ? '계속' : '일시 정지'; });
+  $('resetB').addEventListener('click', () => { reset0(); paused = false; $('pauseB').textContent = '일시 정지'; });
+  $('speedS').addEventListener('change', () => { speed = +$('speedS').value; });
+
+  let last = performance.now();
+  function frame(now){
+    let dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
+    if (!paused && !dragging){
+      dt *= speed;
+      const n = Math.ceil(dt / 0.0005);
+      for (let i = 0; i < n; i++) step(dt / n);
+      if (E0 > 0){
+        simTime += dt;
+        const P = parts();
+        buf.push({ t: simTime, K: P.K, U: P.Ug + P.Us, Q: heat, T: P.K + P.Ug + P.Us + heat });
+        while (buf.length && buf[0].t < simTime - WINDOW - 0.5) buf.shift();
+      }
+    }
+    const P = parts();
+    drawSim(); drawBars(P); drawGraph(); updateStats(P);
+    requestAnimationFrame(frame);
+  }
+  labels(); resize(); reset0();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
