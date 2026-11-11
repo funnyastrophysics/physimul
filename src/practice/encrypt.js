@@ -20,6 +20,7 @@ if (!fs.existsSync(cutDir)) { console.error('문항 그림 폴더가 없습니�
 const map = JSON.parse(fs.readFileSync(path.join(__dirname, 'map.json'), 'utf8'));
 const manual = JSON.parse(fs.readFileSync(path.join(__dirname, 'answers_manual.json'), 'utf8'));
 const U = JSON.parse(fs.readFileSync(path.join(__dirname, 'units.json'), 'utf8'));
+const CODES = JSON.parse(fs.readFileSync(path.join(__dirname, 'codes.json'), 'utf8'));
 const ITER = 200000;
 
 // salt는 한 번 정하면 그대로 쓴다(바뀌면 모든 파일이 달라져 저장소가 불필요하게 커진다).
@@ -54,8 +55,9 @@ for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}$/.test(k)).sort())
     wanted.add(id + '.bin');
     const item = { id, src: `${year}학년도 수능 ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
     (sims[sim] = sims[sim] || []).push(item);
-    const r = U.rules[sim], unit = U.overrides[id] || (Array.isArray(r) ? r[sub === 'p1' ? 0 : 1] : r);
-    if (!U.units[unit]) { console.error('단원 규칙이 없습니다: ' + sim); process.exit(1); }
+    const c = CODES[id] && CODES[id].new, unit = c && U.prefix[c.slice(0, 6)];
+    if (!unit || !U.codes[c]) { console.error('성취기준이 없습니다(classify.py를 먼저 실행하세요): ' + id); process.exit(1); }
+    item.c = c;
     (units[unit] = units[unit] || []).push(item);
   });
 }
@@ -70,7 +72,7 @@ for (const sim of Object.keys(sims).sort()) {
   index.sims[sim] = list.length;
 }
 for (const u of Object.keys(U.units)) {
-  const list = (units[u] || []).sort(order).map(({ id, src, a, s }) => ({ id, src, a, s }));
+  const list = (units[u] || []).sort(order).map(({ id, src, a, s, c }) => ({ id, src, a, s, c }));
   const f = path.join(outDir, 'u_' + u + '.bin');
   if (list.length) { fs.writeFileSync(f, seal(Buffer.from(JSON.stringify(list), 'utf8'))); index.units[u] = list.length; } else if (fs.existsSync(f)) fs.unlinkSync(f);
 }

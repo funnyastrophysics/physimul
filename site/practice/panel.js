@@ -29,7 +29,7 @@
       return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(meta.salt), iterations: meta.iter, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['decrypt']); });
   }
 
-  // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, count, title, sub, simBase: 시뮬레이션 폴더 경로, names: {이름: 제목} }
+  // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, title, sub, simBase: 시뮬레이션 폴더 경로, names: {시뮬레이션 이름: 제목}, codes: {성취기준: 짧은 이름} }
   function mount(box, o) {
     var key = null, all = null, list = null, idx = 0, picked = 0, topic = '', urls = [], cache = {};
     box.className = 'pq';
@@ -66,13 +66,12 @@
     }
     function show() {
       var it = list[idx]; picked = 0; freeUrls(); head();
-      if (o.names) {   // 주제(시뮬레이션)별로 골라 보기
-        var cnt = {}, ord = []; all.forEach(function (x) { if (!cnt[x.s]) { cnt[x.s] = 0; ord.push(x.s); } cnt[x.s]++; });
-        ord.sort(function (a, b) { return cnt[b] - cnt[a]; });
-        var ts = el('select'); ts.setAttribute('aria-label', '주제 고르기');
-        var o0 = el('option', '', '주제: 전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
-        ord.forEach(function (s) { var op = el('option', '', '주제: ' + (o.names[s] || s) + ' (' + cnt[s] + '문제)'); op.value = s; ts.appendChild(op); }); ts.value = topic;
-        ts.addEventListener('change', function () { topic = ts.value; list = topic ? all.filter(function (x) { return x.s === topic; }) : all; idx = 0; show(); }); box.appendChild(ts);
+      if (o.codes) {   // 성취기준별로 골라 보기
+        var cnt = {}, ord = []; all.forEach(function (x) { if (!cnt[x.c]) { cnt[x.c] = 0; ord.push(x.c); } cnt[x.c]++; }); ord.sort();
+        var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
+        var o0 = el('option', '', '전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
+        ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = topic;
+        ts.addEventListener('change', function () { topic = ts.value; list = topic ? all.filter(function (x) { return x.c === topic; }) : all; idx = 0; show(); }); box.appendChild(ts);
       }
       var sel = el('select'); sel.setAttribute('aria-label', '문제 고르기');
       list.forEach(function (x, k) { var op = el('option', '', (k + 1) + '. ' + x.src); op.value = k; sel.appendChild(op); }); sel.value = idx;
