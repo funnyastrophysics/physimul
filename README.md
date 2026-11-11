@@ -10,4 +10,8 @@
   - build.py : `python3 build.py 이름1 이름2 ...` 실행하면 site/sim/<이름>/index.html 생성
 - 1차 시뮬레이션 11개(shm, energy, collision, projectile, capacitor, circuit, efield, induction, optics, slit, gas)는 site/sim 안의 파일 자체가 원본입니다.
 - 공개: main 브랜치에 올리면 .github/workflows/pages.yml이 site 폴더를 GitHub Pages로 내보냅니다.
-- 남은 일: 측정 도구(tools/), 연습문제(practice/, 접근 제한), 도메인 연결
+- 연습문제: 시뮬레이션 화면 아래에 '연결된 기출문제' 칸이 붙습니다(site/practice/panel.js).
+  - 문제 원본은 practice-src/<시뮬레이션 이름>/problems.json 과 그림 파일로 두며, 이 폴더는 GitHub에 올리지 않습니다(.gitignore).
+  - `PRACTICE_CODE=수업코드 node src/practice/encrypt.js` 를 실행하면 수업 코드로 암호화된 site/practice/data/<이름>.json 이 만들어집니다.
+  - 수업 코드는 저장소에 적지 않습니다. 코드를 바꾸면 모든 문제를 다시 암호화해야 합니다.
+- 남은 일: 실제 기출문제 넣기, 측정 도구(tools/), 도메인 연결
