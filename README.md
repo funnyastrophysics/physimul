@@ -11,7 +11,9 @@
 - 1차 시뮬레이션 11개(shm, energy, collision, projectile, capacitor, circuit, efield, induction, optics, slit, gas)는 site/sim 안의 파일 자체가 원본입니다.
 - 공개: main 브랜치에 올리면 .github/workflows/pages.yml이 site 폴더를 GitHub Pages로 내보냅니다.
 - 연습문제: 시뮬레이션 화면 아래에 '연결된 기출문제' 칸이 붙습니다(site/practice/panel.js).
-  - 문제 원본은 practice-src/<시뮬레이션 이름>/problems.json 과 그림 파일로 두며, 이 폴더는 GitHub에 올리지 않습니다(.gitignore).
-  - `PRACTICE_CODE=수업코드 node src/practice/encrypt.js` 를 실행하면 수업 코드로 암호화된 site/practice/data/<이름>.json 이 만들어집니다.
-  - 수업 코드는 저장소에 적지 않습니다. 코드를 바꾸면 모든 문제를 다시 암호화해야 합니다.
-- 남은 일: 실제 기출문제 넣기, 측정 도구(tools/), 도메인 연결
+  - 수능 물리Ⅰ·Ⅱ(2008~2026학년도) 가운데 2022 개정 성취기준에 맞는 문항을 시뮬레이션별로 연결했습니다. 연결표는 src/practice/map.json 입니다.
+  - 만드는 순서: ① `python3 src/practice/extract.py <원본 폴더> practice-src/cut` (문제·해설 PDF를 문항별 그림으로 자름, PyMuPDF와 Pillow 필요)
+    ② `PRACTICE_CODE=수업코드 node src/practice/encrypt.js` (수업 코드로 암호화해 site/practice/data 에 생성)
+  - 원본 폴더 구조: p1/d1(문제) p1/d2(정답) p1/d3(해설), p2/… 이고 파일 이름은 p1_2026_11.pdf 형식입니다.
+  - 문제 원본(practice-src)과 수업 코드는 GitHub에 올리지 않습니다(.gitignore). 수업 코드를 바꾸면 site/practice/data/index.json 을 지우고 다시 암호화합니다.
+- 남은 일: 6월·9월 모의평가 문항 넣기, 측정 도구(tools/), 도메인 연결
