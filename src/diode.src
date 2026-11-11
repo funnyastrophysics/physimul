@@ -6,25 +6,31 @@
       <button data-m="band">에너지띠</button>
       <button data-m="pn">p-n 접합 다이오드</button>
       <button data-m="rect">정류 회로</button>
+      <button data-m="tr">트랜지스터</button>
       <button data-m="logic">논리 회로</button>
     </div>
     <canvas id="sim" style="height:300px;border-radius:8px"></canvas>
     <div class="row m-pn"><button class="b" id="flipB">전원 뒤집기</button></div>
     <div class="row m-rect"><select id="rectS"><option value="half">반파 정류 (다이오드 1개)</option><option value="full">전파 정류 (다이오드 4개)</option></select><label class="chk"><input type="checkbox" id="cCap"> 축전기로 평활</label></div>
+    <div class="row m-tr"><select id="trS"><option value="sw">스위치 작용 (LED 켜기)</option><option value="amp">증폭 작용 (스피커 소리 키우기)</option></select></div>
     <div class="row m-logic"><select id="gateS"><option value="and">AND 게이트</option><option value="or">OR 게이트</option><option value="not">NOT 게이트</option></select>
       <button class="b" id="aB">입력 A: 0</button><button class="b" id="bB">입력 B: 0</button></div>
     <div class="stats" id="stats"></div>
   </div>
-  <div class="card m-pn m-rect"><canvas id="graph" style="height:220px"></canvas></div>
+  <div class="card m-pn m-rect m-tr"><canvas id="graph" style="height:220px"></canvas></div>
   <div class="card">
     <div class="controls">
       <div class="sl m-band"><div class="top"><span>온도</span><b id="tV"></b></div>
         <input type="range" id="tS" min="0" max="600" step="10" value="300"><div class="range"><span>0 K</span><span>600 K</span></div></div>
+      <div class="sl m-tr"><div class="top"><span id="trL"></span><b id="trV"></b></div>
+        <input type="range" id="trR" min="0" max="100" step="1" value="50"><div class="range"><span id="trA"></span><span id="trB"></span></div></div>
       <div class="sl m-pn"><div class="top"><span>전원 전압</span><b id="vV"></b></div>
         <input type="range" id="vS" min="0" max="1.2" step="0.02" value="0.4"><div class="range"><span>0 V</span><span>1.2 V</span></div></div>
     </div>
     <p class="note" id="noteTxt"></p>
   </div>
+---CSS---
+#tabs button{min-width:96px}
 ---SCRIPT---
 const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); if (G.clientWidth) gr = fitCanvas(G); }; window.addEventListener('resize', rs);
 let mode, flip = 1, A = 0, Bv = 0, t = 0, buf = [], phase = 0, capV = 0;
@@ -147,10 +153,54 @@ function logic(){
     T(ctx, '스위치를 닫으면 전류가 LED를 피해 흐름', W * 0.4, Bt + 22, { size: 11 }); }
   // LED
   const lx = R, ly = my; if (out){ const gg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 40); gg.addColorStop(0, 'rgba(255,80,60,0.8)'); gg.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(lx, ly, 40, 0, 7); ctx.fill(); }
-  ctx.fillStyle = out ? '#ff5a3c' : '#f3d0cb'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(lx, ly, 13, 0, 7); ctx.fill(); ctx.stroke(); T(ctx, '출력 LED = ' + (out ? 1 : 0), lx, ly - 34, { bold: true, color: out ? RED : SUB, align: 'right' });
+  ctx.fillStyle = out ? '#ff5a3c' : '#f3d0cb'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(lx, ly, 13, 0, 7); ctx.fill(); ctx.stroke(); T(ctx, '출력 LED = ' + (out ? 1 : 0), lx - 22, ly - 30, { bold: true, color: out ? RED : SUB, align: 'right' });
   // 진리표
   const rows = g === 'not' ? [[0, 1], [1, 0]] : [[0, 0], [0, 1], [1, 0], [1, 1]].map(([a, b]) => [a, b, g === 'and' ? a & b : a | b]);
   setStats(rows.map(r => [g === 'not' ? 'A = ' + r[0] : 'A ' + r[0] + ', B ' + r[1], '출력 ' + r[r.length - 1], (g === 'not' ? r[0] === A : r[0] === A && r[1] === Bv) ? RED : null]));
+}
+// ---------- 트랜지스터 ----------
+let trT = 0;
+function trLab(){ const amp = $('trS').value === 'amp', v = +$('trR').value;
+  $('trL').textContent = amp ? '마이크에서 들어오는 신호의 크기' : '베이스에 거는 전압'; $('trA').textContent = amp ? '0 mV' : '0 V'; $('trB').textContent = amp ? '20 mV' : '1.2 V';
+  $('trV').textContent = amp ? (v * 0.2).toFixed(1) + ' mV' : (v * 0.012).toFixed(2) + ' V'; }
+const icOf = vb => Math.min(5, Math.max(0, vb - 0.6) * 100 / 10);   // mA (베이스 저항 10 kΩ, 전류 증폭률 100, 최대 5 mA)
+function tr(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0, 0, W, H); trT += dt;
+  const amp = $('trS').value === 'amp', v = +$('trR').value;
+  let ib, ic, vin = 0, vout = 0, on = 0;
+  if (amp){ vin = v * 0.2 * Math.sin(trT * Math.PI * 1.5); vout = Math.max(-1.5, Math.min(1.5, -vin * 0.1)); ib = Math.abs(vin) / 20; ic = Math.abs(vout) / 1.5; on = ic; }
+  else { const vb = v * 0.012; ib = Math.max(0, vb - 0.6) / 0.6; ic = icOf(vb) / 5; on = ic; }
+  const cx = W * 0.52, cy = 150, top = 44, bot = 262, xl = W * 0.12, xr = W * 0.84;
+  // 배선
+  line(ctx, [[xl, cy], [cx - 9, cy]], WIRE, 2); line(ctx, [[cx + 14, cy - 22], [cx + 14, top], [xr, top], [xr, 92]], WIRE, 2); line(ctx, [[xr, 150], [xr, bot], [xl, bot], [xl, cy + 26]], WIRE, 2);
+  line(ctx, [[cx + 14, cy + 22], [cx + 14, bot]], WIRE, 2);
+  // 트랜지스터 기호
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 28, 0, 7); ctx.fill(); ctx.stroke();
+  line(ctx, [[cx - 9, cy - 17], [cx - 9, cy + 17]], INK, 4); line(ctx, [[cx - 9, cy - 7], [cx + 14, cy - 22]], INK, 2); arrow(ctx, cx - 9, cy + 7, cx + 14, cy + 22, INK, 2, 8);
+  T(ctx, '베이스', cx - 40, cy - 12, { size: 10, align: 'right' }); T(ctx, '컬렉터', cx + 22, cy - 40, { size: 10, align: 'left' }); T(ctx, '이미터', cx + 22, cy + 42, { size: 10, align: 'left' });
+  // 입력 쪽
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(xl, cy + 13, 13, 0, 7); ctx.fill(); ctx.stroke();
+  T(ctx, amp ? '~' : '±', xl, cy + 13, { bold: true, size: 14, color: INK }); T(ctx, amp ? '마이크' : '입력 전원', xl, cy - 14, { size: 11, bold: true, color: BLUE });
+  // 전원과 부하
+  ctx.fillStyle = '#fff'; ctx.strokeRect(xr - 13, 150, 26, 0); line(ctx, [[xr - 12, 196], [xr + 12, 196]], INK, 2); line(ctx, [[xr - 6, 204], [xr + 6, 204]], INK, 4); T(ctx, '전원', xr - 18, 200, { size: 10, align: 'right' });
+  if (amp){ const d = vout * 4; ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.fillRect(xr - 9, 104, 18, 34); ctx.strokeRect(xr - 9, 104, 18, 34);
+    ctx.beginPath(); ctx.moveTo(xr - 9, 108); ctx.lineTo(xr - 26 - d, 96); ctx.lineTo(xr - 26 - d, 146); ctx.lineTo(xr - 9, 134); ctx.closePath(); ctx.fillStyle = '#e8eefb'; ctx.fill(); ctx.stroke(); T(ctx, '스피커', xr, 84, { size: 11, bold: true, color: RED }); line(ctx, [[xr, 92], [xr, 104]], WIRE, 2); line(ctx, [[xr, 138], [xr, 150]], WIRE, 2); }
+  else { ctx.fillStyle = `rgba(255,90,60,${0.12 + 0.88 * on})`; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(xr, 121, 14, 0, 7); ctx.fill(); ctx.stroke();
+    if (on > 0.05){ ctx.strokeStyle = `rgba(255,90,60,${on})`; for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4; ctx.beginPath(); ctx.moveTo(xr + Math.cos(a) * 18, 121 + Math.sin(a) * 18); ctx.lineTo(xr + Math.cos(a) * (20 + 6 * on), 121 + Math.sin(a) * (20 + 6 * on)); ctx.stroke(); } }
+    T(ctx, 'LED', xr, 84, { size: 11, bold: true, color: RED }); line(ctx, [[xr, 92], [xr, 107]], WIRE, 2); line(ctx, [[xr, 135], [xr, 150]], WIRE, 2); }
+  // 전류 화살표
+  if (ib > 0.02) arrow(ctx, xl + 30, cy - 6, xl + 30 + 14 + 10 * Math.min(1, ib), cy - 6, BLUE, 1.5, 6);
+  if (ic > 0.02) arrow(ctx, cx + 24, top + 34, cx + 24, top + 34 - 12 - 26 * ic, RED, 2 + 3 * ic, 8 + 4 * ic);
+  T(ctx, '작은 전류', xl + 42, cy + 12, { size: 10, color: BLUE }); T(ctx, '큰 전류', cx + 34, top + 14, { size: 10, color: RED, align: 'left' });
+  if (amp){ buf.push({ t: trT, vin, vout }); if (buf.length > 600) buf.shift();
+    if (gr) timeGraph(gr.ctx, gr.W, gr.H, buf, trT, [{ keys: ['vin'], names: ['입력 전압 (mV)'], colors: [BLUE], fixed: 20 }, { keys: ['vout'], names: ['출력 전압 (V)'], colors: [RED], fixed: 2 }], 4);
+    const clip = v * 0.2 * 0.1 > 1.5;
+    setStats([['입력 신호의 진폭', (v * 0.2).toFixed(1) + ' mV', BLUE], ['출력 신호의 진폭', Math.min(1.5, v * 0.02).toFixed(2) + ' V', RED], ['출력 파형', v === 0 ? '—' : clip ? '윗부분이 잘림(찌그러짐)' : '입력과 모양이 같음']]);
+  } else if (gr){ const g = gr.ctx, vb = v * 0.012; g.clearRect(0, 0, gr.W, gr.H);
+    const A2 = axes(g, gr.W, gr.H, { x0: 0, x1: 1.2, y0: 0, y1: 6, xt: [0, 0.3, 0.6, 0.9, 1.2], yt: [0, 2, 4, 6], xl: '베이스에 거는 전압 (V)', yl: '컬렉터 전류 (mA)' });
+    const pts = []; for (let x = 0; x <= 1.2001; x += 0.01) pts.push([A2.X(x), A2.Y(icOf(x))]); line(g, pts, RED, 2.2);
+    g.fillStyle = INK; g.beginPath(); g.arc(A2.X(vb), A2.Y(icOf(vb)), 5, 0, 7); g.fill();
+    setStats([['베이스 전류', (Math.max(0, vb - 0.6) * 100).toFixed(0) + ' μA', BLUE], ['컬렉터 전류', icOf(vb).toFixed(1) + ' mA', RED], ['스위치', icOf(vb) === 0 ? '꺼짐 (0)' : icOf(vb) >= 5 ? '켜짐 (1)' : '켜지는 중']]); }
 }
 const TEXT = {
   band: ['도체, 반도체, 절연체의 에너지띠를 비교하세요. 온도를 높이면 반도체에서 원자가 띠의 전자가 띠틈을 넘어 전도띠로 올라갑니다.',
@@ -159,10 +209,13 @@ const TEXT = {
     '순방향 전압을 걸면 공핍층이 좁아져 양공과 전자가 접합면을 넘어 이동하므로 전류가 잘 흐릅니다(실리콘은 약 0.7 V 이상). 역방향 전압을 걸면 공핍층이 넓어져 전류가 거의 흐르지 않습니다. 이처럼 다이오드는 한쪽 방향으로만 전류를 흐르게 합니다. 발광 다이오드(LED)는 전자와 양공이 결합할 때 빛을 냅니다.'],
   rect: ['교류를 다이오드에 통과시키면 출력 전압이 어떻게 달라지는지 그래프로 비교하세요. (화면에서 보이도록 교류의 진동수를 0.5 Hz로 느리게 나타냈습니다)',
     '다이오드는 한 방향으로만 전류를 흐르게 하므로 교류를 직류로 바꾸는 정류에 쓰입니다. 다이오드 1개는 반주기만 통과시키고(반파 정류), 4개를 다리 모양으로 연결하면 두 반주기를 모두 같은 방향으로 바꿉니다(전파 정류). 축전기를 함께 쓰면 전압이 고르게 됩니다. 휴대폰 충전기 속에 이런 회로가 들어 있습니다.'],
+  tr: ['트랜지스터는 베이스에 흐르는 작은 전류로 컬렉터에 흐르는 큰 전류를 조절합니다. 스위치 작용과 증폭 작용을 차례로 확인하세요.',
+    '트랜지스터는 p형과 n형 반도체 세 개를 접합한 소자입니다. 베이스에 거는 전압이 일정한 값(실리콘은 약 0.6 V)보다 작으면 전류가 흐르지 않고, 크면 큰 전류가 흐르므로 전기 신호로 켜고 끄는 스위치로 쓸 수 있습니다(디지털 회로의 0과 1). 또 베이스 전류가 조금만 변해도 컬렉터 전류가 크게 변하므로, 마이크의 약한 신호를 스피커를 울릴 만큼 큰 신호로 증폭할 수 있습니다. 증폭에 필요한 에너지는 전원이 공급합니다. 입력이 너무 크면 출력이 전원 전압을 넘지 못해 파형이 찌그러집니다. (보기 쉽도록 신호를 느리게 나타냈습니다)'],
   logic: ['입력 A, B를 눌러 0과 1을 바꾸며 출력 LED가 켜지는 조건을 진리표와 비교하세요.',
     '디지털 회로는 0과 1로 정보를 처리하며, 실제 회로에서는 트랜지스터가 아주 빠른 스위치 역할을 합니다. AND 게이트는 두 입력이 모두 1일 때만, OR 게이트는 하나라도 1이면 출력이 1이고, NOT 게이트는 입력을 반대로 바꿉니다. 이런 논리 회로를 수십억 개 모아 컴퓨터의 중앙 처리 장치를 만듭니다.'] };
 setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; buf = []; t = 0; rs(); });
 $('flipB').addEventListener('click', () => { flip = -flip; });
 $('aB').addEventListener('click', () => { A = A ? 0 : 1; $('aB').textContent = '입력 A: ' + A; $('aB').classList.toggle('on', !!A); });
 $('bB').addEventListener('click', () => { Bv = Bv ? 0 : 1; $('bB').textContent = '입력 B: ' + Bv; $('bB').classList.toggle('on', !!Bv); });
-loop(dt => ({ band, pn, rect, logic })[mode](dt));
+$('trS').addEventListener('change', () => { buf = []; trLab(); }); $('trR').addEventListener('input', trLab); trLab();
+loop(dt => ({ band, pn, rect, tr, logic })[mode](dt));

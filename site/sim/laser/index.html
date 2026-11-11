@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>레이저와 유도 방출</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>레이저와 유도 방출</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="one">흡수와 방출</button>
+      <button data-m="laser">레이저</button>
+    </div>
+    <canvas id="sim" style="height:260px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row m-one"><button class="b primary" id="shootB">광자 보내기</button><button class="b" id="exciteB">원자에 에너지 공급</button></div>
+    <p class="note m-one" id="msg" style="font-weight:700;color:#1d2330;min-height:3.1em"></p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="sl m-laser"><div class="top"><span>외부에서 공급하는 에너지 (펌핑)</span><b id="pV"></b></div>
+      <input type="range" id="pS" min="0" max="100" step="5" value="20"><div class="range"><span>0</span><span>세게</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); layout(); }; window.addEventListener('resize', rs);
+let mode, t = 0, ph = [], atom = { ex: false, tEx: 0, life: 4 }, atoms = [], outN = 0, outRate = 0, outBuf = [];
+const PALE = '#c9d2e3', DIM = '#8d97aa', PH = '#ff6b5e', SP = 130;
+bindLabels({ pS: ['pV', v => v === 0 ? '0' : v + ' %'] });
+function layout(fresh){ if (!s) return; const { W, H } = s, x0 = W * 0.1, x1 = W * 0.78, cy = H * 0.47; if (fresh || atoms.length !== 24){ atoms = Array.from({ length: 24 }, () => ({ ex: false })); ph = []; outN = 0; outBuf = []; }
+  atoms.forEach((a, k) => { a.x = x0 + (x1 - x0) * (k % 8 + 0.7) / 8.4; a.y = cy + (Math.floor(k / 8) - 1) * 34; }); }
+function photon(ctx, p, col){ const a = Math.atan2(p.vy, p.vx), n = 14; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a); ctx.strokeStyle = col || PH; ctx.lineWidth = 2; ctx.beginPath();
+  for (let i = 0; i <= n; i++){ const u = i / n, x = -18 + 18 * u, y = Math.sin(u * Math.PI * 4) * 4 * Math.sin(u * Math.PI); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  ctx.fillStyle = col || PH; ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(-3, -4); ctx.lineTo(-3, 4); ctx.fill(); ctx.restore(); }
+function atomDraw(ctx, x, y, ex, r){ ctx.strokeStyle = 'rgba(201,210,227,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+  ctx.fillStyle = '#e8eefb'; ctx.beginPath(); ctx.arc(x, y, r * 0.2, 0, 7); ctx.fill();
+  const rr = ex ? r : r * 0.5, a = t * 3; ctx.fillStyle = ex ? ORANGE : '#6aa2ff'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr, Math.max(2.5, r * 0.14), 0, 7); ctx.fill(); }
+const say = m => { $('msg').textContent = m; };
+function drawOne(dt){
+  const { ctx, W, H } = s, ax = W * 0.5, ay = H * 0.55;
+  // 에너지 준위 그림
+  const lx = W - 92, ly1 = 58, ly0 = 92; T(ctx, '에너지 준위', lx + 36, 22, { color: PALE, size: 11, bold: true });
+  line(ctx, [[lx, ly1], [lx + 72, ly1]], PALE, 2); line(ctx, [[lx, ly0], [lx + 72, ly0]], PALE, 2);
+  T(ctx, '들뜬상태', lx - 4, ly1, { color: DIM, size: 10, align: 'right' }); T(ctx, '바닥상태', lx - 4, ly0, { color: DIM, size: 10, align: 'right' });
+  ctx.fillStyle = atom.ex ? ORANGE : '#6aa2ff'; ctx.beginPath(); ctx.arc(lx + 36, atom.ex ? ly1 : ly0, 5, 0, 7); ctx.fill();
+  T(ctx, '광자가 나오는 곳', 8, ay - 22, { color: DIM, size: 10, align: 'left' }); ctx.fillStyle = PALE; ctx.fillRect(0, ay - 10, 8, 20);
+  atomDraw(ctx, ax, ay, atom.ex, 34); T(ctx, atom.ex ? '들뜬상태' : '바닥상태', ax, ay + 52, { color: atom.ex ? ORANGE : '#8fb8ff', bold: true });
+  if (atom.ex){ atom.tEx += dt; if (atom.tEx > atom.life){ atom.ex = false; const a = (0.25 + Math.random() * 1.5) * Math.PI * (Math.random() < 0.5 ? 1 : -1) ; ph.push({ x: ax, y: ay, vx: Math.cos(a) * SP, vy: Math.sin(a) * SP });
+      say('자발 방출: 들뜬상태의 전자가 저절로 바닥상태로 내려오며 광자를 방출합니다. 방출 방향은 제각각입니다.'); } }
+  ph.forEach(p => { const px = p.x; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.inc && px < ax && p.x >= ax){ p.inc = false;
+      if (!atom.ex){ p.dead = true; atom.ex = true; atom.tEx = 0; atom.life = 4 + Math.random() * 3; say('흡수: 바닥상태의 전자가 광자의 에너지를 흡수하여 들뜬상태가 됩니다.'); }
+      else { atom.ex = false; ph.push({ x: p.x, y: p.y + 12, vx: p.vx, vy: 0 }); say('유도 방출: 들어온 광자와 진동수, 위상, 진행 방향이 같은 광자가 하나 더 방출됩니다. 빛이 2배로 증폭되었습니다.'); } } });
+  ph = ph.filter(p => !p.dead && p.x > -30 && p.x < W + 30 && p.y > -30 && p.y < H + 30); ph.forEach(p => photon(ctx, p));
+  setStats([['원자의 상태', atom.ex ? '들뜬상태' : '바닥상태', atom.ex ? ORANGE : BLUE], ['광자의 에너지', '두 준위의 에너지 차와 같음']]);
+}
+function drawLaser(dt){
+  const { ctx, W, H } = s, x0 = W * 0.1, x1 = W * 0.78, cy = H * 0.47, P = +$('pS').value / 100;
+  ctx.fillStyle = 'rgba(120,160,255,0.07)'; ctx.fillRect(x0, cy - 58, x1 - x0, 116);
+  ctx.fillStyle = PALE; ctx.fillRect(x0 - 7, cy - 62, 7, 124); ctx.fillStyle = 'rgba(201,210,227,0.55)'; ctx.fillRect(x1, cy - 62, 4, 124);
+  T(ctx, '전반사 거울', x0 + 2, cy + 78, { color: PALE, size: 10, align: 'left' }); T(ctx, '부분 투과 거울', x1 + 4, cy + 78, { color: PALE, size: 10, align: 'right' });
+  T(ctx, '레이저 빛 →', (x1 + W) / 2 + 2, cy - 74, { color: PH, size: 11, bold: true });
+  if (P > 0) for (let k = 0; k < 5; k++){ const x = x0 + (x1 - x0) * (k + 0.5) / 5; arrow(ctx, x, 6, x, 6 + 8 + 12 * P, YELLOW, 2, 6); }
+  atoms.forEach(a => {
+    if (!a.ex){ if (Math.random() < P * 1.6 * dt) a.ex = true; }
+    else if (Math.random() < 0.3 * dt){ a.ex = false; const ang = Math.random() * Math.PI * 2, ax = Math.abs(Math.sin(ang)) < 0.26;
+      ph.push(ax ? { x: a.x, y: a.y, vx: Math.sign(Math.cos(ang)) * SP, vy: 0, ax: true } : { x: a.x, y: a.y, vx: Math.cos(ang) * SP, vy: Math.sin(ang) * SP }); }
+    atomDraw(ctx, a.x, a.y, a.ex, 9); });
+  const add = [];
+  ph.forEach(p => { const px = p.x; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.ax && !p.out){
+      if (p.x < x0){ p.x = x0; p.vx = SP; }
+      if (p.x > x1){ if (Math.random() < 0.2){ p.out = true; outN++; outBuf.push(t); } else { p.x = x1; p.vx = -SP; } }
+      for (const a of atoms){ if (Math.abs(a.y - p.y) > 10 || (px - a.x) * (p.x - a.x) > 0) continue;
+        if (a.ex){ if (Math.random() < 0.4 && ph.length + add.length < 110){ a.ex = false; add.push({ x: p.x, y: a.y + (Math.random() - 0.5) * 12, vx: p.vx, vy: 0, ax: true }); } }
+        else if (Math.random() < 0.4){ a.ex = true; p.dead = true; break; } } } });
+  ph = ph.concat(add).filter(p => !p.dead && p.x > -30 && p.x < W + 30 && p.y > -30 && p.y < H + 30);
+  ph.forEach(p => photon(ctx, p, p.ax ? PH : 'rgba(255,107,94,0.4)'));
+  outBuf = outBuf.filter(v => v > t - 2); outRate += (outBuf.length / 2 - outRate) * Math.min(1, dt * 2);
+  const nEx = atoms.filter(a => a.ex).length, inv = nEx > atoms.length / 2;
+  setStats([['들뜬상태 원자', nEx + ' / ' + atoms.length, ORANGE], ['밀도 반전', inv ? '이루어짐' : '안 됨', inv ? GREEN : SUB], ['공진기 속 광자', String(ph.filter(p => p.ax && !p.out).length)], ['레이저 출력', fmt(outRate, 1) + ' 개/초', RED]]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'one') drawOne(dt); else drawLaser(dt); }
+const TEXT = {
+  one: ['원자 하나에 광자를 보냅니다. 원자가 바닥상태일 때와 들뜬상태일 때 광자를 보내면 각각 어떤 일이 일어나는지 비교하세요.',
+    '빛과 물질이 상호작용하는 기본 방식은 흡수와 방출입니다. 들뜬상태의 원자는 잠시 뒤 저절로 빛을 방출하는데(자발 방출), 이때 나오는 빛은 방향과 위상이 제각각입니다. 한편 들뜬상태의 원자에 두 준위의 에너지 차와 같은 에너지를 가진 광자가 들어오면, 들어온 광자와 똑같은 광자가 하나 더 방출됩니다(유도 방출). 레이저는 이 유도 방출을 이용해 빛을 증폭합니다.'],
+  laser: ['두 거울 사이(공진기)에 원자들이 들어 있습니다. 외부에서 공급하는 에너지를 늘리며 레이저 빛이 나오기 시작하는 조건을 찾으세요. 주황색 전자가 들뜬상태의 원자입니다.',
+    '외부에서 에너지를 공급하여 들뜬상태의 원자가 바닥상태의 원자보다 많아지면(밀도 반전), 흡수되는 광자보다 유도 방출되는 광자가 많아져 빛이 증폭됩니다. 거울 사이를 왕복하며 증폭된 빛의 일부가 부분 투과 거울을 통과해 나온 것이 레이저 빛입니다. 레이저 빛은 진동수가 같고(단색성), 위상이 같으며(결맞음), 퍼지지 않고 곧게 나아갑니다(직진성). 광통신, 바코드 판독, 광디스크, 레이저 수술, 정밀 가공, 거리 측정에 쓰입니다. 레이저 빛을 눈에 직접 비추면 위험합니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); layout(true); atom.ex = false; say('‘광자 보내기’를 눌러 보세요.'); });
+$('shootB').addEventListener('click', () => { ph.push({ x: 8, y: s.H * 0.55, vx: SP, vy: 0, inc: true }); });
+$('exciteB').addEventListener('click', () => { atom.ex = true; atom.tEx = 0; atom.life = 5 + Math.random() * 3; say('에너지를 공급받아 전자가 들뜬상태가 되었습니다. 저절로 내려오기 전에 광자를 보내 보세요.'); });
+loop(draw);
+})();
+</script>
+</body>
+</html>

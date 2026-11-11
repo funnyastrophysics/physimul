@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>터널 효과</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>터널 효과</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="classic">공 (고전)</button>
+      <button data-m="quantum">전자 (양자)</button>
+      <button data-m="stm">현미경 (STM)</button>
+    </div>
+    <canvas id="sim" style="height:280px;border-radius:8px;background:#fbfcfd"></canvas>
+    <div class="row m-quantum"><button class="b primary" id="fireB">전자 100개 보내기</button><button class="b" id="clrB">기록 지우기</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl m-classic m-quantum"><div class="top"><span id="eL">입자의 에너지</span><b id="eV"></b></div>
+        <input type="range" id="eS" min="0.5" max="6" step="0.1" value="2"><div class="range"><span>작음</span><span>큼</span></div></div>
+      <div class="sl m-classic m-quantum"><div class="top"><span id="uL">장벽의 높이</span><b id="uV"></b></div>
+        <input type="range" id="uS" min="1" max="6" step="0.1" value="4"><div class="range"><span>낮음</span><span>높음</span></div></div>
+      <div class="sl m-classic m-quantum"><div class="top"><span>장벽의 폭</span><b id="wV"></b></div>
+        <input type="range" id="wS" min="0.1" max="1" step="0.05" value="0.3"><div class="range"><span>좁음</span><span>넓음</span></div></div>
+      <div class="sl m-stm"><div class="top"><span>탐침의 높이</span><b id="hV"></b></div>
+        <input type="range" id="hS" min="0.3" max="0.8" step="0.02" value="0.5"><div class="range"><span>시료에 가까이</span><span>멀리</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, t = 0, ball = { x: 0, dir: 1 }, parts = [], toFire = 0, fireAcc = 0, nT = 0, nR = 0, tipX = 0, tipDir = 1, scan = [];
+const unit = () => mode === 'classic' ? ' J' : ' eV';
+const upLab = bindLabels({ eS: ['eV', v => v.toFixed(1) + unit()], uS: ['uV', v => v.toFixed(1) + unit()], wS: ['wV', v => mode === 'classic' ? (v * 10).toFixed(1) + ' m' : v.toFixed(2) + ' nm'], hS: ['hV', v => v.toFixed(2) + ' nm'] });
+// 사각형 장벽의 투과 확률 (E, V: eV, w: nm)
+function Tq(E, V, w){ if (Math.abs(E - V) < 1e-3) E += 2e-3; const K = 5.123;
+  if (E < V){ const k = K * Math.sqrt(V - E), sh = Math.sinh(k * w); return 1 / (1 + V * V * sh * sh / (4 * E * (V - E))); }
+  const k = K * Math.sqrt(E - V), sn = Math.sin(k * w); return 1 / (1 + V * V * sn * sn / (4 * E * (E - V))); }
+const pct = p => p >= 0.9995 ? '100 %' : p >= 0.1 ? fmt(p * 100, 0) + ' %' : p >= 0.001 ? fmt(p * 100, p >= 0.01 ? 1 : 2) + ' %' : p < 1e-12 ? '거의 0 %' : '약 ' + (() => { const e = Math.floor(Math.log10(p)); return fmt(p / Math.pow(10, e), 0) + '×10' + String(e + 2).replace('-', '−').replace(/[−0-9]/g, c => ({ '−': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' })[c]) + ' %'; })();
+function geo(){ const { W, H } = s, y0 = H - 46, sc = (y0 - 34) / 6.4, w = +$('wS').value * 110, xc = W * 0.52; return { W, H, y0, sc, x1: xc - w / 2, x2: xc + w / 2, xc, w, E: +$('eS').value, V: +$('uS').value }; }
+function drawClassic(dt){
+  const { ctx } = s, g = geo(), sig = g.w / 2 + 14, U = x => g.V * Math.exp(-(((x - g.xc) / sig) ** 4));
+  // 언덕
+  ctx.fillStyle = '#dfe6f1'; ctx.beginPath(); ctx.moveTo(0, g.y0); for (let x = 0; x <= g.W; x += 3) ctx.lineTo(x, g.y0 - U(x) * g.sc); ctx.lineTo(g.W, g.y0); ctx.fill();
+  const pts = []; for (let x = 0; x <= g.W; x += 3) pts.push([x, g.y0 - U(x) * g.sc]); line(ctx, pts, WIRE, 2);
+  line(ctx, [[0, g.y0 - g.E * g.sc], [g.W, g.y0 - g.E * g.sc]], RED, 1.5, true); T(ctx, '공의 역학적 에너지', 6, g.y0 - g.E * g.sc - 9, { align: 'left', color: RED, size: 11 });
+  T(ctx, '언덕 꼭대기의 퍼텐셜 에너지', g.xc, g.y0 - g.V * g.sc - 12, { size: 11, color: INK });
+  const k = Math.max(g.E - U(ball.x), 0); let v = 60 + 150 * Math.sqrt(k / 6);
+  if (g.E < g.V && k < 0.03 && ball.dir > 0 && ball.x < g.xc) ball.dir = -1;
+  ball.x += ball.dir * v * dt; if (ball.x > g.W + 12 || ball.x < -12){ ball.x = -10; ball.dir = 1; }
+  ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(ball.x, g.y0 - U(ball.x) * g.sc - 8, 8, 0, 7); ctx.fill();
+  const pass = g.E >= g.V;
+  setStats([['공의 역학적 에너지', g.E.toFixed(1) + ' J', RED], ['언덕을 넘는 데 필요한 에너지', g.V.toFixed(1) + ' J'], ['결과', pass ? '언덕을 넘어감' : '되돌아옴', pass ? GREEN : SUB], ['넘어갈 확률', pass ? '100 %' : '0 %']]);
+}
+function drawQuantum(dt){
+  const { ctx } = s, g = geo(), p = Tq(g.E, g.V, g.w / 110), yE = g.y0 - g.E * g.sc;
+  ctx.fillStyle = '#dfe6f1'; ctx.fillRect(g.x1, g.y0 - g.V * g.sc, g.w, g.V * g.sc); ctx.strokeStyle = WIRE; ctx.lineWidth = 2; ctx.strokeRect(g.x1, g.y0 - g.V * g.sc, g.w, g.V * g.sc);
+  line(ctx, [[0, g.y0], [g.W, g.y0]], WIRE, 2); T(ctx, '퍼텐셜 장벽', g.xc, g.y0 - g.V * g.sc - 12, { size: 11, color: INK });
+  line(ctx, [[0, yE], [g.W, yE]], RED, 1, true); T(ctx, '점선: 전자의 에너지', 6, g.y0 + 14, { align: 'left', color: RED, size: 11 });
+  // 확률 파동 (입사파와 투과파)
+  const lam = 46 / Math.sqrt(g.E), kk = 2 * Math.PI / lam, om = 5, A = 20, aT = Math.sqrt(p), pts = [];
+  for (let x = 0; x <= g.W; x += 2){ let y;
+    if (x < g.x1) y = A * Math.cos(kk * (x - g.x1) - om * t);
+    else if (x <= g.x2) y = A * Math.pow(aT, (x - g.x1) / Math.max(1, g.w)) * Math.cos(-om * t);
+    else y = A * aT * Math.cos(kk * (x - g.x2) - om * t);
+    pts.push([x, yE - y]); }
+  line(ctx, pts, PURPLE, 2); T(ctx, '전자의 확률 파동', g.W - 6, 16, { align: 'right', color: PURPLE, size: 11, bold: true });
+  // 전자 하나씩
+  if (toFire > 0){ fireAcc += dt * 25; while (fireAcc >= 1 && toFire > 0){ fireAcc--; toFire--; parts.push({ x: -5, y: g.y0 - 10 - Math.random() * 16, v: 260 + Math.random() * 60, pass: Math.random() < p, st: 0 }); } }
+  parts.forEach(q => { const px = q.x; q.x += q.v * dt * (q.st === 2 ? -1 : 1);
+    if (q.st === 0 && q.x >= g.x1 - 4){ if (q.pass){ q.st = 1; nT++; } else { q.st = 2; nR++; } } });
+  parts = parts.filter(q => q.x > -10 && q.x < g.W + 10);
+  parts.forEach(q => { ctx.fillStyle = q.st === 1 ? GREEN : q.st === 2 ? GRAY : BLUE; ctx.globalAlpha = q.st === 1 && q.x < g.x2 ? 0.35 : 1; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
+  setStats([['통과할 확률 (이론)', pct(p), PURPLE], ['장벽을 통과한 전자', nT + '개', GREEN], ['반사된 전자', nR + '개'], ['고전 역학의 예상', g.E >= g.V ? '모두 통과' : '모두 반사']]);
+}
+function drawStm(dt){
+  const { ctx, W, H } = s, r = 13, n = Math.floor((W - 20) / (2 * r)), xs = [], yS = 150, h = +$('hS').value, px = 80;   // 1 nm = 80 px
+  const miss = Math.floor(n * 0.62); for (let i = 0; i < n; i++) if (i !== miss) xs.push((W - n * 2 * r) / 2 + r + i * 2 * r);
+  const surf = x => { let m = -2 * r; for (const a of xs){ const d = Math.abs(x - a); if (d < r) m = Math.max(m, Math.sqrt(r * r - d * d) - r); } return m; };   // 원자 꼭대기 기준 높이(px), 빈자리는 아래층
+  tipX += tipDir * 55 * dt; if (tipX > W - 14){ tipX = W - 14; tipDir = -1; scan = []; } if (tipX < 14){ tipX = 14; tipDir = 1; scan = []; }
+  const tipY = yS - r - h * px, gap = (yS - r - surf(tipX) - tipY) / px, I = Math.exp(-2 * 10 * (gap - 0.3));
+  scan.push([tipX, I]);
+  // 시료
+  ctx.fillStyle = '#c9d6ea'; for (let i = 0; i < n; i++){ const x = (W - n * 2 * r) / 2 + r + i * 2 * r; ctx.beginPath(); ctx.arc(x, yS + 2 * r, r, 0, 7); ctx.fill(); }
+  xs.forEach(x => { ctx.fillStyle = '#7fa3d6'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, yS, r, 0, 7); ctx.fill(); ctx.stroke(); });
+  T(ctx, '아래: 시료 표면의 원자', 8, 16, { align: 'left', size: 11 });
+  // 탐침
+  ctx.fillStyle = '#8b94a5'; ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(tipX - 13, tipY - 44); ctx.lineTo(tipX + 13, tipY - 44); ctx.fill(); T(ctx, '탐침', tipX, tipY - 54, { size: 11, bold: true, color: INK });
+  ctx.fillStyle = `rgba(142,68,173,${Math.min(1, 0.15 + I * 0.5)})`; for (let k = 0; k < 3; k++){ const yy = tipY + ((t * 60 + k * 9) % Math.max(4, gap * px)); ctx.beginPath(); ctx.arc(tipX, yy, 2.2, 0, 7); ctx.fill(); }
+  // 전류 그래프
+  const gy = H - 12, gh = 56, mx = Math.exp(-2 * 10 * (h - 0.3));
+  line(ctx, [[14, gy], [W - 14, gy]], GRAY, 1); T(ctx, '탐침 위치에 따른 터널 전류', 8, gy - gh - 10, { align: 'left', size: 11, color: PURPLE, bold: true });
+  if (scan.length > 1) line(ctx, scan.map(p => [p[0], gy - Math.min(1.05, p[1] / mx) * gh]), PURPLE, 2);
+  setStats([['탐침과 원자 사이의 간격', gap.toFixed(2) + ' nm'], ['터널 전류 (상대값)', I >= 0.1 ? fmt(I, 2) : fmt(I, 4), PURPLE], ['간격이 0.1 nm 늘면', '전류가 약 1/7로']]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'classic') drawClassic(dt); else if (mode === 'quantum') drawQuantum(dt); else drawStm(dt); }
+const TEXT = {
+  classic: ['고전 역학을 따르는 공이 언덕을 향해 굴러갑니다. 공의 역학적 에너지와 언덕의 높이를 바꾸며 공이 언덕을 넘는 조건을 찾으세요.',
+    '고전 역학에서는 공의 역학적 에너지가 언덕 꼭대기에서의 퍼텐셜 에너지보다 작으면 공은 절대로 언덕을 넘지 못하고 되돌아옵니다. 언덕의 폭은 결과에 영향을 주지 않습니다.'],
+  quantum: ['양자 역학을 따르는 전자가 자신의 에너지보다 높은 퍼텐셜 장벽을 만납니다. ‘전자 100개 보내기’를 누르고, 장벽의 높이와 폭을 바꾸며 통과하는 전자의 수를 비교하세요.',
+    '전자와 같이 매우 작은 입자는 파동성을 가지므로, 자신의 에너지보다 높은 장벽을 만나도 장벽 너머에서 발견될 확률이 0이 아닙니다. 이 현상을 터널 효과라고 합니다. 전자 하나가 통과할지는 미리 알 수 없고 확률만 알 수 있으며, 장벽이 높을수록, 폭이 넓을수록 통과할 확률이 급격히 작아집니다. 태양 중심부에서 수소 원자핵이 전기적 반발력의 장벽을 넘어 핵융합하는 것도 터널 효과 때문입니다. 반도체 소자가 수 nm 크기로 작아지면 얇은 절연막을 전자가 통과해 새는 문제가 생기는데, 플래시 메모리는 오히려 이 효과를 이용해 정보를 저장합니다.'],
+  stm: ['뾰족한 탐침이 시료 표면 위를 일정한 높이로 지나갑니다. 탐침과 시료는 떨어져 있지만 터널 효과로 전류가 흐릅니다. 원자가 빠진 자리에서 전류가 어떻게 달라지는지 찾으세요.',
+    '주사 터널링 현미경(STM)은 탐침과 시료 사이의 빈 공간을 전자가 터널 효과로 건너갈 때 흐르는 전류를 측정합니다. 이 전류는 탐침과 시료 사이의 간격에 매우 민감해서, 간격이 원자 지름의 몇 분의 일만 달라져도 크게 변합니다. 그래서 표면을 훑으며 전류를 기록하면 원자 하나하나의 배열을 볼 수 있습니다. 원자 꼭대기 위에서는 전류가 크고 원자 사이에서는 작으며, 원자가 빠진 자리에서는 전류가 거의 흐르지 않습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; $('eL').textContent = m === 'classic' ? '공의 역학적 에너지' : '전자의 에너지'; $('uL').textContent = m === 'classic' ? '언덕의 높이 (퍼텐셜 에너지)' : '장벽의 높이'; upLab(); parts = []; nT = nR = 0; toFire = 0; scan = []; ball = { x: -10, dir: 1 }; rs(); });
+$('fireB').addEventListener('click', () => { toFire += 100; });
+$('clrB').addEventListener('click', () => { parts = []; nT = nR = 0; toFire = 0; });
+['eS', 'uS', 'wS'].forEach(id => $(id).addEventListener('input', () => { nT = nR = 0; parts = []; toFire = 0; }));
+$('hS').addEventListener('input', () => { scan = []; });
+loop(draw);
+})();
+</script>
+</body>
+</html>

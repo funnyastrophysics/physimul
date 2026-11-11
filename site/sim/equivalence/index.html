@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>등가 원리와 블랙홀</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>등가 원리와 블랙홀</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="ball">공 놓기</button>
+      <button data-m="light">빛의 진행</button>
+      <button data-m="bh">블랙홀</button>
+    </div>
+    <canvas id="sim" style="height:320px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row m-ball"><select id="sitS"><option value="g">지표면의 방 ↔ 가속하는 우주선</option><option value="free">자유 낙하하는 방 ↔ 우주에 떠 있는 우주선</option></select>
+      <button class="b primary" id="dropB">공 놓기</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="sl m-light"><div class="top"><span>중력 가속도와 우주선의 가속도 (과장)</span><b id="aV"></b></div>
+      <input type="range" id="aS" min="0" max="100" step="5" value="60"><div class="range"><span>0</span><span>매우 큼</span></div></div>
+    <div class="sl m-bh"><div class="top"><span>천체의 반지름 (질량은 태양과 같음)</span><b id="rV"></b></div>
+      <input type="range" id="rS" min="0" max="100" step="1" value="0"><div class="range"><span>태양 크기</span><span>아주 작게 압축</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, tDrop = -1, t = 0, stars = Array.from({ length: 40 }, () => [Math.random(), Math.random()]), cl1 = 0, cl2 = 0;
+const PALE = '#c9d2e3', DIM = '#8d97aa', LIGHT = '#ffe58a';
+const RS = 2.95, R0 = 6.96e5;   // 태양 질량의 슈바르츠실트 반지름, 태양 반지름 (km)
+const Rkm = u => R0 * Math.pow(10, -u / 100 * 5.67);
+const kmTxt = R => R >= 10000 ? Math.round(R / 10000).toLocaleString('ko-KR') + '만 km' : R >= 100 ? Math.round(R).toLocaleString('ko-KR') + ' km' : fmt(R, 1) + ' km';
+bindLabels({ aS: ['aV', v => v === 0 ? '0' : v + ' %'], rS: ['rV', v => kmTxt(Rkm(v))] });
+function person(ctx, x, yFloor, hand){
+  ctx.strokeStyle = PALE; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, yFloor - 62, 7, 0, 7); ctx.stroke();
+  line(ctx, [[x, yFloor - 55], [x, yFloor - 26]], PALE, 2); line(ctx, [[x - 7, yFloor], [x, yFloor - 26], [x + 7, yFloor]], PALE, 2); line(ctx, [[x, yFloor - 48], [hand[0], hand[1]]], PALE, 2); }
+// 방 두 개의 공통 틀. 반환: 방의 좌표
+function rooms(ctx, W, H, labels, rocketFlame, starSpeed, leftKind, dt){
+  const rw = W * 0.4, rh = 170, y0 = 62, xs = [W * 0.06, W * 0.54];
+  // 오른쪽: 우주 배경
+  stars.forEach(p => { p[1] = (p[1] + starSpeed * dt) % 1; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(W * 0.5 + p[0] * W * 0.5, p[1] * (H - 40), 1.5, 1.5); });
+  // 왼쪽: 지구 배경
+  ctx.fillStyle = '#1d2a3f'; ctx.fillRect(0, 0, W * 0.5, H - 40);
+  if (leftKind === 'ground'){ ctx.fillStyle = '#2e6b4a'; ctx.fillRect(0, y0 + rh + 4, W * 0.5, H - 40 - y0 - rh - 4); }
+  else for (let k = 0; k < 6; k++){ const yy = (H - 40) - ((t * 140 + k * 60) % (H - 40)); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(4 + (k % 2) * (W * 0.5 - 14), yy, 6, 26); }
+  line(ctx, [[W * 0.5, 0], [W * 0.5, H - 40]], '#0c1120', 2);
+  xs.forEach((x, k) => {
+    ctx.fillStyle = '#263048'; ctx.fillRect(x, y0, rw, rh); ctx.strokeStyle = PALE; ctx.lineWidth = 2; ctx.strokeRect(x, y0, rw, rh);
+    T(ctx, labels[k][0], x + rw / 2, 20, { color: PALE, bold: true }); T(ctx, labels[k][1], x + rw / 2, 40, { color: DIM, size: 11 }); });
+  if (rocketFlame){ const x = xs[1], f = 14 + 8 * Math.sin(t * 30); ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.moveTo(x + rw * 0.3, y0 + rh + 2); ctx.lineTo(x + rw / 2, y0 + rh + 2 + f + 16); ctx.lineTo(x + rw * 0.7, y0 + rh + 2); ctx.fill();
+    arrow(ctx, x + rw + 10, y0 + rh * 0.65, x + rw + 10, y0 + rh * 0.35, ORANGE, 2.5, 8); }
+  return { xs, rw, rh, y0 };
+}
+function drawBall(dt){
+  const { ctx, W, H } = s, free = $('sitS').value === 'free';
+  const R = rooms(ctx, W, H, free ? [['자유 낙하하는 방', '줄이 끊어진 승강기'], ['떠 있는 우주선', '중력이 없는 우주 공간']] : [['지표면에 정지한 방', '아래로 중력이 작용'], ['가속하는 우주선', '중력이 없는 우주 공간']], !free, free ? 0 : 0.25, free ? 'fall' : 'ground', dt);
+  const yF = R.y0 + R.rh, hy = yF - 96, fall = yF - 7 - hy;
+  let dy = 0; if (tDrop >= 0){ tDrop += dt; dy = free ? 0 : Math.min(fall, 0.5 * 420 * tDrop * tDrop); }
+  R.xs.forEach(x => { const px = x + R.rw * 0.35, bx = x + R.rw * 0.62; person(ctx, px, yF, [bx - 6, hy + 4]);
+    ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(bx, hy + dy, 7, 0, 7); ctx.fill();
+    if (tDrop >= 0 && !free && dy < fall) arrow(ctx, bx + 14, hy + dy - 10, bx + 14, hy + dy + 14, RED, 2, 6); });
+  T(ctx, free ? '두 방 모두 공이 손 옆에 그대로 떠 있다' : '두 방 모두 공이 같은 가속도로 바닥에 떨어진다', W / 2, H - 20, { color: LIGHT, bold: true, size: 12 });
+  setStats(free ? [['방 안에서 본 공', '떠 있음'], ['몸무게', '느껴지지 않음'], ['두 방의 구별', '할 수 없음', ORANGE]] : [['방 안에서 본 공의 가속도', '둘 다 9.8 m/s²'], ['몸무게', '똑같이 느껴짐'], ['두 방의 구별', '할 수 없음', ORANGE]]);
+}
+function drawLight(dt){
+  const { ctx, W, H } = s, a = +$('aS').value / 100;
+  const R = rooms(ctx, W, H, [['지표면에 정지한 방', '아래로 중력이 작용'], ['가속하는 우주선', '중력이 없는 우주 공간']], a > 0, 0.25 * a, 'ground', dt);
+  const y1 = R.y0 + 40, drop = 100 * a, ph = (t * 0.7) % 1.3;
+  R.xs.forEach(x => {
+    ctx.fillStyle = PALE; ctx.fillRect(x - 3, y1 - 6, 12, 12);
+    line(ctx, [[x + 9, y1], [x + R.rw, y1]], 'rgba(201,210,227,0.35)', 1, [3, 4]);
+    const pts = []; for (let u = 0; u <= Math.min(1, ph) + 1e-9; u += 0.02) pts.push([x + 9 + (R.rw - 9) * u, y1 + drop * u * u]);
+    if (pts.length > 1) line(ctx, pts, LIGHT, 2.5);
+    const u = Math.min(1, ph); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 9 + (R.rw - 9) * u, y1 + drop * u * u, 4, 0, 7); ctx.fill(); });
+  T(ctx, a > 0 ? '두 방 모두 빛이 아래로 휘어진다' : '가속도가 0이면 빛은 직진한다', W / 2, H - 20, { color: LIGHT, bold: true, size: 12 });
+  setStats([['우주선 안에서 본 빛', a > 0 ? '아래로 휘어짐' : '직진'], ['등가 원리에 따르면', a > 0 ? '중력도 빛을 휘게 함' : '—', ORANGE], ['점선', '직진할 때의 경로']]);
+}
+function hand(ctx, x, y, r, ang, lab, rate){
+  ctx.fillStyle = '#263048'; ctx.strokeStyle = PALE; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+  line(ctx, [[x, y], [x + Math.sin(ang) * r * 0.8, y - Math.cos(ang) * r * 0.8]], LIGHT, 2.5); T(ctx, lab, x, y + r + 13, { color: PALE, size: 11 }); T(ctx, rate, x, y + r + 28, { color: LIGHT, size: 11, bold: true }); }
+function drawBh(dt){
+  const { ctx, W, H } = s, R = Rkm(+$('rS').value), comp = RS / R, bh = comp >= 1;
+  stars.forEach(p => { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(p[0] * W, p[1] * H, 1.5, 1.5); });
+  const cx = W / 2, cy = 120, rp = 22;
+  // 빛의 경로 (천체 반지름을 같은 크기로 그리고 휘는 정도만 비교)
+  const K = Math.min(comp, 1.2) * rp * 1.1;
+  for (const b of [-88, -62, -40, 40, 62, 88]){
+    let x = 0, y = cy + b, vx = 1, vy = 0; const pts = [[x, y]]; let dead = false;
+    for (let i = 0; i < 900 && x < W + 5 && x > -5 && y > -30 && y < H + 30; i++){
+      const dx = cx - x, dy = cy - y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2); if (r < rp){ dead = true; break; }
+      vx += K * dx / (r2 * r) * 0.5; vy += K * dy / (r2 * r) * 0.5; const n = Math.hypot(vx, vy); vx /= n; vy /= n; x += vx * 0.5; y += vy * 0.5; if (i % 4 === 0) pts.push([x, y]); }
+    line(ctx, pts, dead ? 'rgba(255,229,138,0.45)' : LIGHT, 1.6);
+  }
+  const kind = bh ? '블랙홀' : R < 30 ? '중성자별 정도' : R < 2e4 ? '백색 왜성 정도' : R < 3e5 ? '압축된 별' : '태양';
+  ctx.fillStyle = bh ? '#000' : R < 30 ? '#bfe3ff' : R < 2e4 ? '#ffffff' : '#ffcf5a'; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, 7); ctx.fill();
+  if (bh){ ctx.strokeStyle = ORANGE; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, 7); ctx.stroke(); }
+  T(ctx, kind, cx, cy + rp + 16, { color: PALE, bold: true });
+  T(ctx, '노란 선: 천체 옆을 지나는 빛', W / 2, 14, { color: DIM, size: 11 });
+  const slow = bh ? 0 : Math.sqrt(1 - comp); cl1 += dt * 1.6; cl2 += dt * 1.6 * slow;
+  hand(ctx, W * 0.25, 252, 24, cl1, '먼 곳의 시계', '기준');
+  hand(ctx, W * 0.75, 252, 24, cl2, '천체 표면의 시계', bh ? '멈춘 것처럼 보임' : slow > 0.99995 ? '거의 같음' : '먼 곳의 ' + fmt(slow * 100, slow > 0.995 ? 2 : 0) + ' %');
+  const ve = Math.sqrt(comp) * 3e5;
+  setStats([['천체의 반지름', kmTxt(R)], ['표면에서의 탈출 속도', bh ? '빛의 속력 이상' : ve >= 1e4 ? '약 ' + (Math.round(ve / 1e4)).toLocaleString('ko-KR') + '만 km/s' : Math.round(ve).toLocaleString('ko-KR') + ' km/s', ORANGE], ['빛의 속력', '30만 km/s'], ['상태', kind]]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'ball') drawBall(dt); else if (mode === 'light') drawLight(dt); else drawBh(dt); }
+const TEXT = {
+  ball: ['창문이 없는 두 방 안에서 공을 놓습니다. 방 안의 사람이 자신이 어느 방에 있는지 알아낼 수 있을지 생각해 보세요.',
+    '가속하는 우주선 안에서는 가속도의 반대 방향으로 관성력이 작용하여, 중력이 작용할 때와 똑같은 일이 일어납니다. 이처럼 중력에 의한 효과와 가속 운동에 의한 관성력의 효과를 구별할 수 없다는 것이 등가 원리입니다. 이것은 물체의 관성 질량과 중력 질량이 같기 때문입니다. 자유 낙하하는 방 안에서는 중력과 관성력이 상쇄되어 중력이 없는 우주 공간과 같은 무중력 상태가 됩니다.'],
+  light: ['두 방의 왼쪽 벽에서 빛을 수평으로 쏩니다. 가속도를 바꾸며 빛의 경로를 비교하세요. 실제로는 아주 조금 휘어지므로 크게 과장해서 그렸습니다.',
+    '밖에서 보면 빛은 직진하지만, 빛이 방을 건너가는 동안 우주선이 위로 가속하므로 우주선 안에서는 빛이 아래로 휘어져 보입니다. 등가 원리에 따르면 중력이 작용하는 방에서도 같은 일이 일어나야 하므로, 빛은 중력에 의해 휘어집니다. 일반 상대성 이론에서는 질량이 주위의 시공간을 휘게 하고, 빛은 휘어진 시공간을 따라 진행한다고 설명합니다. 먼 은하의 빛이 휘어져 여러 개로 보이는 중력 렌즈 현상이 그 증거입니다.'],
+  bh: ['질량은 그대로 두고 천체를 압축합니다. 반지름이 작아질수록 탈출 속도, 빛의 경로, 표면의 시계가 어떻게 달라지는지 관찰하세요. 천체는 같은 크기로 그렸습니다.',
+    '천체의 질량이 같아도 반지름이 작을수록 표면의 중력이 커서 탈출 속도가 커집니다. 탈출 속도가 빛의 속력보다 커지면 빛조차 빠져나올 수 없는 블랙홀이 됩니다(태양 질량이면 반지름 약 3 km). 중력이 강한 곳일수록 시공간이 많이 휘어져 빛이 크게 휘고 시간이 느리게 갑니다(중력 시간 지연). 지표면보다 중력이 약한 높은 곳에 있는 위성 항법 장치(GPS) 위성의 시계는 지상의 시계보다 빨리 가므로 이를 보정해야 위치를 정확히 알 수 있습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; tDrop = -1; $('dropB').textContent = '공 놓기'; rs(); });
+$('dropB').addEventListener('click', () => { if (tDrop >= 0){ tDrop = -1; $('dropB').textContent = '공 놓기'; } else { tDrop = 0; $('dropB').textContent = '다시 잡기'; } });
+$('sitS').addEventListener('change', () => { tDrop = -1; $('dropB').textContent = '공 놓기'; });
+loop(draw);
+})();
+</script>
+</body>
+</html>

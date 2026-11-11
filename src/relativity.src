@@ -1,0 +1,78 @@
+빛 시계와 시간 팽창
+  <h1>빛 시계와 시간 팽창</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="time">시간 팽창</button>
+      <button data-m="len">길이 수축</button>
+    </div>
+    <canvas id="sim" style="height:320px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row"><button class="b primary" id="runB">일시 정지</button><button class="b" id="resetB">처음으로</button></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="sl"><div class="top"><span>우주선의 속력</span><b id="vV"></b></div>
+      <input type="range" id="vS" min="0" max="0.95" step="0.05" value="0.6"><div class="range"><span>정지</span><span>빛의 속력의 95 %</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let mode, run = true, tG = 0, tS = 0, shipX = 0, trail = [];
+const LIGHT = '#ffe58a', PALE = '#c9d2e3', DIM = '#8d97aa';
+bindLabels({ vS: ['vV', v => v === 0 ? '정지' : '빛의 속력의 ' + Math.round(v * 100) + ' %'] });
+const reset = () => { tG = 0; tS = 0; shipX = 0; trail = []; };
+const tri = p => { p = ((p % 1) + 1) % 1; return p < 0.5 ? p * 2 : 2 - p * 2; };   // 0→1→0
+function clock(ctx, x, yTop, h, w, ph){
+  ctx.fillStyle = PALE; ctx.fillRect(x - w / 2, yTop - 4, w, 4); ctx.fillRect(x - w / 2, yTop + h, w, 4);
+  const y = yTop + h - tri(ph) * h; ctx.fillStyle = LIGHT; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); return y; }
+function shipBody(ctx, x, y, len, hgt){   // x: 왼쪽 끝, y: 가운데
+  ctx.save(); ctx.translate(x, y); ctx.scale(len / 100, 1);
+  ctx.fillStyle = '#3d4a66'; ctx.strokeStyle = PALE; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, -hgt / 2); ctx.lineTo(78, -hgt / 2); ctx.quadraticCurveTo(100, -hgt / 4, 100, 0); ctx.quadraticCurveTo(100, hgt / 4, 78, hgt / 2); ctx.lineTo(0, hgt / 2); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.moveTo(x, y - hgt / 2); ctx.lineTo(x + len * 0.78, y - hgt / 2); ctx.quadraticCurveTo(x + len, y - hgt / 4, x + len, y); ctx.quadraticCurveTo(x + len, y + hgt / 4, x + len * 0.78, y + hgt / 2); ctx.lineTo(x, y + hgt / 2); ctx.closePath(); ctx.stroke();
+}
+function drawTime(dt){
+  const { ctx, W, H } = s, v = +$('vS').value, k = Math.sqrt(1 - v * v), h = 84, cpx = h;   // 정지한 시계: 왕복 2초
+  if (run){ tG += dt; tS += dt * k; shipX += v * cpx * dt; if (shipX > W + 60){ shipX = -60; trail = []; } }
+  // 지상의 시계
+  T(ctx, '지상에 정지한 빛 시계', W / 2, 16, { color: PALE, bold: true });
+  ctx.fillStyle = '#263048'; ctx.fillRect(0, 138, W, 6);
+  clock(ctx, W / 2, 40, h, 44, tG / 2);
+  T(ctx, fmt(tG, 1) + ' s', W / 2 + 70, 82, { color: LIGHT, bold: true, size: 15 });
+  // 우주선의 시계
+  T(ctx, '우주선 안의 빛 시계 (지상에서 본 모습)', W / 2, 166, { color: PALE, bold: true });
+  const yTop = 196, x = shipX;
+  ctx.strokeStyle = 'rgba(201,210,227,0.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 34, yTop - 12, 68, h + 24);
+  if (v > 0){ ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.moveTo(x - 34, yTop + h / 2 - 8); ctx.lineTo(x - 34 - 10 - 18 * v, yTop + h / 2); ctx.lineTo(x - 34, yTop + h / 2 + 8); ctx.fill(); }
+  if (trail.length > 1) line(ctx, trail, 'rgba(255,229,138,0.55)', 1.5, [3, 3]);
+  const y = clock(ctx, x, yTop, h, 44, tS / 2);
+  if (run){ trail.push([x, y]); if (trail.length > 900) trail.shift(); }
+  T(ctx, fmt(tS, 1) + ' s', Math.min(W - 34, Math.max(34, x)), yTop + h + 26, { color: LIGHT, bold: true, size: 15 });
+  setStats([['지상의 시계', fmt(tG, 1) + ' s'], ['우주선의 시계', fmt(tS, 1) + ' s', ORANGE], ['우주선 시계의 빛이 한 번 왕복하는 시간 (지상에서 측정)', fmt(2 / k, 2) + ' s'], ['빛의 속력', '두 시계에서 같음']]);
+}
+function drawLen(dt){
+  const { ctx, W, H } = s, v = +$('vS').value, k = Math.sqrt(1 - v * v), L0 = W * 0.55, hgt = 46;
+  if (run){ shipX += v * 150 * dt; if (shipX > W + 20) shipX = -L0 * k - 20; }
+  T(ctx, '우주선 안에서 잰 길이 (고유 길이)', W / 2, 18, { color: PALE, bold: true });
+  const x0 = (W - L0) / 2; ctx.setLineDash([5, 4]); shipBody(ctx, x0, 70, L0, hgt); ctx.setLineDash([]);
+  arrow(ctx, x0 + L0 / 2, 112, x0 + L0, 112, DIM, 1.5, 6); arrow(ctx, x0 + L0 / 2, 112, x0, 112, DIM, 1.5, 6); T(ctx, '100 m', W / 2, 126, { color: PALE });
+  T(ctx, '지상에서 본 움직이는 우주선', W / 2, 166, { color: PALE, bold: true });
+  const L = L0 * k, x = shipX, y = 222;
+  if (v > 0){ ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x - 10 - 20 * v, y); ctx.lineTo(x, y + 9); ctx.fill(); }
+  shipBody(ctx, x, y, L, hgt);
+  ctx.fillStyle = '#263048'; ctx.fillRect(0, 262, W, 6);
+  for (let m = 0; m * W * 0.055 < W; m++){ ctx.fillStyle = DIM; ctx.fillRect(m * W * 0.055, 262, 1, m % 5 ? 5 : 10); }
+  T(ctx, '지상에서 잰 길이: ' + fmt(100 * k, 0) + ' m', W / 2, 292, { color: LIGHT, bold: true, size: 14 });
+  setStats([['고유 길이', '100 m'], ['지상에서 잰 길이', fmt(100 * k, 0) + ' m', ORANGE], ['우주선의 높이', '변하지 않음']]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); if (mode === 'time') drawTime(dt); else drawLen(dt); }
+const TEXT = {
+  time: ['빛 시계는 두 거울 사이를 빛이 한 번 왕복할 때마다 째깍 하고 시간이 가는 시계입니다. 우주선의 속력을 바꾸며 두 시계가 가리키는 시간을 비교하세요.',
+    '지상에서 보면 우주선 안의 빛은 비스듬한 경로를 따라 더 먼 거리를 이동합니다. 그런데 빛의 속력은 모든 관성 좌표계에서 같으므로(광속 불변 원리), 우주선의 빛 시계는 한 번 왕복하는 데 시간이 더 걸립니다. 즉, 지상의 관찰자에게는 움직이는 우주선의 시간이 느리게 갑니다. 이 현상을 시간 팽창(시간 지연)이라고 하며, 속력이 빛의 속력에 가까울수록 뚜렷합니다. 우주선 안의 관찰자에게는 자신의 시계가 정상으로 가고, 오히려 지상의 시계가 느리게 갑니다.'],
+  len: ['점선은 우주선과 함께 움직이는 사람이 잰 우주선의 길이입니다. 우주선의 속력을 바꾸며 지상의 관찰자가 잰 길이와 비교하세요.',
+    '지상의 관찰자가 측정하면 움직이는 우주선의 길이는 운동 방향으로 짧아집니다. 이 현상을 길이 수축이라고 합니다. 운동 방향에 수직인 방향(높이)의 길이는 변하지 않습니다. 우주에서 날아오는 뮤온은 수명이 짧아 지표면에 닿기 어려울 것 같지만, 지상에서 보면 뮤온의 시간이 느리게 가고 뮤온에서 보면 대기층의 두께가 짧아지므로 지표면에서 많이 발견됩니다. 위성 항법 장치(GPS)의 시간 보정에도 상대성 이론이 쓰입니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; reset(); rs(); });
+$('runB').addEventListener('click', () => { run = !run; $('runB').textContent = run ? '일시 정지' : '계속'; });
+$('resetB').addEventListener('click', reset);
+loop(draw);

@@ -1,0 +1,64 @@
+큐비트의 중첩과 측정
+  <h1>큐비트의 중첩과 측정</h1>
+  <p class="hint">큐비트는 0과 1이 중첩된 상태에 있을 수 있습니다. 중첩 상태를 정한 뒤 여러 번 측정하여 결과가 어떻게 나오는지 확인하세요.</p>
+  <div class="card">
+    <canvas id="sim" style="height:270px;border-radius:8px;background:#fbfcfd"></canvas>
+    <div class="row"><button class="b primary" id="m1B">새로 준비해 측정</button><button class="b" id="againB">같은 큐비트 다시 측정</button></div>
+    <div class="row"><button class="b" id="m100B">100번 반복</button><button class="b" id="clrB">기록 지우기</button></div>
+    <p class="note" id="msg" style="font-weight:700;color:#1d2330;min-height:3.1em"></p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="sl"><div class="top"><span>준비하는 상태: 1로 측정될 확률</span><b id="pV"></b></div>
+      <input type="range" id="pS" min="0" max="100" step="5" value="50"><div class="range"><span>0 % (0인 상태)</span><span>100 % (1인 상태)</span></div></div>
+    <p class="note">하나하나의 측정 결과는 미리 알 수 없고 확률만 알 수 있습니다. 측정하는 순간 중첩 상태는 0 또는 1 가운데 하나로 정해지며, 그 뒤에 같은 큐비트를 다시 측정하면 같은 결과가 나옵니다. 이처럼 측정이 상태를 바꾸기 때문에, 누군가 중간에서 엿보면 흔적이 남습니다. 양자 암호 통신은 이 성질을 이용해 도청을 알아냅니다.</p>
+  </div>
+  <div class="card">
+    <div class="sl"><div class="top"><span>비트의 개수</span><b id="nV"></b></div>
+      <input type="range" id="nS" min="1" max="30" step="1" value="3"><div class="range"><span>1개</span><span>30개</span></div></div>
+    <div class="stats" id="stats2"></div>
+    <p class="note">고전 컴퓨터의 비트는 0 또는 1 가운데 한 가지 값만 가집니다. 큐비트 여러 개는 가능한 모든 값이 중첩된 상태가 될 수 있어서, 양자 컴퓨터는 특정한 문제(소인수 분해, 신약·신소재 개발을 위한 분자 계산 등)를 매우 빠르게 풀 것으로 기대됩니다. 한편 지금 쓰는 암호 체계가 풀릴 수 있다는 걱정도 있습니다.</p>
+  </div>
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+let n0 = 0, n1 = 0, hist = [], col = null, ang = Math.PI / 2, flash = 0;
+const say = m => { $('msg').textContent = m; };
+const P1 = () => +$('pS').value / 100, thetaOf = p => 2 * Math.asin(Math.sqrt(p));
+bindLabels({ pS: ['pV', v => v + ' %'], nS: ['nV', v => v + '개'] });
+function measure(){ const r = Math.random() < P1() ? 1 : 0; col = r; r ? n1++ : n0++; hist.push(r); if (hist.length > 26) hist.shift(); flash = 1; return r; }
+function draw(dt){
+  const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); flash = Math.max(0, flash - dt * 2);
+  const target = col === null ? thetaOf(P1()) : col ? Math.PI : 0; ang += (target - ang) * Math.min(1, dt * 12);
+  // 상태 그림
+  const cx = W * 0.27, cy = 112, r = Math.min(70, W * 0.2);
+  T(ctx, '큐비트의 상태', cx, 16, { bold: true, color: INK });
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); line(ctx, [[cx, cy - r], [cx, cy + r]], '#d9dde4', 1, true);
+  T(ctx, '0', cx, cy - r - 12, { bold: true, size: 15, color: BLUE }); T(ctx, '1', cx, cy + r + 13, { bold: true, size: 15, color: RED });
+  const ex = cx + Math.sin(ang) * r, ey = cy - Math.cos(ang) * r; arrow(ctx, cx, cy, ex, ey, col === null ? PURPLE : col ? RED : BLUE, 3.5, 11);
+  if (flash > 0){ ctx.strokeStyle = `rgba(224,164,0,${flash})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 7); ctx.stroke(); }
+  T(ctx, col === null ? (P1() === 0 ? '0인 상태' : P1() === 1 ? '1인 상태' : '0과 1의 중첩 상태') : '측정됨: ' + col, cx, cy + r + 36, { bold: true, color: col === null ? PURPLE : col ? RED : BLUE, size: 13 });
+  // 막대그래프
+  const gx = W * 0.58, gw = W * 0.36, top = 40, base = 190, n = n0 + n1, bw = gw * 0.32;
+  T(ctx, '측정 결과 (' + n + '번)', gx + gw / 2, 16, { bold: true, color: INK });
+  line(ctx, [[gx, base], [gx + gw, base]], WIRE, 1.5);
+  [[n0, BLUE, '0', 1 - P1()], [n1, RED, '1', P1()]].forEach(([c, colr, lab, p], k) => {
+    const x = gx + gw * (0.12 + 0.5 * k), h = n ? c / n * (base - top) : 0;
+    ctx.fillStyle = colr; ctx.fillRect(x, base - h, bw, h);
+    const ye = base - p * (base - top); line(ctx, [[x - 5, ye], [x + bw + 5, ye]], INK, 1.5, [4, 3]);
+    T(ctx, lab, x + bw / 2, base + 13, { bold: true, size: 14, color: colr }); T(ctx, c + '번', x + bw / 2, base + 30, { size: 11 }); });
+  T(ctx, '점선: 확률로 예상한 값', gx + gw / 2, top - 10, { size: 10 });
+  // 최근 결과
+  T(ctx, '최근 결과', 8, H - 34, { align: 'left', size: 11 });
+  hist.forEach((v, i) => T(ctx, String(v), 10 + i * ((W - 20) / 26) + 4, H - 14, { bold: true, size: 13, color: v ? RED : BLUE }));
+  const pc = c => n ? fmt(c / n * 100, 0) + ' %' : '—';
+  setStats([['측정 횟수', n + '번'], ['0이 나온 비율', pc(n0), BLUE], ['1이 나온 비율', pc(n1), RED]]);
+}
+$('m1B').addEventListener('click', () => { const r = measure(); say('측정 결과는 ' + r + '입니다. 측정하는 순간 중첩 상태가 ' + r + '인 상태로 정해졌습니다.'); });
+$('againB').addEventListener('click', () => { if (col === null){ const r = measure(); say('측정 결과는 ' + r + '입니다. 한 번 더 눌러 같은 큐비트를 다시 측정해 보세요.'); } else { flash = 1; say('다시 측정해도 ' + col + '입니다. 이미 ' + col + '인 상태로 정해졌기 때문입니다. (횟수에는 넣지 않았습니다.)'); } });
+$('m100B').addEventListener('click', () => { for (let i = 0; i < 100; i++) measure(); say('같은 상태의 큐비트를 100번 새로 준비해 한 번씩 측정했습니다. 횟수가 많아질수록 비율이 확률에 가까워집니다.'); });
+$('clrB').addEventListener('click', () => { n0 = n1 = 0; hist = []; col = null; say('기록을 지우고 큐비트를 다시 준비했습니다.'); });
+$('pS').addEventListener('input', () => { col = null; n0 = n1 = 0; hist = []; say('준비하는 상태를 바꾸었습니다. 측정해 보세요.'); });
+const big = n => { const v = Math.pow(2, n); return v < 1e4 ? String(v) : v < 1e8 ? '약 ' + fmt(v / 1e4, v < 1e5 ? 1 : 0) + '만' : '약 ' + fmt(v / 1e8, 1) + '억'; };
+const up2 = () => { const n = +$('nS').value; $('stats2').innerHTML = [['고전 비트 ' + n + '개가 한 번에 나타내는 값', '1가지'], ['큐비트 ' + n + '개가 중첩할 수 있는 값', big(n) + '가지']].map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="val">${v}</div></div>`).join(''); };
+$('nS').addEventListener('input', up2); up2();
+say('‘새로 준비해 측정’을 눌러 보세요.'); rs(); loop(draw);

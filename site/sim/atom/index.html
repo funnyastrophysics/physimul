@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>현대의 원자 모형</title>
+<style>
+:root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.back{display:none;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+h1{font-size:22px;margin:4px 0}
+.hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat .k{font-size:12px;color:var(--sub)}
+.stat .val{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sl .top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;gap:8px}
+.sl .top b{font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.sl select{width:100%;margin-top:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+select{max-width:100%;text-overflow:ellipsis}
+button.b,select{font:inherit;font-size:15px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.b.on,button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+label.chk input{width:18px;height:18px}
+.hide{display:none!important}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+@media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" id="back" href="../../">← 목록으로</a>
+<h1>현대의 원자 모형</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="bohr">보어 모형</button>
+      <button data-m="cloud">현대 모형</button>
+      <button data-m="unc">불확정성 원리</button>
+    </div>
+    <canvas id="sim" style="height:300px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row m-bohr"><select id="nS"><option value="1">n = 1 (바닥상태)</option><option value="2">n = 2 (들뜬상태)</option><option value="3">n = 3 (들뜬상태)</option></select></div>
+    <div class="row m-cloud"><button class="b primary" id="m1B">위치 측정 1번</button><button class="b" id="mNB">500번 측정</button><button class="b" id="clrB">지우기</button></div>
+    <div class="row m-cloud"><label class="chk"><input type="checkbox" id="cOrb" checked> 보어 모형의 궤도 함께 보기</label></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-cloud"><canvas id="graph" style="height:210px"></canvas></div>
+  <div class="card">
+    <div class="sl m-unc"><div class="top"><span>전자의 위치를 아는 정확도</span><b id="dV"></b></div>
+      <input type="range" id="dS" min="0" max="100" step="5" value="30"><div class="range"><span>대강 앎</span><span>정확히 앎</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+</div>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const INK = '#1d2330', SUB = '#5b6475', GRAY = '#9aa3b2', WIRE = '#3a4252', BLUE = '#2f6fdf', RED = '#d64541', ORANGE = '#e0782f', GREEN = '#2e9e6a', PURPLE = '#8e44ad', YELLOW = '#e0a400';
+if (/\/sim\//.test(location.pathname) && location.protocol.startsWith('http')) $('back').style.display = 'inline-block';
+// 캔버스 크기 맞추기: {ctx, W, H}
+function fitCanvas(c){ const d = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { ctx: x, W: w, H: h }; }
+function T(ctx, s, x, y, o){ o = o || {}; ctx.fillStyle = o.color || SUB; ctx.font = (o.bold ? 'bold ' : '') + (o.size || 12) + 'px ' + FONT; ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle'; ctx.fillText(s, x, y); }
+function line(ctx, pts, color, lw, dash){ ctx.strokeStyle = color || WIRE; ctx.lineWidth = lw || 2; ctx.setLineDash(dash ? (dash === true ? [5, 4] : dash) : []); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]); }
+function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
+function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
+// 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
+function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
+function niceMax(v){ v = Math.max(v, 1e-9); const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= v * 0.999) return k * p; return 10 * p; }
+// 탭: 버튼에 data-m, 요소에 class="m-이름"
+function setupTabs(onChange){
+  const btns = document.querySelectorAll('#tabs button');
+  const go = m => { btns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    document.querySelectorAll('[class*="m-"]').forEach(e => { const cl = [...e.classList].filter(k => k.startsWith('m-')); if (cl.length) e.classList.toggle('hide', !cl.includes('m-' + m)); });
+    onChange(m); };
+  btns.forEach(b => b.addEventListener('click', () => go(b.dataset.m))); go(btns[0].dataset.m); return go; }
+// 시간 그래프. panels: [{keys:[...], names:[...], colors:[...], min: 최소 범위, pos: true면 0부터 위로만}]
+function timeGraph(ctx, W, H, buf, t, panels, win){
+  win = win || 10; ctx.clearRect(0, 0, W, H);
+  const ph = H / panels.length, L = 50, R = 36, pw = W - L - R, t1 = Math.max(t, win), t0 = t1 - win;
+  panels.forEach((p, k) => {
+    const top = k * ph + 20, h = ph - 42; let mx = p.min || 1;
+    for (const b of buf) if (b.t >= t0) for (const key of p.keys) mx = Math.max(mx, Math.abs(b[key]));
+    const Y = p.fixed || niceMax(mx * 1.05), lo = p.pos ? 0 : -Y, yy = v => top + h - (v - lo) / (Y - lo) * h;
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; let lx = L;
+    p.keys.forEach((key, i) => { ctx.fillStyle = p.colors[i]; ctx.fillText(p.names[i], lx, top - 3); lx += ctx.measureText(p.names[i]).width + 14; });
+    ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+    ctx.strokeStyle = GRAY; ctx.beginPath(); ctx.moveTo(L, yy(0)); ctx.lineTo(L + pw, yy(0)); ctx.stroke();
+    ctx.font = '11px ' + FONT; ctx.fillStyle = SUB; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const lab = v => String(+v.toPrecision(3)).replace('-', '−');
+    ctx.fillText(lab(Y), L - 4, top + 4); ctx.fillText('0', L - 4, yy(0)); if (!p.pos) ctx.fillText(lab(-Y), L - 4, top + h - 4);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const st = win > 20 ? 5 : 1; for (let s = Math.ceil(t0 / st) * st; s <= t1 + 1e-9; s += st) ctx.fillText(String(s), L + (s - t0) / win * pw, top + h + 3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('t (s)', W - 2, yy(0));
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, h); ctx.clip();
+    p.keys.forEach((key, i) => { ctx.strokeStyle = p.colors[i]; ctx.lineWidth = 2.2; ctx.beginPath(); let s = false;
+      for (const b of buf){ if (b.t < t0 || b[key] === undefined) continue; const X = L + (b.t - t0) / win * pw, Yp = yy(b[key]); s ? ctx.lineTo(X, Yp) : (ctx.moveTo(X, Yp), s = true); }
+      ctx.stroke(); });
+    ctx.restore(); });
+}
+// x–y 그래프 축. 반환: {X, Y} 변환 함수
+function axes(ctx, W, H, o){
+  const L = o.L || 52, R = o.R || 14, top = o.top || 14, B = o.B || 40, pw = W - L - R, h = H - top - B;
+  const X = v => L + (v - o.x0) / (o.x1 - o.x0) * pw, Y = v => top + h - (v - o.y0) / (o.y1 - o.y0) * h;
+  ctx.strokeStyle = '#d9dde4'; ctx.lineWidth = 1; ctx.strokeRect(L, top, pw, h);
+  ctx.font = '11px ' + FONT; ctx.fillStyle = SUB;
+  (o.xt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), top + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(String(v), X(v), top + h + 3); });
+  (o.yt || []).forEach(v => { ctx.strokeStyle = '#eef0f4'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), L - 4, Y(v)); });
+  if (o.xl){ ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, L + pw / 2, top + h + 18); }
+  if (o.yl){ ctx.save(); ctx.translate(11, top + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.yl, 0, 0); ctx.restore(); }
+  return { X, Y, L, top, pw, h };
+}
+function loop(fn){ let last = performance.now(); const f = now => { const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now; fn(dt, now / 1000); requestAnimationFrame(f); }; requestAnimationFrame(f); }
+function pointer(c, down, move, up){
+  const loc = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }; let active = false;
+  c.addEventListener('pointerdown', e => { const [x, y] = loc(e); if (down(x, y) !== false){ active = true; c.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  c.addEventListener('pointermove', e => { if (active){ const [x, y] = loc(e); move && move(x, y); } });
+  const end = () => { if (active){ active = false; up && up(); } }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+}
+// 소리 (Web Audio)
+let _ac = null;
+function audio(){ if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); return _ac; }
+function tone(){ const ac = audio(), o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(ac.destination); o.start();
+  return { set(f, v){ o.frequency.setTargetAtTime(f, ac.currentTime, 0.02); g.gain.setTargetAtTime(v, ac.currentTime, 0.03); }, stop(){ g.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => o.stop(), 200); } }; }
+// 파장(nm) → [r,g,b] (0~1)
+function lamRGB(l){ let r = 0, g = 0, b = 0;
+  if (l < 440){ r = -(l - 440) / 60; b = 1; } else if (l < 490){ g = (l - 440) / 50; b = 1; } else if (l < 510){ g = 1; b = -(l - 510) / 20; }
+  else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
+const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); if (G.clientWidth) gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+let mode, t = 0, dots = [], rsamp = [], uncDots = [], uncT = 0;
+const PALE = '#c9d2e3', DIM = '#8d97aa', EL = '#6fb1ff', A0 = 0.0529;
+bindLabels({ dS: ['dV', v => v < 25 ? '대강 앎' : v < 70 ? '보통' : '정확히 앎'] });
+function nucleus(ctx, x, y){ ctx.fillStyle = '#ff7a6b'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); }
+function drawBohr(){
+  const { ctx, W, H } = s, n = +$('nS').value, cx = W / 2, cy = H / 2, r1 = Math.min(W, H) * 0.049;
+  for (let k = 1; k <= 3; k++){ ctx.strokeStyle = k === n ? PALE : 'rgba(201,210,227,0.3)'; ctx.lineWidth = k === n ? 1.8 : 1; ctx.beginPath(); ctx.arc(cx, cy, r1 * k * k, 0, 7); ctx.stroke(); T(ctx, 'n=' + k, cx + r1 * k * k * 0.707 + 4, cy - r1 * k * k * 0.707 - 6, { color: k === n ? PALE : DIM, size: 11, align: 'left' }); }
+  nucleus(ctx, cx, cy); const a = t * 5 / (n * n * n) * 2, r = r1 * n * n; ctx.fillStyle = EL; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 6, 0, 7); ctx.fill();
+  T(ctx, '전자는 정해진 궤도 위에서만 원운동을 한다', W / 2, 16, { color: PALE, size: 12, bold: true });
+  setStats([['궤도 반지름', fmt(A0 * n * n, 3) + ' nm'], ['전자의 에너지', fmt(-13.6 / (n * n), 2) + ' eV', ORANGE], ['전자의 위치와 속도', '둘 다 정확히 정해짐']]);
+}
+// 수소 원자 바닥상태에서 전자의 위치를 한 번 측정 (단위: 보어 반지름)
+function sample(){ const r = -0.5 * Math.log(Math.random() * Math.random() * Math.random()), u = Math.random() * 2 - 1, p = Math.random() * 2 * Math.PI, q = Math.sqrt(1 - u * u); rsamp.push(r); dots.push([r * q * Math.cos(p), r * u]); }
+function drawCloud(){
+  const { ctx, W, H } = s, cx = W / 2, cy = H / 2 + 6, sc = Math.min(W, H) / 9.5;
+  T(ctx, '점 하나 = 전자의 위치를 한 번 측정한 결과', W / 2, 16, { color: PALE, size: 12, bold: true });
+  ctx.fillStyle = 'rgba(111,177,255,0.75)'; dots.forEach(d => ctx.fillRect(cx + d[0] * sc - 1, cy + d[1] * sc - 1, 2, 2));
+  if (dots.length && dots.length < 30){ const d = dots[dots.length - 1]; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx + d[0] * sc, cy + d[1] * sc, 6, 0, 7); ctx.stroke(); }
+  if ($('cOrb').checked){ ctx.strokeStyle = ORANGE; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(cx, cy, sc, 0, 7); ctx.stroke(); ctx.setLineDash([]); T(ctx, '보어 모형의 궤도', cx + sc * 0.75 + 4, cy - sc * 0.75 - 6, { color: ORANGE, size: 11, align: 'left' }); }
+  nucleus(ctx, cx, cy);
+  line(ctx, [[14, H - 16], [14 + sc * 2, H - 16]], PALE, 2); T(ctx, (A0 * 2).toFixed(2) + ' nm', 14 + sc, H - 28, { color: PALE, size: 11 });
+  const n = rsamp.length, mean = n ? rsamp.reduce((a, b) => a + b, 0) / n : 0;
+  setStats([['측정 횟수', n + '번'], ['원자핵에서 떨어진 거리의 평균', n ? fmt(mean * A0, 3) + ' nm' : '—', BLUE], ['다음 측정 결과', '확률만 알 수 있음', ORANGE]]);
+  if (!gr) return; const g = gr.ctx; g.clearRect(0, 0, gr.W, gr.H);
+  const A = axes(g, gr.W, gr.H, { x0: 0, x1: 5, y0: 0, y1: 0.65, xt: [0, 1, 2, 3, 4, 5], yt: [], xl: '원자핵에서 떨어진 거리 (보어 반지름의 배수)', yl: '발견된 횟수의 비율', top: 22 });
+  const nb = 25, bins = new Array(nb).fill(0); rsamp.forEach(r => { const k = Math.floor(r / 5 * nb); if (k < nb) bins[k]++; });
+  if (n) bins.forEach((c, k) => { const d = c / n / (5 / nb); g.fillStyle = 'rgba(47,111,223,0.55)'; g.fillRect(A.X(k * 5 / nb) + 1, A.Y(Math.min(0.65, d)), A.pw / nb - 2, A.Y(0) - A.Y(Math.min(0.65, d))); });
+  const pts = []; for (let r = 0; r <= 5.001; r += 0.05) pts.push([A.X(r), A.Y(4 * r * r * Math.exp(-2 * r))]); line(g, pts, INK, 1.8);
+  line(g, [[A.X(1), A.top], [A.X(1), A.top + A.h]], ORANGE, 1.5, true); T(g, '보어 반지름', A.X(1) + 5, A.top + 9, { color: ORANGE, size: 11, align: 'left' });
+  T(g, '검은 선: 이론으로 구한 확률', A.L + A.pw - 4, A.top + 9, { size: 11, align: 'right' });
+}
+function drawUnc(dt){
+  const { ctx, W, H } = s, u = +$('dS').value / 100, dx = 0.34 - 0.3 * u, dp = 0.0136 / dx;   // 곱이 일정
+  uncT += dt; if (uncT > 0.05){ uncT = 0; const gs = () => { let a = 0; for (let k = 0; k < 6; k++) a += Math.random(); return (a - 3) / 0.707; }; uncDots.push([gs() * dx * 0.5, gs() * dp * 0.5, Math.random()]); if (uncDots.length > 90) uncDots.shift(); }
+  const bell = (y0, hgt, wd, col, lab, sub) => { const pts = []; for (let x = 0; x <= W; x += 3){ const z = (x - W / 2) / (wd * W * 0.5); pts.push([x, y0 - hgt * Math.exp(-z * z / 2)]); }
+    ctx.fillStyle = col.replace('1)', '0.22)'); ctx.beginPath(); ctx.moveTo(0, y0); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(W, y0); ctx.fill(); line(ctx, pts, col, 2); line(ctx, [[0, y0], [W, y0]], DIM, 1);
+    T(ctx, lab, 8, y0 - hgt - 14, { color: PALE, size: 12, bold: true, align: 'left' }); T(ctx, sub, W - 8, y0 + 13, { color: DIM, size: 11, align: 'right' }); };
+  bell(122, 74, dx, 'rgba(111,177,255,1)', '전자가 발견되는 위치의 분포', '위치 →');
+  bell(268, 74, dp, 'rgba(255,170,90,1)', '전자의 운동량(속도)의 분포', '운동량 →');
+  uncDots.forEach(d => { ctx.fillStyle = EL; ctx.beginPath(); ctx.arc(W / 2 + d[0] * W, 122 - 6 - d[2] * 8, 2.2, 0, 7); ctx.fill(); ctx.fillStyle = '#ffaa5a'; ctx.beginPath(); ctx.arc(W / 2 + d[1] * W, 268 - 6 - d[2] * 8, 2.2, 0, 7); ctx.fill(); });
+  const lev = v => v < 0.06 ? '매우 작음' : v < 0.1 ? '작음' : v < 0.14 ? '보통' : v < 0.22 ? '큼' : '매우 큼';
+  setStats([['위치의 불확정성', lev(dx), BLUE], ['운동량의 불확정성', lev(dp), ORANGE], ['두 불확정성의 곱', '일정한 값 이상']]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'bohr') drawBohr(); else if (mode === 'cloud') drawCloud(); else drawUnc(dt); }
+const TEXT = {
+  bohr: ['보어의 수소 원자 모형입니다. 양자수 n을 바꾸며 전자의 궤도와 에너지를 확인하세요.',
+    '보어 원자 모형에서 전자는 원자핵 주위의 정해진 궤도에서만 원운동을 하며, 궤도마다 에너지가 정해져 있습니다(에너지 준위의 양자화). 이 모형은 수소 원자의 선 스펙트럼을 잘 설명합니다. 그러나 전자가 정해진 궤도를 돈다면 전자의 위치와 운동량을 동시에 정확히 알 수 있다는 뜻이 되어 불확정성 원리에 어긋나고, 전자가 여러 개인 원자의 스펙트럼도 설명하지 못합니다.'],
+  cloud: ['바닥상태의 수소 원자에서 전자의 위치를 측정합니다. 한 번씩 측정해 본 뒤 500번씩 여러 번 측정하여 점이 어떻게 분포하는지 보어 모형의 궤도와 비교하세요.',
+    '현대의 원자 모형에서는 전자가 정해진 궤도를 돈다고 보지 않습니다. 전자의 위치는 측정할 때마다 다르게 나오며, 어느 곳에서 발견될지는 확률로만 알 수 있습니다. 측정 결과를 점으로 찍어 모으면 구름처럼 보여서 전자구름 모형이라고도 합니다. 점은 원자핵 근처에서 가장 촘촘하지만, 같은 거리에 있는 모든 방향을 합하면 원자핵에서 보어 반지름만큼 떨어진 거리에서 전자가 발견될 확률이 가장 큽니다(아래 그래프). 보어 모형의 궤도는 전자가 가장 잘 발견되는 거리에 해당합니다. 에너지 준위가 양자화되어 있다는 점은 두 모형이 같습니다.'],
+  unc: ['전자의 위치를 더 정확히 알수록 운동량의 분포가 어떻게 달라지는지 관찰하세요.',
+    '전자와 같이 파동성을 가진 입자는 위치와 운동량을 동시에 정확하게 측정할 수 없습니다. 위치를 정확히 알수록(위치의 불확정성이 작을수록) 운동량의 불확정성이 커지고, 운동량을 정확히 알수록 위치의 불확정성이 커집니다. 이것을 하이젠베르크의 불확정성 원리라고 합니다. 측정 기술이 부족해서가 아니라 자연의 근본적인 성질입니다. 따라서 원자 속 전자가 어떤 경로로 움직이는지는 말할 수 없고, 발견될 확률만 말할 수 있습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('m1B').addEventListener('click', sample);
+$('mNB').addEventListener('click', () => { for (let i = 0; i < 500; i++) sample(); if (dots.length > 6000){ dots = dots.slice(-6000); } });
+$('clrB').addEventListener('click', () => { dots = []; rsamp = []; });
+$('dS').addEventListener('input', () => { uncDots = []; });
+loop(draw);
+})();
+</script>
+</body>
+</html>

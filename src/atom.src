@@ -1,0 +1,80 @@
+현대의 원자 모형
+  <h1>현대의 원자 모형</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="bohr">보어 모형</button>
+      <button data-m="cloud">현대 모형</button>
+      <button data-m="unc">불확정성 원리</button>
+    </div>
+    <canvas id="sim" style="height:300px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row m-bohr"><select id="nS"><option value="1">n = 1 (바닥상태)</option><option value="2">n = 2 (들뜬상태)</option><option value="3">n = 3 (들뜬상태)</option></select></div>
+    <div class="row m-cloud"><button class="b primary" id="m1B">위치 측정 1번</button><button class="b" id="mNB">500번 측정</button><button class="b" id="clrB">지우기</button></div>
+    <div class="row m-cloud"><label class="chk"><input type="checkbox" id="cOrb" checked> 보어 모형의 궤도 함께 보기</label></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-cloud"><canvas id="graph" style="height:210px"></canvas></div>
+  <div class="card">
+    <div class="sl m-unc"><div class="top"><span>전자의 위치를 아는 정확도</span><b id="dV"></b></div>
+      <input type="range" id="dS" min="0" max="100" step="5" value="30"><div class="range"><span>대강 앎</span><span>정확히 앎</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); if (G.clientWidth) gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+let mode, t = 0, dots = [], rsamp = [], uncDots = [], uncT = 0;
+const PALE = '#c9d2e3', DIM = '#8d97aa', EL = '#6fb1ff', A0 = 0.0529;
+bindLabels({ dS: ['dV', v => v < 25 ? '대강 앎' : v < 70 ? '보통' : '정확히 앎'] });
+function nucleus(ctx, x, y){ ctx.fillStyle = '#ff7a6b'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); }
+function drawBohr(){
+  const { ctx, W, H } = s, n = +$('nS').value, cx = W / 2, cy = H / 2, r1 = Math.min(W, H) * 0.049;
+  for (let k = 1; k <= 3; k++){ ctx.strokeStyle = k === n ? PALE : 'rgba(201,210,227,0.3)'; ctx.lineWidth = k === n ? 1.8 : 1; ctx.beginPath(); ctx.arc(cx, cy, r1 * k * k, 0, 7); ctx.stroke(); T(ctx, 'n=' + k, cx + r1 * k * k * 0.707 + 4, cy - r1 * k * k * 0.707 - 6, { color: k === n ? PALE : DIM, size: 11, align: 'left' }); }
+  nucleus(ctx, cx, cy); const a = t * 5 / (n * n * n) * 2, r = r1 * n * n; ctx.fillStyle = EL; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 6, 0, 7); ctx.fill();
+  T(ctx, '전자는 정해진 궤도 위에서만 원운동을 한다', W / 2, 16, { color: PALE, size: 12, bold: true });
+  setStats([['궤도 반지름', fmt(A0 * n * n, 3) + ' nm'], ['전자의 에너지', fmt(-13.6 / (n * n), 2) + ' eV', ORANGE], ['전자의 위치와 속도', '둘 다 정확히 정해짐']]);
+}
+// 수소 원자 바닥상태에서 전자의 위치를 한 번 측정 (단위: 보어 반지름)
+function sample(){ const r = -0.5 * Math.log(Math.random() * Math.random() * Math.random()), u = Math.random() * 2 - 1, p = Math.random() * 2 * Math.PI, q = Math.sqrt(1 - u * u); rsamp.push(r); dots.push([r * q * Math.cos(p), r * u]); }
+function drawCloud(){
+  const { ctx, W, H } = s, cx = W / 2, cy = H / 2 + 6, sc = Math.min(W, H) / 9.5;
+  T(ctx, '점 하나 = 전자의 위치를 한 번 측정한 결과', W / 2, 16, { color: PALE, size: 12, bold: true });
+  ctx.fillStyle = 'rgba(111,177,255,0.75)'; dots.forEach(d => ctx.fillRect(cx + d[0] * sc - 1, cy + d[1] * sc - 1, 2, 2));
+  if (dots.length && dots.length < 30){ const d = dots[dots.length - 1]; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx + d[0] * sc, cy + d[1] * sc, 6, 0, 7); ctx.stroke(); }
+  if ($('cOrb').checked){ ctx.strokeStyle = ORANGE; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(cx, cy, sc, 0, 7); ctx.stroke(); ctx.setLineDash([]); T(ctx, '보어 모형의 궤도', cx + sc * 0.75 + 4, cy - sc * 0.75 - 6, { color: ORANGE, size: 11, align: 'left' }); }
+  nucleus(ctx, cx, cy);
+  line(ctx, [[14, H - 16], [14 + sc * 2, H - 16]], PALE, 2); T(ctx, (A0 * 2).toFixed(2) + ' nm', 14 + sc, H - 28, { color: PALE, size: 11 });
+  const n = rsamp.length, mean = n ? rsamp.reduce((a, b) => a + b, 0) / n : 0;
+  setStats([['측정 횟수', n + '번'], ['원자핵에서 떨어진 거리의 평균', n ? fmt(mean * A0, 3) + ' nm' : '—', BLUE], ['다음 측정 결과', '확률만 알 수 있음', ORANGE]]);
+  if (!gr) return; const g = gr.ctx; g.clearRect(0, 0, gr.W, gr.H);
+  const A = axes(g, gr.W, gr.H, { x0: 0, x1: 5, y0: 0, y1: 0.65, xt: [0, 1, 2, 3, 4, 5], yt: [], xl: '원자핵에서 떨어진 거리 (보어 반지름의 배수)', yl: '발견된 횟수의 비율', top: 22 });
+  const nb = 25, bins = new Array(nb).fill(0); rsamp.forEach(r => { const k = Math.floor(r / 5 * nb); if (k < nb) bins[k]++; });
+  if (n) bins.forEach((c, k) => { const d = c / n / (5 / nb); g.fillStyle = 'rgba(47,111,223,0.55)'; g.fillRect(A.X(k * 5 / nb) + 1, A.Y(Math.min(0.65, d)), A.pw / nb - 2, A.Y(0) - A.Y(Math.min(0.65, d))); });
+  const pts = []; for (let r = 0; r <= 5.001; r += 0.05) pts.push([A.X(r), A.Y(4 * r * r * Math.exp(-2 * r))]); line(g, pts, INK, 1.8);
+  line(g, [[A.X(1), A.top], [A.X(1), A.top + A.h]], ORANGE, 1.5, true); T(g, '보어 반지름', A.X(1) + 5, A.top + 9, { color: ORANGE, size: 11, align: 'left' });
+  T(g, '검은 선: 이론으로 구한 확률', A.L + A.pw - 4, A.top + 9, { size: 11, align: 'right' });
+}
+function drawUnc(dt){
+  const { ctx, W, H } = s, u = +$('dS').value / 100, dx = 0.34 - 0.3 * u, dp = 0.0136 / dx;   // 곱이 일정
+  uncT += dt; if (uncT > 0.05){ uncT = 0; const gs = () => { let a = 0; for (let k = 0; k < 6; k++) a += Math.random(); return (a - 3) / 0.707; }; uncDots.push([gs() * dx * 0.5, gs() * dp * 0.5, Math.random()]); if (uncDots.length > 90) uncDots.shift(); }
+  const bell = (y0, hgt, wd, col, lab, sub) => { const pts = []; for (let x = 0; x <= W; x += 3){ const z = (x - W / 2) / (wd * W * 0.5); pts.push([x, y0 - hgt * Math.exp(-z * z / 2)]); }
+    ctx.fillStyle = col.replace('1)', '0.22)'); ctx.beginPath(); ctx.moveTo(0, y0); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(W, y0); ctx.fill(); line(ctx, pts, col, 2); line(ctx, [[0, y0], [W, y0]], DIM, 1);
+    T(ctx, lab, 8, y0 - hgt - 14, { color: PALE, size: 12, bold: true, align: 'left' }); T(ctx, sub, W - 8, y0 + 13, { color: DIM, size: 11, align: 'right' }); };
+  bell(122, 74, dx, 'rgba(111,177,255,1)', '전자가 발견되는 위치의 분포', '위치 →');
+  bell(268, 74, dp, 'rgba(255,170,90,1)', '전자의 운동량(속도)의 분포', '운동량 →');
+  uncDots.forEach(d => { ctx.fillStyle = EL; ctx.beginPath(); ctx.arc(W / 2 + d[0] * W, 122 - 6 - d[2] * 8, 2.2, 0, 7); ctx.fill(); ctx.fillStyle = '#ffaa5a'; ctx.beginPath(); ctx.arc(W / 2 + d[1] * W, 268 - 6 - d[2] * 8, 2.2, 0, 7); ctx.fill(); });
+  const lev = v => v < 0.06 ? '매우 작음' : v < 0.1 ? '작음' : v < 0.14 ? '보통' : v < 0.22 ? '큼' : '매우 큼';
+  setStats([['위치의 불확정성', lev(dx), BLUE], ['운동량의 불확정성', lev(dp), ORANGE], ['두 불확정성의 곱', '일정한 값 이상']]);
+}
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); t += dt; if (mode === 'bohr') drawBohr(); else if (mode === 'cloud') drawCloud(); else drawUnc(dt); }
+const TEXT = {
+  bohr: ['보어의 수소 원자 모형입니다. 양자수 n을 바꾸며 전자의 궤도와 에너지를 확인하세요.',
+    '보어 원자 모형에서 전자는 원자핵 주위의 정해진 궤도에서만 원운동을 하며, 궤도마다 에너지가 정해져 있습니다(에너지 준위의 양자화). 이 모형은 수소 원자의 선 스펙트럼을 잘 설명합니다. 그러나 전자가 정해진 궤도를 돈다면 전자의 위치와 운동량을 동시에 정확히 알 수 있다는 뜻이 되어 불확정성 원리에 어긋나고, 전자가 여러 개인 원자의 스펙트럼도 설명하지 못합니다.'],
+  cloud: ['바닥상태의 수소 원자에서 전자의 위치를 측정합니다. 한 번씩 측정해 본 뒤 500번씩 여러 번 측정하여 점이 어떻게 분포하는지 보어 모형의 궤도와 비교하세요.',
+    '현대의 원자 모형에서는 전자가 정해진 궤도를 돈다고 보지 않습니다. 전자의 위치는 측정할 때마다 다르게 나오며, 어느 곳에서 발견될지는 확률로만 알 수 있습니다. 측정 결과를 점으로 찍어 모으면 구름처럼 보여서 전자구름 모형이라고도 합니다. 점은 원자핵 근처에서 가장 촘촘하지만, 같은 거리에 있는 모든 방향을 합하면 원자핵에서 보어 반지름만큼 떨어진 거리에서 전자가 발견될 확률이 가장 큽니다(아래 그래프). 보어 모형의 궤도는 전자가 가장 잘 발견되는 거리에 해당합니다. 에너지 준위가 양자화되어 있다는 점은 두 모형이 같습니다.'],
+  unc: ['전자의 위치를 더 정확히 알수록 운동량의 분포가 어떻게 달라지는지 관찰하세요.',
+    '전자와 같이 파동성을 가진 입자는 위치와 운동량을 동시에 정확하게 측정할 수 없습니다. 위치를 정확히 알수록(위치의 불확정성이 작을수록) 운동량의 불확정성이 커지고, 운동량을 정확히 알수록 위치의 불확정성이 커집니다. 이것을 하이젠베르크의 불확정성 원리라고 합니다. 측정 기술이 부족해서가 아니라 자연의 근본적인 성질입니다. 따라서 원자 속 전자가 어떤 경로로 움직이는지는 말할 수 없고, 발견될 확률만 말할 수 있습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('m1B').addEventListener('click', sample);
+$('mNB').addEventListener('click', () => { for (let i = 0; i < 500; i++) sample(); if (dots.length > 6000){ dots = dots.slice(-6000); } });
+$('clrB').addEventListener('click', () => { dots = []; rsamp = []; });
+$('dS').addEventListener('input', () => { uncDots = []; });
+loop(draw);
