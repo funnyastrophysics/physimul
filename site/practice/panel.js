@@ -17,7 +17,7 @@
     '.pq .pq-ch button.ok{border-color:#2e9e6a;background:#e3f4ec;font-weight:700}.pq .pq-ch button.no{border-color:#d64541;background:#fbe9e8}' +
     '.pq .pq-res{font-weight:700;margin:10px 0 0}.pq .pq-exp{border-top:1px solid #d9dde4;padding:10px 0 0;margin:10px 0 0}.pq .pq-exp b{display:block;font-size:13px;color:#5b6475;margin:0 0 6px}' +
     '.pq .pq-rec{font-size:13px;color:#5b6475;margin:0 0 8px}.pq .pq-rec a{color:#5b6475;margin-left:6px}.pq .pq-err{color:#d64541;font-size:14px;margin:8px 0 0}.pq .pq-copy{font-size:12px;color:#5b6475;margin:12px 0 0}' +
-    '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:inline-block;font-size:14px;color:#2f6fdf;font-weight:700;text-decoration:none;margin:10px 0 0}';
+    '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:block;font-size:15px;color:#2f6fdf;font-weight:700;text-decoration:none;text-align:center;border:1px solid #2f6fdf;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#f3f7ff}';
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function b64(s) { var bin = atob(s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
@@ -91,6 +91,7 @@
       var sel = el('select'); sel.setAttribute('aria-label', '문제 고르기');
       list.forEach(function (x, k) { var r = g[x.id], op = el('option', '', (r ? (r[0] ? '✓ ' : '✗ ') : '') + (k + 1) + '. ' + x.src); op.value = k; sel.appendChild(op); }); sel.value = idx;
       sel.addEventListener('change', function () { idx = +sel.value; show(); }); box.appendChild(sel);
+      if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; box.appendChild(sa); }
       var area = el('div', 'pq-load', '문제를 불러오는 중…'); box.appendChild(area);
       var ch = el('div', 'pq-ch'), marks = ['①', '②', '③', '④', '⑤'], btns = [];
       marks.forEach(function (mk, k) { var b = el('button', '', mk); b.type = 'button'; b.setAttribute('aria-label', (k + 1) + '번');
@@ -113,7 +114,6 @@
       out.addEventListener('click', function (e) { e.preventDefault(); setCode(''); keyP = {}; key = null; all = list = null; cache = {}; freeUrls(); start(); });
       row.appendChild(chk); row.appendChild(prev); row.appendChild(next); row.appendChild(out);
       box.appendChild(res); box.appendChild(exp); box.appendChild(row);
-      if (o.names && it.s) { var a = el('a', 'pq-sim', '관련 시뮬레이션: ' + (o.names[it.s] || it.s) + ' →'); a.href = o.simBase + it.s + '/'; box.appendChild(a); }
       box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제의 저작권은 한국교육과정평가원에, 해설의 저작권은 EBS에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
     }
     function start() {
