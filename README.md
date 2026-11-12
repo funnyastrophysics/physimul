@@ -17,5 +17,6 @@
   - 원본 폴더 구조: p1/d1(문제) p1/d2(정답) p1/d3(해설), p2/… 이고 파일 이름은 p1_2026_11.pdf 형식입니다.
   - 단원별 기출문제 화면은 site/practice/index.html 입니다. `python3 src/practice/classify.py` 가 문항마다 출제 당시 성취기준과 2022 개정 성취기준을 붙여 src/practice/codes.json 을 만들고, encrypt.js가 이것으로 영역별 목록을 만듭니다. 문항 하나만 고치려면 src/practice/codes_fix.json 에 적습니다. 과목·영역·성취기준 이름은 src/practice/units.json 에 있습니다.
   - 문제 원본(practice-src)과 수업 코드는 GitHub에 올리지 않습니다(.gitignore). 수업 코드를 바꾸면 site/practice/data/index.json 을 지우고 다시 암호화합니다.
+- 시각 고르기: 시간이 흐르는 시뮬레이션에는 시간 막대와 '시간' 칸 직접 입력이 있습니다. 공통 함수는 src/common.js의 timeBar(막대와 입력 칸)와 loopT(처음으로 되돌린 뒤 그 시각까지 다시 계산)입니다. 1차 페이지(shm, collision, energy, projectile)에는 timeBar를 페이지 안에 직접 넣었습니다.
 - 측정 도구: site/tools/<이름>/index.html (페이지 하나로 완결). 만든 것: accel(가속도 기록). 아이폰은 버튼을 눌러 센서 권한을 허용해야 하며, iOS는 중력 포함 가속도의 부호가 안드로이드와 반대라 맞춰 두었습니다.
 - 남은 일: 측정 도구(소리 발생기, 주파수 분석, 소리 크기, 동영상 분석), 6월·9월 모의평가 문항 넣기, 도메인 연결
