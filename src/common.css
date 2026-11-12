@@ -33,7 +33,11 @@ label.chk input{width:18px;height:18px}
 .tbar .top{display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:8px;flex-wrap:wrap}
 .tbar .tb-r{display:flex;align-items:center;gap:6px}
 .tbar .tb-r button.b{padding:7px 10px;font-size:14px}
-.tbar input[type=number]{font:inherit;font-weight:700;color:var(--accent);width:78px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
-.tbar i{font-style:normal;font-weight:700;color:var(--accent)}
 .tbar input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
 .tbar .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.stat.tcell{outline:1.5px solid var(--accent);background:#fff}
+.stat.tcell .k::after{content:" (직접 입력)";color:var(--accent)}
+.stat.tcell .val{display:flex;justify-content:center;align-items:baseline;gap:3px}
+.stat.tcell input{font:inherit;font-weight:700;color:var(--ink);width:72px;padding:1px 2px;border:0;border-bottom:1.5px solid var(--accent);border-radius:0;background:transparent;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stat.tcell input::-webkit-outer-spin-button,.stat.tcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stat.tcell i{font-style:normal;font-weight:700}

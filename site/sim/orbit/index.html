@@ -41,10 +41,14 @@ label.chk input{width:18px;height:18px}
 .tbar .top{display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:8px;flex-wrap:wrap}
 .tbar .tb-r{display:flex;align-items:center;gap:6px}
 .tbar .tb-r button.b{padding:7px 10px;font-size:14px}
-.tbar input[type=number]{font:inherit;font-weight:700;color:var(--accent);width:78px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
-.tbar i{font-style:normal;font-weight:700;color:var(--accent)}
 .tbar input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
 .tbar .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.stat.tcell{outline:1.5px solid var(--accent);background:#fff}
+.stat.tcell .k::after{content:" (직접 입력)";color:var(--accent)}
+.stat.tcell .val{display:flex;justify-content:center;align-items:baseline;gap:3px}
+.stat.tcell input{font:inherit;font-weight:700;color:var(--ink);width:72px;padding:1px 2px;border:0;border-bottom:1.5px solid var(--accent);border-radius:0;background:transparent;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stat.tcell input::-webkit-outer-spin-button,.stat.tcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stat.tcell i{font-style:normal;font-weight:700}
 
 #tbl th,#tbl td{border-bottom:1px solid var(--line);padding:6px 3px;text-align:right} #tbl td{white-space:nowrap} #tbl th{font-size:12px} #tbl th:first-child,#tbl td:first-child{text-align:left}
 
@@ -102,7 +106,9 @@ function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
   const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
   ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
-function setStats(items){ $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); }
+function setStats(items){ const box = $('stats'), key = items.map(i => i[0]).join('|');
+  if (box.dataset.k !== key){ box.dataset.k = key; box.innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); return; }
+  items.forEach(([k, v, c], i) => { const cell = box.children[i]; if (cell.dataset.edit) return; const e = cell.lastChild; if (e.textContent !== String(v)) e.innerHTML = v; e.style.color = c || ''; }); }
 const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
 // 슬라이더 값 표시: {슬라이더id: [표시id, 값 => 문자열]}
 function bindLabels(map){ const up = () => { for (const k in map){ const [lid, f] = map[k]; $(lid).textContent = f(+$(k).value, $(k)); } }; for (const k in map) $(k).addEventListener('input', up); up(); return up; }
@@ -169,20 +175,24 @@ function lamRGB(l){ let r = 0, g = 0, b = 0;
   const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
 const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
 
-// 시간 조절 칸: host 안에 숫자 입력 칸, 막대, 앞뒤 버튼을 만든다.
-// o: { max: () => 끝나는 시각(초), set: t => 그 시각으로 옮기기, step: 버튼 한 번에 움직이는 시간(기본 0.1), unit: 숫자 자리수(기본 2) }
+// 시간 조절: host 안에 막대와 앞뒤 버튼을 만들고, 값 칸(#stats) 가운데 이름이 o.label(기본 '시간')로 시작하는 칸을 숫자 입력 칸으로 바꾼다.
+// o: { max: () => 끝나는 시각(초), set: t => 그 시각으로 옮기기, step: 버튼 한 번에 움직이는 시간(기본 0.1), cell: 입력 칸으로 바꿀 요소를 돌려주는 함수(선택) }
 // 반환한 show(t)를 매 프레임 부르면 막대와 숫자가 지금 시각을 따라간다.
 function timeBar(host, o){
-  const st = o.step || 0.1, dg = o.unit === undefined ? 2 : o.unit;
+  const st = o.step || 0.1, lab = o.label || '시간';
   host.className = 'tbar';
-  host.innerHTML = '<div class="top"><span>시간 t</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button><input type="number" min="0" step="' + st + '" inputmode="decimal" aria-label="시간(초)"><i>s</i></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
-  const num = host.querySelector('input[type=number]'), bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0;
+  host.innerHTML = '<div class="top"><span>시간 막대</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
+  const bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0, num = null;
   const go = v => { const m = o.max(); o.set(Math.max(0, Math.min(isFinite(m) ? m : 1e9, v))); };
-  num.addEventListener('input', () => { const v = parseFloat(num.value); if (isFinite(v)) go(v); });
-  num.addEventListener('blur', () => { num.value = cur.toFixed(dg); });
   bar.addEventListener('input', () => go(+bar.value));
-  host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const k = Math.round(cur / st + (+b.dataset.d > 0 ? 1e-6 : -1e-6) * 1); go((+b.dataset.d > 0 ? Math.floor(cur / st + 1e-6) + 1 : Math.ceil(cur / st - 1e-6) - 1) * st); }));
-  return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(dg) + ' s'; } bar.value = t; if (document.activeElement !== num) num.value = t.toFixed(dg); };
+  host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => go((+b.dataset.d > 0 ? Math.floor(cur / st + 1e-6) + 1 : Math.ceil(cur / st - 1e-6) - 1) * st)));
+  const findCell = o.cell || (() => [...document.querySelectorAll('#stats .stat')].find(e => e.firstChild.textContent.indexOf(lab) === 0));
+  function attach(){ const c = findCell(); if (!c || c.dataset.edit) return; c.dataset.edit = '1'; c.classList.add('tcell');
+    const v = c.querySelector('.val'); v.innerHTML = '<input type="number" min="0" step="' + st + '" inputmode="decimal" aria-label="시간(초) 직접 입력"><i>s</i>'; num = v.firstChild;
+    num.addEventListener('input', () => { const x = parseFloat(num.value); if (isFinite(x)) go(x); });
+    num.addEventListener('blur', () => { num.value = cur.toFixed(2); }); }
+  return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(2) + ' s'; } bar.value = t;
+    if (!num || !num.isConnected) attach(); if (num && document.activeElement !== num) num.value = t.toFixed(2); };
 }
 
 const GM = 3.986e14, RE = 6.371e6, S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);

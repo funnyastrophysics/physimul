@@ -101,7 +101,7 @@ function stepCar(dt){
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(carX - 24, roadY - 7, 4, 0, 7); ctx.arc(carX - 6, roadY - 7, 4, 0, 7); ctx.fill();
   if (phase === 2){ T(ctx, '브레이크!', carX - 15, roadY - 40, { color: RED, bold: true }); }
   if (phase === 1){ T(ctx, '반응하는 중…', carX - 15, roadY - 40, { color: ORANGE, bold: true }); }
-  setStats([['공주 거리', dR.toFixed(1) + ' m', ORANGE], ['제동 거리', dB.toFixed(1) + ' m', RED], ['정지 거리', tot.toFixed(1) + ' m', INK], ['지금 속력', (cv * 3.6).toFixed(0) + ' km/h']]);
+  setStats([['시간', t.toFixed(2) + ' s'], ['공주 거리', dR.toFixed(1) + ' m', ORANGE], ['제동 거리', dB.toFixed(1) + ' m', RED], ['정지 거리', tot.toFixed(1) + ' m', INK], ['지금 속력', (cv * 3.6).toFixed(0) + ' km/h']]);
   // 속도–시간 그래프 (넓이 = 이동 거리)
   const { ctx: c2, W: GW, H: GH } = gr; c2.clearRect(0, 0, GW, GH);
   const tEnd = rt + v0 / a, A = axes(c2, GW, GH, { x0: 0, x1: Math.max(4, Math.ceil(tEnd * 1.1)), y0: 0, y1: 120, xt: [...Array(Math.max(4, Math.ceil(tEnd * 1.1)) + 1).keys()].filter(k => k % (tEnd > 10 ? 2 : 1) === 0), yt: [0, 30, 60, 90, 120], xl: '시간 (s)', yl: '속력 (km/h)', top: 26, B: 40 });
