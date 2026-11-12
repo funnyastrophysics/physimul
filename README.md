@@ -1,8 +1,8 @@
 # 물리 수업 실험실
 
 - site/ : 실제로 공개되는 웹사이트 (GitHub Pages에 올리는 폴더)
-  - index.html : 첫 화면 (역학과 열역학 13 / 전자기학 9 / 빛과 파동 7 / 현대물리 9)
-  - sim/<이름>/index.html : 시뮬레이션 38개
+  - index.html : 첫 화면 (역학과 열역학 13 / 전자기학 9 / 빛과 파동 8 / 현대물리 9)
+  - sim/<이름>/index.html : 시뮬레이션 39개
   - robots.txt : 검색 노출 방지 (모든 페이지에 noindex도 들어 있음)
 - src/ : 2차·3차 시뮬레이션의 원본 (3차 7개: magnet, relativity, equivalence, laser, qubit, tunnel, atom)
   - common.css, common.js : 모든 시뮬레이션이 같이 쓰는 스타일과 함수

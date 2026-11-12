@@ -1,0 +1,110 @@
+파동의 중첩
+  <h1>파동의 중첩</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="opp">마주 보고 진행</button>
+      <button data-m="same">같은 곳에서 출발</button>
+    </div>
+    <canvas id="sim" style="height:350px;border-radius:8px;background:#fbfcfd"></canvas>
+    <div class="row">
+      <button class="b primary" id="goB">시작</button><button class="b" id="stepB">0.5초 뒤</button><button class="b" id="resetB">처음으로</button>
+    </div>
+    <div class="row">
+      <select id="kindS"><option value="wave">연속으로 발생하는 파동</option><option value="pulse">한 파장만 발생 (펄스)</option></select>
+      <select id="spS"><option value="1">실제 빠르기</option><option value="0.5" selected>0.5배로 느리게</option><option value="0.25">0.25배로 느리게</option></select>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <h2 class="wh" style="color:#2f6fdf">파동 1 <span id="d1"></span></h2>
+    <div class="controls">
+      <div class="sl"><div class="top"><span>진폭</span><b id="a1V"></b></div>
+        <input type="range" id="a1S" min="0" max="3" step="0.5" value="2"><div class="range"><span>0</span><span>3 cm</span></div></div>
+      <div class="sl"><div class="top"><span>진동수</span><b id="f1V"></b></div>
+        <input type="range" id="f1S" min="0.25" max="2" step="0.25" value="0.5"><div class="range"><span>0.25 Hz</span><span>2 Hz</span></div></div>
+      <div class="sl"><div class="top"><span>파장</span><b id="l1V"></b></div>
+        <input type="range" id="l1S" min="1" max="6" step="0.5" value="2"><div class="range"><span>1 m</span><span>6 m</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="wh" style="color:#e0782f">파동 2 <span id="d2"></span></h2>
+    <div class="row" style="margin:0 0 10px"><label class="chk"><input type="checkbox" id="cSame"> 파동 1과 같게 맞추기</label></div>
+    <div class="controls" id="w2">
+      <div class="sl"><div class="top"><span>진폭</span><b id="a2V"></b></div>
+        <input type="range" id="a2S" min="0" max="3" step="0.5" value="2"><div class="range"><span>0</span><span>3 cm</span></div></div>
+      <div class="sl"><div class="top"><span>진동수</span><b id="f2V"></b></div>
+        <input type="range" id="f2S" min="0.25" max="2" step="0.25" value="0.5"><div class="range"><span>0.25 Hz</span><span>2 Hz</span></div></div>
+      <div class="sl"><div class="top"><span>파장</span><b id="l2V"></b></div>
+        <input type="range" id="l2S" min="1" max="6" step="0.5" value="2"><div class="range"><span>1 m</span><span>6 m</span></div></div>
+    </div>
+    <div class="controls" style="margin-top:14px">
+      <div class="sl m-same"><div class="top"><span>파동 2가 늦게 출발하는 정도 (위상 차)</span><b id="phV"></b></div>
+        <input type="range" id="phS" min="0" max="360" step="30" value="0"><div class="range"><span>0° (동시에)</span><span>360° (한 주기 늦게)</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="sl"><div class="top"><span>관찰하는 점 P의 위치</span><b id="pV"></b></div>
+      <input type="range" id="pS" min="0" max="12" step="0.5" value="6"><div class="range"><span>0 m</span><span>12 m</span></div></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---CSS---
+.wh{font-size:16px;margin:0 0 10px}.wh span{font-size:13px;font-weight:400;color:var(--sub);margin-left:6px}
+---SCRIPT---
+const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
+const LX = 12;   // 줄의 길이 (m)
+let mode, t = 0, run = false;
+const up = bindLabels({ a1S: ['a1V', v => v.toFixed(1) + ' cm'], f1S: ['f1V', v => v.toFixed(2) + ' Hz'], l1S: ['l1V', v => v.toFixed(1) + ' m'],
+  a2S: ['a2V', v => v.toFixed(1) + ' cm'], f2S: ['f2V', v => v.toFixed(2) + ' Hz'], l2S: ['l2V', v => v.toFixed(1) + ' m'], phS: ['phV', v => v + '°'], pS: ['pV', v => 'x = ' + v.toFixed(1) + ' m'] });
+function waves(){
+  const w1 = { A: +$('a1S').value, f: +$('f1S').value, l: +$('l1S').value, lag: 0, right: true };
+  const w2 = { A: +$('a2S').value, f: +$('f2S').value, l: +$('l2S').value, lag: mode === 'same' ? +$('phS').value / 360 / +$('f2S').value : 0, right: mode === 'same' };
+  w1.v = w1.f * w1.l; w2.v = w2.f * w2.l; return [w1, w2];
+}
+// 파원에서 떨어진 거리 d인 곳의 변위: 파동이 도착한 뒤부터 진동한다. 처음에는 위(+)로 움직이기 시작한다.
+function disp(w, x, tt){ const d = w.right ? x : LX - x, tau = tt - w.lag - d / w.v; if (tau < 0) return 0; if ($('kindS').value === 'pulse' && tau > 1 / w.f) return 0; return w.A * Math.sin(2 * Math.PI * w.f * tau); }
+function reset(){ t = 0; run = false; $('goB').textContent = '시작'; }
+function draw(dt){
+  if (run) t += dt * +$('spS').value;
+  const { ctx, W, H } = s, ws = waves(), L = 34, R = 10, pw = W - L - R, X = x => L + x / LX * pw;
+  ctx.clearRect(0, 0, W, H);
+  const sc = Math.max(2, ws[0].A + ws[1].A), rows = [{ y: 52, h: 34, lab: '파동 1의 변위 (cm)', c: BLUE, f: x => disp(ws[0], x, t) }, { y: 138, h: 34, lab: '파동 2의 변위 (cm)', c: ORANGE, f: x => disp(ws[1], x, t) },
+    { y: 256, h: 62, lab: '합성파의 변위 (cm) = 두 변위의 합', c: PURPLE, f: x => disp(ws[0], x, t) + disp(ws[1], x, t) }];
+  const px = +$('pS').value;
+  // 세로 눈금선 (1 m 간격)
+  for (let x = 0; x <= LX; x++){ line(ctx, [[X(x), 14], [X(x), H - 22]], x % 2 ? '#f1f3f7' : '#e6e9ef', 1); if (x % 2 === 0) T(ctx, String(x), X(x), H - 12, { size: 11 }); }
+  T(ctx, 'x(m)', L - 6, H - 12, { size: 10, align: 'right' });
+  line(ctx, [[X(px), 14], [X(px), H - 22]], GREEN, 1.5, [4, 3]); T(ctx, 'P', X(px), 8, { color: GREEN, bold: true, size: 12 });
+  rows.forEach((r, k) => {
+    const hh = r.h, Y = v => r.y - v / sc * hh, top = k === 2 ? sc : Math.max(ws[0].A, ws[1].A, 1);
+    line(ctx, [[L, r.y], [L + pw, r.y]], GRAY, 1);
+    T(ctx, r.lab, L + 2, r.y - hh - 9, { align: 'left', color: r.c, bold: true, size: 12 });
+    T(ctx, fmt(top, top % 1 ? 1 : 0), L - 4, Y(top), { align: 'right', size: 10 }); T(ctx, '0', L - 4, r.y, { align: 'right', size: 10 }); T(ctx, fmt(-top, top % 1 ? 1 : 0), L - 4, Y(-top), { align: 'right', size: 10 });
+    line(ctx, [[L, Y(top)], [L + pw, Y(top)]], '#eef0f4', 1, [2, 3]); line(ctx, [[L, Y(-top)], [L + pw, Y(-top)]], '#eef0f4', 1, [2, 3]);
+    if (k === 2){   // 합성파 뒤에 두 파동을 옅게 겹쳐 그린다
+      [0, 1].forEach(i => { const pts = []; for (let q = 0; q <= pw; q += 2){ const x = q / pw * LX; pts.push([L + q, Y(disp(ws[i], x, t))]); } line(ctx, pts, i ? 'rgba(224,120,47,0.35)' : 'rgba(47,111,223,0.35)', 1.2); }); }
+    const pts = []; for (let q = 0; q <= pw; q += 1.5){ const x = q / pw * LX; pts.push([L + q, Y(r.f(x))]); } line(ctx, pts, r.c, k === 2 ? 2.8 : 2);
+    ctx.fillStyle = r.c; ctx.beginPath(); ctx.arc(X(px), Y(r.f(px)), k === 2 ? 5 : 4, 0, 7); ctx.fill();
+    // 진행 방향
+    const dirR = k === 0 || (k === 1 && mode === 'same'); if (k < 2) arrow(ctx, dirR ? L + pw - 46 : L + pw - 16, r.y - hh - 9, dirR ? L + pw - 16 : L + pw - 46, r.y - hh - 9, r.c, 2, 7);
+  });
+  $('d1').textContent = '오른쪽으로 진행'; $('d2').textContent = mode === 'same' ? '오른쪽으로 진행' : '왼쪽으로 진행';
+  const y1 = disp(ws[0], px, t), y2 = disp(ws[1], px, t), cm = v => fmt(v, 2) + ' cm';
+  setStats([['시간', fmt(t, 2) + ' s'], ['파동 1의 주기와 속력', fmt(1 / ws[0].f, 2) + ' s, ' + fmt(ws[0].v, 2) + ' m/s', BLUE], ['파동 2의 주기와 속력', fmt(1 / ws[1].f, 2) + ' s, ' + fmt(ws[1].v, 2) + ' m/s', ORANGE],
+    ['P에서 파동 1의 변위', cm(y1), BLUE], ['P에서 파동 2의 변위', cm(y2), ORANGE], ['P에서 합성파의 변위', cm(y1 + y2), PURPLE]]);
+}
+function sync(){ const on = $('cSame').checked; if (on){ [['a1S', 'a2S'], ['f1S', 'f2S'], ['l1S', 'l2S']].forEach(p => { $(p[1]).value = $(p[0]).value; }); up(); }
+  $('w2').style.opacity = on ? 0.45 : 1; ['a2S', 'f2S', 'l2S'].forEach(id => { $(id).disabled = on; }); }
+const TEXT = {
+  opp: ['두 파동이 줄의 양 끝에서 서로를 향해 진행합니다. 두 파동이 만나는 동안과 지나간 뒤의 모습을 관찰하세요. ‘0.5초 뒤’를 누르면 시간을 조금씩 넘기며 볼 수 있습니다.',
+    '두 파동이 만나 겹쳐질 때 매질의 변위는 각 파동의 변위를 더한 것과 같습니다(중첩 원리). 겹쳐진 뒤에는 두 파동이 서로 영향을 주지 않고 원래 모양 그대로 진행합니다(파동의 독립성). 마루와 마루가 만나면 변위가 커지고(보강 간섭), 마루와 골이 만나면 변위가 작아집니다(상쇄 간섭). 진폭, 진동수, 파장이 같은 두 연속 파동이 마주 보고 진행하면 진행하지 않는 것처럼 보이는 정상파가 만들어지며, 전혀 진동하지 않는 마디와 가장 크게 진동하는 배가 번갈아 나타납니다. 파동의 속력은 v = fλ이고, 같은 매질에서는 속력이 같으므로 진동수가 크면 파장이 짧습니다.'],
+  same: ['두 파동이 줄의 왼쪽 끝에서 출발해 같은 방향으로 진행합니다. 파동 2가 늦게 출발하는 정도(위상 차)를 바꾸며 합성파의 진폭을 비교하고, 진동수를 조금 다르게도 해 보세요.',
+    '같은 방향으로 진행하는 두 파동도 중첩 원리에 따라 변위가 더해집니다. 진동수와 파장이 같은 두 파동의 위상이 같으면(위상 차 0°) 합성파의 진폭은 두 진폭의 합이 되고, 위상이 반대이면(위상 차 180°) 두 진폭의 차가 됩니다. 진폭까지 같으면 완전히 상쇄되어 줄이 진동하지 않습니다. 소음 제거 헤드폰은 소음과 위상이 반대인 소리를 만들어 소음을 줄입니다. 속력은 같고 진동수가 조금 다른 두 파동을 합치면 진폭이 커졌다 작아졌다를 되풀이하며, 소리에서는 이것이 맥놀이로 들립니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); reset(); });
+$('goB').addEventListener('click', () => { run = !run; $('goB').textContent = run ? '일시 정지' : '계속'; });
+$('stepB').addEventListener('click', () => { run = false; t = Math.round((t + 0.5) * 2) / 2; $('goB').textContent = '계속'; });
+$('resetB').addEventListener('click', reset);
+$('cSame').addEventListener('change', sync);
+['a1S', 'f1S', 'l1S'].forEach(id => $(id).addEventListener('input', () => { if ($('cSame').checked) sync(); }));
+['f1S', 'l1S', 'f2S', 'l2S', 'phS', 'kindS'].forEach(id => $(id).addEventListener(id === 'kindS' ? 'change' : 'input', reset));
+sync(); loop(draw);
