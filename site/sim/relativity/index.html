@@ -65,6 +65,7 @@ label.chk input{width:18px;height:18px}
     </div>
     <canvas id="sim" style="height:320px;border-radius:8px;background:#141a28"></canvas>
     <div class="row"><button class="b primary" id="runB">일시 정지</button><button class="b" id="resetB">처음으로</button></div>
+    <div id="tbar" class="m-time"></div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card">
@@ -87,7 +88,9 @@ function arrow(ctx, x1, y1, x2, y2, color, lw, hs){
   const L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return; hs = hs || Math.min(10, 4 + L * 0.3); const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
   ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hs * 0.8, y2 - uy * hs * 0.8); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * hs - uy * hs * 0.55, y2 - uy * hs + ux * hs * 0.55); ctx.lineTo(x2 - ux * hs + uy * hs * 0.55, y2 - uy * hs - ux * hs * 0.55); ctx.closePath(); ctx.fill(); }
-function setStats(items){ const box = $('stats'), key = items.map(i => i[0]).join('|');
+let _clockLabel = null, _clockOn = () => true;
+function setStats(items){ if (_clockLabel && _clockOn() && !items.some(i => i[0].indexOf(_clockLabel) === 0)) items = [[_clockLabel, '']].concat(items);
+  const box = $('stats'), key = items.map(i => i[0]).join('|');
   if (box.dataset.k !== key){ box.dataset.k = key; box.innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="val"${c ? ` style="color:${c}"` : ''}>${v}</div></div>`).join(''); return; }
   items.forEach(([k, v, c], i) => { const cell = box.children[i]; if (cell.dataset.edit) return; const e = cell.lastChild; if (e.textContent !== String(v)) e.innerHTML = v; e.style.color = c || ''; }); }
 const fmt = (v, d) => { const s = (+v).toFixed(d); return (+s === 0 ? (0).toFixed(d) : s).replace('-', '−'); };
@@ -161,7 +164,7 @@ const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * 
 // 반환한 show(t)를 매 프레임 부르면 막대와 숫자가 지금 시각을 따라간다.
 function timeBar(host, o){
   const st = o.step || 0.1, lab = o.label || '시간';
-  host.className = 'tbar';
+  host.classList.add('tbar');
   host.innerHTML = '<div class="top"><span>시간 막대</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
   const bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0, num = null;
   const go = v => { const m = o.max(); o.set(Math.max(0, Math.min(isFinite(m) ? m : 1e9, v))); };
@@ -179,6 +182,26 @@ function timeBar(host, o){
 // 가속도가 중력 가속도 g의 몇 배인지: 간단한 분수이면 분수로, 아니면 소수로 (예: 4/5 g, 0.17 g)
 function gTxt(a){ const r = Math.abs(a) / 9.8; if (r < 0.0005) return '0'; for (let d = 1; d <= 12; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.0006) return (a < 0 ? '−' : '') + (d === 1 ? (n === 1 ? '' : n) : n + '/' + d + ' ') + 'g'; } return fmt(a / 9.8, 2) + ' g'; }
 const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>';
+// 시계가 달린 반복 실행. fn(dt)를 매 프레임 부르되, 시간 막대와 '시간' 칸으로 원하는 시각을 고를 수 있게 한다.
+// 뒤로 갈 때는 o.reset()으로 처음 상태를 만든 뒤 원하는 시각까지 빠르게 다시 계산한다(결과가 항상 같아야 하므로 무작위 요소가 없는 시뮬레이션에만 쓴다).
+// o: { reset: 처음 상태로, start: 출발시키기(선택), active: () => 지금 운동 중인지(선택, 없으면 항상 진행), label: 시간 칸 이름(기본 '시간'), max: () => 막대 끝(선택), step, onPause: b => 버튼 글자 바꾸기 }
+// 반환: { zero(): 시계를 0으로, toggle(): 일시 정지/계속, paused(), t() }
+function loopT(fn, o){
+  let T = 0, paused = false, want = null, inReplay = false;
+  let host = $('tbar'); if (!host){ host = document.createElement('div'); host.id = 'tbar'; const st = $('stats'); st.parentNode.insertBefore(host, st); }
+  _clockLabel = o.label || '시간'; if (o.visible) _clockOn = o.visible;
+  const act = () => !o.active || o.active();
+  const setP = b => { paused = b; if (o.onPause) o.onPause(b); };
+  const show = timeBar(host, { label: _clockLabel, step: o.step, max: () => o.max ? o.max() : Math.max(10, Math.ceil(T / 10) * 10), set: v => { want = v; } });
+  loop(dt => {
+    if (want !== null){ const v = want; want = null; inReplay = true;
+      if (v < T - 1e-9 || !act()){ o.reset(); T = 0; if (o.start) o.start(); }
+      let n = 0; while (T < v - 1e-9 && n < 6000 && act()){ const h = Math.min(1 / 120, v - T); fn(h); T += h; n++; }
+      inReplay = false; setP(true); }
+    if (!paused && act()){ fn(dt); T += dt; } else fn(0);
+    show(T); });
+  return { zero(){ if (!inReplay){ T = 0; if (paused) setP(false); } }, toggle(){ setP(!paused); }, paused: () => paused, t: () => T };
+}
 /*SLIDER-EDIT*/
 // 슬라이더 옆의 값을 누르면 숫자를 직접 입력할 수 있게 한다. (값 글자의 숫자가 슬라이더 값과 같을 때만)
 setTimeout(function(){
@@ -209,10 +232,10 @@ setTimeout(function(){
 /*SLIDER-EDIT-END*/
 
 const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
-let mode, run = true, tG = 0, tS = 0, shipX = 0, trail = [];
+let mode, run = true, tG = 0, tS = 0, shipX = 0, trail = [], clk = null;
 const LIGHT = '#ffe58a', PALE = '#c9d2e3', DIM = '#8d97aa';
 bindLabels({ vS: ['vV', v => v === 0 ? '정지' : '빛의 속력의 ' + Math.round(v * 100) + ' %'] });
-const reset = () => { tG = 0; tS = 0; shipX = 0; trail = []; };
+const reset = () => { tG = 0; tS = 0; shipX = 0; trail = []; if (clk) clk.zero(); };
 const tri = p => { p = ((p % 1) + 1) % 1; return p < 0.5 ? p * 2 : 2 - p * 2; };   // 0→1→0
 function clock(ctx, x, yTop, h, w, ph){
   ctx.fillStyle = PALE; ctx.fillRect(x - w / 2, yTop - 4, w, 4); ctx.fillRect(x - w / 2, yTop + h, w, 4);
@@ -239,7 +262,7 @@ function drawTime(dt){
   if (v > 0){ ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.moveTo(x - 34, yTop + h / 2 - 8); ctx.lineTo(x - 34 - 10 - 18 * v, yTop + h / 2); ctx.lineTo(x - 34, yTop + h / 2 + 8); ctx.fill(); }
   if (trail.length > 1) line(ctx, trail, 'rgba(255,229,138,0.55)', 1.5, [3, 3]);
   const y = clock(ctx, x, yTop, h, 44, tS / 2);
-  if (run){ trail.push([x, y]); if (trail.length > 900) trail.shift(); }
+  if (run && !(trail.length && trail[trail.length - 1][0] === x && trail[trail.length - 1][1] === y)){ trail.push([x, y]); if (trail.length > 900) trail.shift(); }
   T(ctx, fmt(tS, 1) + ' s', Math.min(W - 34, Math.max(34, x)), yTop + h + 26, { color: LIGHT, bold: true, size: 15 });
   setStats([['지상의 시계', fmt(tG, 1) + ' s'], ['우주선의 시계', fmt(tS, 1) + ' s', ORANGE], ['우주선 시계의 빛이 한 번 왕복하는 시간 (지상에서 측정)', fmt(2 / k, 2) + ' s'], ['빛의 속력', '두 시계에서 같음']]);
 }
@@ -265,9 +288,9 @@ const TEXT = {
   len: ['점선은 우주선과 함께 움직이는 사람이 잰 우주선의 길이입니다. 우주선의 속력을 바꾸며 지상의 관찰자가 잰 길이와 비교하세요.',
     '지상의 관찰자가 측정하면 움직이는 우주선의 길이는 운동 방향으로 짧아집니다. 이 현상을 길이 수축이라고 합니다. 운동 방향에 수직인 방향(높이)의 길이는 변하지 않습니다. 우주에서 날아오는 뮤온은 수명이 짧아 지표면에 닿기 어려울 것 같지만, 지상에서 보면 뮤온의 시간이 느리게 가고 뮤온에서 보면 대기층의 두께가 짧아지므로 지표면에서 많이 발견됩니다. 위성 항법 장치(GPS)의 시간 보정에도 상대성 이론이 쓰입니다.'] };
 setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; reset(); rs(); });
-$('runB').addEventListener('click', () => { run = !run; $('runB').textContent = run ? '일시 정지' : '계속'; });
+$('runB').addEventListener('click', () => clk.toggle());
 $('resetB').addEventListener('click', reset);
-loop(draw);
+clk = loopT(draw, { reset, label: '지상의 시계', visible: () => mode === 'time', onPause: b => { $('runB').textContent = b ? '계속' : '일시 정지'; } });
 })();
 </script>
 <script src="../../practice/panel.js" defer></script>

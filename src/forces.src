@@ -17,6 +17,7 @@
       <button class="b" id="resetB">처음으로</button>
       <label class="chk"><input type="checkbox" id="cComp" checked> 중력의 성분</label>
     </div>
+    <div id="tbar" class="m-slope"></div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card">
@@ -107,8 +108,9 @@ const TEXT = {
   slope: ['빗면의 기울기와 마찰 계수를 바꾸며 물체에 작용하는 힘을 분석하세요. 중력을 빗면에 나란한 성분과 수직인 성분으로 나누면 운동을 예측할 수 있습니다.',
     '중력의 빗면 방향 성분은 mg sinθ, 수직 성분은 mg cosθ이며 수직 항력과 크기가 같습니다. 중력의 빗면 방향 성분이 최대 정지 마찰력(μₛN)보다 크면 물체가 미끄러지고, 그때 가속도는 (mg sinθ − μₖN)/m입니다. 화살표 길이는 힘의 크기에 비례합니다.'] };
 setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
-const reset = () => { pos = 0; vel = 0; run = false; };
+let clock = null;
+const reset = () => { pos = 0; vel = 0; run = false; if (clock) clock.zero(); };
 $('goB').addEventListener('click', () => { reset(); run = true; vel = 0; });
 $('resetB').addEventListener('click', reset);
 ['angS', 'mS', 'musS', 'mukS'].forEach(id => $(id).addEventListener('input', reset));
-loop(dt => mode === 'sum' ? drawSum() : drawSlope(dt));
+clock = loopT(dt => mode === 'sum' ? drawSum() : drawSlope(dt), { reset, start: () => { run = true; vel = 0; }, active: () => mode === 'slope' && run, visible: () => mode === 'slope' });

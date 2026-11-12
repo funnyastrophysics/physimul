@@ -15,6 +15,7 @@
       <select id="medS" class="m-trans"><option value="slow">가벼운 줄 → 무거운 줄 (느려짐)</option><option value="fast">무거운 줄 → 가벼운 줄 (빨라짐)</option></select>
       <button class="b" id="slowB">느리게</button>
     </div>
+    <div id="tbar" class="m-kind"></div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card">
@@ -96,4 +97,4 @@ setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').t
 $('pulseB').addEventListener('click', () => { setupMedium(); pulseT = 0; });
 $('endS').addEventListener('change', setupMedium); $('medS').addEventListener('change', setupMedium);
 $('slowB').addEventListener('click', () => { slow = slow === 1 ? 0.35 : 1; $('slowB').classList.toggle('on', slow < 1); });
-loop(dt => mode === 'kind' ? kind(dt) : waveDraw(dt));
+loopT(dt => mode === 'kind' ? kind(dt) : waveDraw(dt), { reset: () => { t = 0; }, active: () => mode === 'kind', visible: () => mode === 'kind' });
