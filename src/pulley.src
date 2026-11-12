@@ -14,6 +14,8 @@
       <button class="b m-incl" id="cutB">A와 B 사이의 실 끊기</button>
       <button class="b m-incl" id="balB">일정한 속력이 되게 기울기 맞추기</button>
     </div>
+    <div id="tbar">
+    </div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card"><canvas id="graph" style="height:200px"></canvas></div>
@@ -37,7 +39,7 @@
 ---SCRIPT---
 const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); gr = fitCanvas(G); }; window.addEventListener('resize', rs);
 const g = 9.8, D = Math.PI / 180, BS = 24;
-let mode, t = 0, run = false, done = '', x = 0, v = 0, cut = false, xA = 0, vA = 0, buf = [], cutX = 0, topC = null;
+let mode, t = 0, run = false, done = '', x = 0, v = 0, cut = false, xA = 0, vA = 0, buf = [], cutX = 0, topC = null, cutT = null, endC = null;
 bindLabels({ aS: ['aV', v => v.toFixed(1) + ' kg'], bS: ['bV', v => v.toFixed(1) + ' kg'], cS: ['cV', v => v.toFixed(1) + ' kg'], lS: ['lV', v => v + '°'], rS: ['rV', v => (+v).toFixed(1) + '°'], vS: ['vV', v => v.toFixed(1) + ' m/s'] });
 // 실의 방향(+: 오른쪽 물체가 내려가는 방향)으로 본 물체 목록. k: 중력 가운데 운동 방향 성분의 비율
 function objs(){
@@ -50,27 +52,34 @@ function objs(){
 function accel(list){ let F = 0, M = 0; list.forEach(o => { F += o.m * g * o.k; M += o.m; }); return F / M; }
 // 물체 사이의 실이 당기는 힘: 앞쪽 물체들만 묶어서 구한다
 function tensions(list, a){ const T = []; let sum = 0; for (let i = 0; i < list.length - 1; i++){ sum += list[i].m * a - list[i].m * g * list[i].k; T.push(sum); } return T; }
-function reset(){ t = 0; run = false; done = ''; x = 0; xA = 0; cut = false; buf = []; cutX = 0; topC = null; v = vA = mode === 'incl' ? +$('vS').value : 0; $('goB').textContent = mode === 'incl' && v > 0 ? '출발' : '놓기'; $('cutB').disabled = false; }
+function reset(){ t = 0; run = false; done = ''; x = 0; xA = 0; cut = false; buf = []; cutX = 0; topC = null; cutT = null; endC = null; v = vA = mode === 'incl' ? +$('vS').value : 0; $('goB').textContent = mode === 'incl' && v > 0 ? '출발' : '놓기'; $('cutB').disabled = false; }
 function geoIncl(){
   const { W, H } = s, a1 = +$('lS').value * D, a2 = +$('rS').value * D, ax = W / 2, ay = 62, by = H - 26;
   const L1 = Math.min((W / 2 - 12) / Math.cos(a1), (by - ay) / Math.sin(a1)), L2 = Math.min((W / 2 - 12) / Math.cos(a2), (by - ay) / Math.sin(a2));
   const ppm = 88; return { a1, a2, ax, ay, by, L1, L2, ppm, len1: L1 / ppm, len2: L2 / ppm };
 }
+// 시각 tt일 때의 상태를 식으로 바로 구한다. 실은 cutT에 끊어진다(끊지 않았으면 null).
+function at(tt){
+  const o = objs(), v0 = mode === 'incl' ? +$('vS').value : 0, a = accel(o);
+  if (cutT === null || tt <= cutT){ const x = v0 * tt + 0.5 * a * tt * tt, v = v0 + a * tt; return { x, v, xA: x, vA: v, cut: false, cutX: 0, topC: null }; }
+  const xc = v0 * cutT + 0.5 * a * cutT * cutT, vc = v0 + a * cutT, u = tt - cutT, aA = g * o[0].k, aR = accel(o.slice(1));
+  let topC = null; if (aA < 0 && vc > 0){ const ut = vc / -aA; if (u >= ut) topC = vc * ut + 0.5 * aR * ut * ut; } else if (vc <= 0) topC = 0;
+  return { x: xc + vc * u + 0.5 * aR * u * u, v: vc + aR * u, xA: xc + vc * u + 0.5 * aA * u * u, vA: vc + aA * u, cut: true, cutX: xc, topC };
+}
+function ended(q){
+  if (mode === 'table') return q.x >= 0.8; if (mode === 'atwood') return Math.abs(q.x) >= 0.6;
+  const G = geoIncl(), dA = 1.5 - q.xA, dB = 1.1 - q.x, dC = 0.45 + q.x;
+  return dB < 0.22 || dC < 0.22 || dC > G.len2 - 0.16 || dB > G.len1 - 0.16 || dA > G.len1 - 0.16 || (q.cut && dA - dB < 0.3 && q.vA > q.v) || dA < 0.22;
+}
+// 운동이 끝나는 시각(끝에 닿는 때). 한 번 구해 두고 조건이 바뀌면 다시 구한다.
+function tEnd(){ if (endC !== null) return endC; let e = Infinity; for (let tt = 0.004; tt <= 30; tt += 0.004) if (ended(at(tt))){ e = tt; break; } return endC = e; }
+const DONE = { table: 'A가 L만큼 이동했습니다.', atwood: '끝까지 이동했습니다.', incl: '물체가 빗면의 끝에 닿아 멈췄습니다.' };
+function setT(val){ run = false; t = Math.max(0, Math.min(tEnd(), val)); $('goB').textContent = t > 0 && t < tEnd() ? '계속' : (mode === 'incl' && +$('vS').value > 0 ? '출발' : '놓기'); }
 function step(dt){
-  if (!run || done) return;
-  const o = objs(), n = 4, h = dt / n;
-  for (let i = 0; i < n; i++){
-    if (cut){ const aA = g * o[0].k, a = accel(o.slice(1)); vA += aA * h; xA += vA * h; v += a * h; x += v * h;
-      if (topC === null && vA <= 0) topC = x - cutX; }
-    else { const a = accel(o); v += a * h; x += v * h; xA = x; vA = v; }
-    t += h;
-    if (mode === 'table'){ if (x >= 0.8){ done = 'A가 L만큼 이동했습니다.'; break; } }
-    else if (mode === 'atwood'){ if (Math.abs(x) >= 0.6){ done = '끝까지 이동했습니다.'; break; } }
-    else { const q = geoIncl(), dA = 1.5 - xA, dB = 1.1 - x, dC = 0.45 + x;
-      if (dB < 0.22 || dC < 0.22 || dC > q.len2 - 0.16 || dB > q.len1 - 0.16 || dA > q.len1 - 0.16 || (cut ? dA - dB < 0.3 && vA > v : false) || dA < 0.22){ done = '물체가 빗면의 끝에 닿아 멈췄습니다.'; break; } }
-  }
-  buf.push({ t, v, vA }); if (buf.length > 900) buf.shift();
-  if (done){ run = false; $('goB').textContent = '놓기'; }
+  if (run){ t += dt; if (t >= tEnd()){ t = tEnd(); run = false; $('goB').textContent = '놓기'; } }
+  const q = at(t); x = q.x; v = q.v; xA = q.xA; vA = q.vA; cut = q.cut; cutX = q.cutX; topC = q.topC; done = t >= tEnd() - 1e-9 ? DONE[mode] : '';
+  buf = []; const n = Math.max(1, Math.min(240, Math.ceil(t / 0.01))); for (let i = 0; i <= n; i++){ const tt = t * i / n, h = at(tt); buf.push({ t: tt, v: h.v, vA: h.vA }); }
+  showT(t);
 }
 function box(ctx, cx, cy, ang, o){ ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.fillStyle = o.c; ctx.fillRect(-BS / 2, -BS / 2, BS, BS); ctx.restore(); T(ctx, o.n, cx, cy, { color: '#fff', bold: true, size: 13 }); }
 function ghost(ctx, cx, cy, ang){ ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.strokeStyle = GRAY; ctx.setLineDash([3, 3]); ctx.strokeRect(-BS / 2, -BS / 2, BS, BS); ctx.setLineDash([]); ctx.restore(); }
@@ -114,14 +123,14 @@ function draw(dt){
   const acc = gAcc;
   if (mode === 'incl'){
     const aAll = accel(o), aA = cut ? g * o[0].k : aAll, aR = cut ? accel(o.slice(1)) : aAll, Tn = cut ? [0].concat(tensions(o.slice(1), aR)) : tensions(o, aAll);
-    setStats([['A의 가속도', acc(aA), BLUE], ['B, C의 가속도', acc(aR), GREEN], ['A–B 실이 당기는 힘(장력)', cut ? '끊어짐' : f2(Tn[0], 'N')], ['B–C 실이 당기는 힘(장력)', f2(Tn[1], 'N')],
+    setStats([['시간', f2(t, 's')], ['A의 가속도', acc(aA), BLUE], ['B, C의 가속도', acc(aR), GREEN], ['A–B 실이 당기는 힘(장력)', cut ? '끊어짐' : f2(Tn[0], 'N')], ['B–C 실이 당기는 힘(장력)', f2(Tn[1], 'N')],
       ['A의 속도', f2(vA, 'm/s'), BLUE], ['C의 속도', f2(v, 'm/s'), GREEN], ['실이 끊어진 뒤 C의 이동 거리', cut ? f2(x - cutX, 'm') : '—'], ['A가 최고점일 때 C의 이동 거리', topC === null ? '—' : f2(topC, 'm'), ORANGE]]);
   } else {
     const a = accel(o), Tn = tensions(o, a);
-    setStats([['가속도의 크기', acc(Math.abs(a)), ORANGE], ['실이 당기는 힘(장력)', f2(Tn[0], 'N')], ['속력', f2(Math.abs(v), 'm/s')], ['이동 거리', f2(Math.abs(x), 'm')], ['걸린 시간', f2(t, 's'), BLUE]]);
+    setStats([['가속도의 크기', acc(Math.abs(a)), ORANGE], ['실이 당기는 힘(장력)', f2(Tn[0], 'N')], ['속력', f2(Math.abs(v), 'm/s')], ['이동 거리', f2(Math.abs(x), 'm')], ['시간', f2(t, 's'), BLUE]]);
   }
-  const names = cut ? ['B, C의 속도 (m/s)', 'A의 속도 (m/s)'] : [mode === 'incl' ? '속도 (m/s)  +: C가 내려가는 방향' : '속도 (m/s)'];
-  timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: cut ? ['v', 'vA'] : ['v'], names, colors: cut ? [GREEN, BLUE] : [ORANGE], min: 2, pos: mode === 'table' }], 3);
+  const names = cutT !== null ? ['B, C의 속도 (m/s)', 'A의 속도 (m/s)'] : [mode === 'incl' ? '속도 (m/s)  +: C가 내려가는 방향' : '속도 (m/s)'];
+  timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: cutT !== null ? ['v', 'vA'] : ['v'], names, colors: cutT !== null ? [GREEN, BLUE] : [ORANGE], min: 2, pos: mode === 'table' }], 3);
 }
 const TEXT = {
   table: ['수평면 위의 A와 매달린 B가 실로 연결되어 있습니다. ‘놓기’를 눌러 A가 L만큼 이동하는 데 걸리는 시간을 재고, ‘A와 B 바꾸기’를 눌러 비교하세요. 모든 마찰은 무시합니다.',
@@ -133,12 +142,13 @@ const TEXT = {
 setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1];
   if (m === 'incl'){ $('aS').value = 2; $('bS').value = 1; $('cS').value = 2; } else { $('aS').value = 1; $('bS').value = 4; }
   ['aS', 'bS', 'cS'].forEach(id => $(id).dispatchEvent(new Event('input'))); rs(); reset(); });
-$('goB').addEventListener('click', () => { if (done) reset(); run = !run; $('goB').textContent = run ? '일시 정지' : '계속'; });
+const showT = timeBar($('tbar'), { max: tEnd, set: setT });
+$('goB').addEventListener('click', () => { if (done){ const c = cutT; reset(); } run = !run; $('goB').textContent = run ? '일시 정지' : '계속'; });
 $('resetB').addEventListener('click', reset);
 $('swapB').addEventListener('click', () => { const a = $('aS').value; $('aS').value = $('bS').value; $('bS').value = a; ['aS', 'bS'].forEach(id => $(id).dispatchEvent(new Event('input'))); });
 $('balB').addEventListener('click', () => { const q = (+$('aS').value + +$('bS').value) * Math.sin(+$('lS').value * D) / +$('cS').value, a = Math.asin(Math.min(1, q)) / D;
   if (q > 1 || a > 60 || a < 15){ window.alert('이 질량과 왼쪽 기울기로는 15°~60° 안에서 맞출 수 없어요. C의 질량을 키우거나 왼쪽 기울기를 줄여 보세요.'); return; }
   $('rS').value = a.toFixed(1); $('rS').dispatchEvent(new Event('input')); });
-$('cutB').addEventListener('click', () => { if (cut || done) return; cut = true; cutX = x; $('cutB').disabled = true; if (!run){ run = true; $('goB').textContent = '일시 정지'; } });
+$('cutB').addEventListener('click', () => { if (cutT !== null || done) return; cutT = t; endC = null; $('cutB').disabled = true; if (!run){ run = true; $('goB').textContent = '일시 정지'; } });
 ['aS', 'bS', 'cS', 'lS', 'rS', 'vS'].forEach(id => $(id).addEventListener('input', reset));
 loop(draw);

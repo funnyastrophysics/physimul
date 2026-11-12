@@ -61,12 +61,14 @@ label.chk input{width:18px;height:18px}
   <div class="card">
     <canvas id="sim" style="height:330px"></canvas>
     <div class="row">
-      <button class="b primary" id="cutB">줄 끊기</button>
+      <button class="b primary" id="goB">일시 정지</button>
+      <button class="b" id="cutB">줄 끊기</button>
       <button class="b" id="resetB">처음으로</button>
       <label class="chk"><input type="checkbox" id="cV" checked> 속도</label>
       <label class="chk"><input type="checkbox" id="cF" checked> 구심력</label>
       <label class="chk"><input type="checkbox" id="cTrail" checked> 지나간 자리</label>
     </div>
+    <div id="tbar"></div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card">
@@ -217,21 +219,28 @@ setTimeout(function(){
 /*SLIDER-EDIT-END*/
 
 const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
-let ang = 0, free = null, trail = [];
+let t = 0, run = true, cutT = null;   // cutT: 줄을 끊은 시각
 bindLabels({ vS: ['vV', v => v.toFixed(1) + ' m/s'], rS: ['rV', v => v.toFixed(2) + ' m'], mS: ['mV', v => v.toFixed(2) + ' kg'] });
-function reset(){ free = null; trail = []; }
-$('cutB').addEventListener('click', () => { if (free) return; const v = +$('vS').value, r = +$('rS').value;
-  free = { x: r * Math.cos(ang), y: r * Math.sin(ang), vx: -v * Math.sin(ang), vy: v * Math.cos(ang) }; });
+function reset(){ t = 0; cutT = null; run = true; $('goB').textContent = '일시 정지'; $('cutB').disabled = false; }
+// 시각 tt일 때 공의 위치와 속도 (줄을 끊은 뒤에는 접선 방향으로 등속 직선 운동)
+function at(tt){ const v = +$('vS').value, r = +$('rS').value, w = v / r, a = w * Math.min(tt, cutT === null ? tt : cutT), u = cutT === null ? 0 : Math.max(0, tt - cutT);
+  const vx = -v * Math.sin(a), vy = v * Math.cos(a); return { x: r * Math.cos(a) + vx * u, y: r * Math.sin(a) + vy * u, vx, vy, free: u > 0 }; }
+// 줄을 끊으면 화면 밖(중심에서 2.2 m)으로 나갈 때까지만 움직인다
+function tEnd(){ if (cutT === null) return Infinity; const v = +$('vS').value, r = +$('rS').value; return cutT + Math.sqrt(2.2 * 2.2 - r * r) / v; }
+function setT(val){ run = false; t = Math.max(0, Math.min(tEnd(), val)); $('goB').textContent = '계속'; }
+const showT = timeBar($('tbar'), { max: tEnd, set: setT });
+$('goB').addEventListener('click', () => { if (t >= tEnd() - 1e-9){ reset(); return; } run = !run; $('goB').textContent = run ? '일시 정지' : '계속'; });
+$('cutB').addEventListener('click', () => { if (cutT !== null) return; cutT = t; $('cutB').disabled = true; run = true; $('goB').textContent = '일시 정지'; });
 $('resetB').addEventListener('click', reset);
-['vS', 'rS'].forEach(id => $(id).addEventListener('input', () => { trail = []; }));
+['vS', 'rS'].forEach(id => $(id).addEventListener('input', reset));
 loop(dt => {
   const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
-  const v = +$('vS').value, r = +$('rS').value, m = +$('mS').value, w = v / r, k = Math.min(W, H) / 3.2, cx = W / 2, cy = H / 2;
+  const v = +$('vS').value, r = +$('rS').value, m = +$('mS').value, k = Math.min(W, H) / 3.2, cx = W / 2, cy = H / 2;
   const X = x => cx + x * k, Y = y => cy - y * k;
-  let bx, by, vx, vy;
-  if (!free){ ang += w * dt; bx = r * Math.cos(ang); by = r * Math.sin(ang); vx = -v * Math.sin(ang); vy = v * Math.cos(ang); }
-  else { free.x += free.vx * dt; free.y += free.vy * dt; bx = free.x; by = free.y; vx = free.vx; vy = free.vy; if (Math.hypot(bx, by) > 2.2) reset(); }
-  trail.push([bx, by]); if (trail.length > 400) trail.shift();
+  if (run){ t += dt; if (t >= tEnd()){ t = tEnd(); run = false; $('goB').textContent = '다시 시작'; } }
+  showT(t);
+  const q = at(t), bx = q.x, by = q.y, vx = q.vx, vy = q.vy, free = q.free;
+  const trail = []; { const T0 = 2 * Math.PI * r / v, t0 = Math.max(0, t - T0 * 0.75), n = 60; for (let i = 0; i <= n; i++){ const p = at(t0 + (t - t0) * i / n); trail.push([p.x, p.y]); } }
   // 원 궤도
   ctx.setLineDash([4, 5]); ctx.strokeStyle = GRAY; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   if ($('cTrail').checked){ ctx.strokeStyle = 'rgba(47,111,223,0.35)'; ctx.lineWidth = 3; ctx.beginPath(); trail.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke(); }
@@ -245,7 +254,7 @@ loop(dt => {
   if ($('cF').checked && !free){ const F = m * v * v / r, fk = Math.min(90, 12 + F * 6), ux = -bx / r, uy = -by / r;
     arrow(ctx, X(bx), Y(by), X(bx) + ux * fk, Y(by) - uy * fk, RED, 3); T(ctx, '구심력', X(bx) + ux * fk * 1.25, Y(by) - uy * fk * 1.25, { color: RED, bold: true }); }
   if (free) T(ctx, '줄이 끊겨 접선 방향으로 날아갑니다', W / 2, 16, { bold: true, color: ORANGE, size: 14 });
-  setStats([['주기', (2 * Math.PI * r / v).toFixed(2) + ' s'], ['구심 가속도', (v * v / r).toFixed(2) + ' m/s²'], ['구심력', free ? '0 N' : (m * v * v / r).toFixed(2) + ' N', RED], ['속력', v.toFixed(1) + ' m/s', BLUE]]);
+  setStats([['시간', t.toFixed(2) + ' s'], ['주기', (2 * Math.PI * r / v).toFixed(2) + ' s'], ['구심 가속도', (v * v / r).toFixed(2) + ' m/s²'], ['구심력', free ? '0 N' : (m * v * v / r).toFixed(2) + ' N', RED], ['속력', v.toFixed(1) + ' m/s', BLUE]]);
 });
 rs();
 })();
