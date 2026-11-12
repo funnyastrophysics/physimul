@@ -1,0 +1,111 @@
+발전기
+  <h1>발전기</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="ac">교류 발전기 (슬립 링)</button>
+      <button data-m="dc">직류 발전기 (정류자)</button>
+    </div>
+    <canvas id="sim" style="height:360px;border-radius:8px;background:#fbfcfd"></canvas>
+    <div class="row"><button class="b primary" id="goB">일시 정지</button><button class="b" id="resetB">처음으로</button></div>
+    <div id="tbar"></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card"><canvas id="graph" style="height:240px"></canvas></div>
+  <div class="card">
+    <div class="controls">
+      <div class="sl"><div class="top"><span>코일을 돌리는 빠르기 (1초에 도는 횟수)</span><b id="fV"></b></div>
+        <input type="range" id="fS" min="0.25" max="2" step="0.25" value="0.5"><div class="range"><span>0.25회</span><span>2회</span></div></div>
+      <div class="sl"><div class="top"><span>자기장의 세기</span><b id="bV"></b></div>
+        <input type="range" id="bS" min="0.1" max="0.5" step="0.05" value="0.3"><div class="range"><span>0.1 T</span><span>0.5 T</span></div></div>
+      <div class="sl"><div class="top"><span>코일의 감은 수</span><b id="nV"></b></div>
+        <input type="range" id="nS" min="10" max="200" step="10" value="100"><div class="range"><span>10회</span><span>200회</span></div></div>
+    </div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+const AREA = 0.01, CA = BLUE, CB = ORANGE;   // 코일의 넓이(m²), 코일의 두 변 a, b의 색
+let mode, t = 0, run = true;
+bindLabels({ fS: ['fV', v => v.toFixed(2) + '회'], bS: ['bV', v => v.toFixed(2) + ' T'], nS: ['nV', v => v + '회'] });
+// 시각 tt일 때: th는 변 a의 위치각(0°이면 오른쪽, 코일면이 자기장과 나란). 반시계 방향으로 회전.
+function at(tt){ const f = +$('fS').value, B = +$('bS').value, N = +$('nS').value, w = 2 * Math.PI * f, th = w * tt;
+  const phi = -B * AREA * Math.sin(th), e = N * B * AREA * w * Math.cos(th);   // 자기 선속(코일 한 번 감은 것), 유도 기전력
+  return { th, phi, e, out: mode === 'dc' ? Math.abs(e) : e, e0: N * B * AREA * w }; }
+function reset(){ t = 0; run = true; $('goB').textContent = '일시 정지'; }
+function setT(v){ run = false; t = Math.max(0, v); $('goB').textContent = '계속'; }
+const showT = timeBar($('tbar'), { max: () => Math.max(10, Math.ceil(t / 10) * 10), set: setT });
+function mark(ctx, x, y, into, col, r){   // 전류 방향 기호: ⊗ 들어감, ⊙ 나옴
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+  if (into === null) return; ctx.lineWidth = 2;
+  if (into){ const d = r * 0.6; line(ctx, [[x - d, y - d], [x + d, y + d]], col, 2); line(ctx, [[x - d, y + d], [x + d, y - d]], col, 2); }
+  else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r * 0.32, 0, 7); ctx.fill(); } }
+function draw(dt){
+  if (run) t += dt;
+  showT(t);
+  const { ctx, W, H } = s, q = at(t), cx = W / 2, cy = 122, R = Math.min(58, W * 0.17), k = q.e0 ? q.e / q.e0 : 0, on = Math.abs(k) > 0.03;
+  ctx.clearRect(0, 0, W, H);
+  // 자석과 자기장
+  const mw = Math.max(34, W * 0.11), mx0 = 6, mx1 = W - 6 - mw;
+  ctx.fillStyle = '#d64541'; ctx.fillRect(mx0, cy - 78, mw, 156); ctx.fillStyle = '#2f6fdf'; ctx.fillRect(mx1, cy - 78, mw, 156);
+  T(ctx, 'N', mx0 + mw / 2, cy, { color: '#fff', bold: true, size: 20 }); T(ctx, 'S', mx1 + mw / 2, cy, { color: '#fff', bold: true, size: 20 });
+  for (const yy of [-56, -28, 0, 28, 56]) arrow(ctx, mx0 + mw + 6, cy + yy, mx1 - 6, cy + yy, 'rgba(120,130,150,0.38)', 1.2, 7);
+  // 코일 (회전축 방향에서 본 모습): 두 변 a, b
+  const ax = cx + R * Math.cos(q.th), ay = cy - R * Math.sin(q.th), bx = cx - R * Math.cos(q.th), by = cy + R * Math.sin(q.th);
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = GRAY; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  line(ctx, [[ax, ay], [bx, by]], WIRE, 3);
+  ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 7); ctx.fill();
+  // 변의 속도 화살표
+  const vl = 22; arrow(ctx, ax, ay, ax - vl * Math.sin(q.th), ay - vl * Math.cos(q.th), GREEN, 2, 7); arrow(ctx, bx, by, bx + vl * Math.sin(q.th), by + vl * Math.cos(q.th), GREEN, 2, 7);
+  // 유도 전류의 방향: 오른쪽에 있는 변은 들어가는 방향(⊗), 왼쪽은 나오는 방향(⊙)
+  mark(ctx, ax, ay, on ? k > 0 : null, CA, 11); mark(ctx, bx, by, on ? k < 0 : null, CB, 11);
+  T(ctx, 'a', ax + 17 * Math.cos(q.th), ay - 17 * Math.sin(q.th), { color: CA, bold: true, size: 13 }); T(ctx, 'b', bx - 17 * Math.cos(q.th), by + 17 * Math.sin(q.th), { color: CB, bold: true, size: 13 });
+  T(ctx, '⊗ 들어가는 전류   ⊙ 나오는 전류', W / 2, 11, { size: 11 }); T(ctx, '회색 화살표: 자기장   초록 화살표: 코일 변의 속도', W / 2, 27, { size: 11 });
+  // ----- 아래: 회전축 끝의 링과 브러시, 전구 -----
+  const y0 = 258, bulbX = cx, bulbY = H - 34, lit = Math.abs(k);
+  ctx.strokeStyle = '#e6e9ef'; ctx.lineWidth = 1; ctx.strokeRect(8, 208, W - 16, H - 216);
+  let bl, br;   // 왼쪽·오른쪽 브러시에서 내려오는 도선의 시작점
+  if (mode === 'ac'){
+    T(ctx, '옆에서 본 슬립 링 2개와 브러시', W / 2, 221, { size: 11, bold: true, color: INK });
+    line(ctx, [[cx - 56, y0], [cx + 56, y0]], '#b9c0cc', 6);
+    const rx = [cx - 40, cx + 40], cols = [CA, CB];
+    rx.forEach((x, i) => { ctx.fillStyle = cols[i]; ctx.fillRect(x - 13, y0 - 20, 26, 40);
+      for (let j = 0; j < 3; j++){ const ph = ((q.th / (2 * Math.PI) + j / 3) % 1 + 1) % 1; ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(x - 13, y0 - 20 + ph * 40 - 1.5, 26, 3); }
+      T(ctx, i ? 'b와 연결' : 'a와 연결', x + (i ? 19 : -19), y0, { size: 10, color: cols[i], bold: true, align: i ? 'left' : 'right' });
+      ctx.fillStyle = '#4a505c'; ctx.fillRect(x - 8, y0 + 20, 16, 12); });
+    T(ctx, '브러시', cx, y0 + 26, { size: 10, color: INK });
+    bl = [rx[0], y0 + 32]; br = [rx[1], y0 + 32];
+  } else {
+    T(ctx, '앞에서 본 정류자(쪼개진 링)와 브러시', W / 2, 221, { size: 11, bold: true, color: INK });
+    const r = 22, gap = 0.16;
+    [[q.th, CA], [q.th + Math.PI, CB]].forEach(([a0, col]) => { ctx.strokeStyle = col; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(cx, y0 + 6, r, -(a0 + Math.PI / 2 - gap), -(a0 - Math.PI / 2 + gap)); ctx.stroke(); });
+    ctx.fillStyle = '#4a505c'; ctx.fillRect(cx - r - 20, y0 - 1, 14, 14); ctx.fillRect(cx + r + 6, y0 - 1, 14, 14);
+    T(ctx, '브러시', cx - r - 36, y0 + 6, { size: 10, color: INK, align: 'right' }); T(ctx, '브러시', cx + r + 36, y0 + 6, { size: 10, color: INK, align: 'left' });
+    bl = [cx - r - 13, y0 + 13]; br = [cx + r + 13, y0 + 13];
+  }
+  // 도선과 전구
+  const wl = bulbX - 92, wr = bulbX + 92;
+  line(ctx, [bl, [bl[0], bulbY - 26], [wl, bulbY - 26], [wl, bulbY], [bulbX - 14, bulbY]], WIRE, 2); line(ctx, [br, [br[0], bulbY - 26], [wr, bulbY - 26], [wr, bulbY], [bulbX + 14, bulbY]], WIRE, 2);
+  ctx.fillStyle = `rgba(255,205,60,${0.1 + 0.9 * lit})`; ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bulbX, bulbY, 14, 0, 7); ctx.fill(); ctx.stroke();
+  if (lit > 0.08){ ctx.strokeStyle = `rgba(240,170,20,${lit})`; ctx.lineWidth = 2; for (let j = 0; j < 8; j++){ const a = j * Math.PI / 4; ctx.beginPath(); ctx.moveTo(bulbX + Math.cos(a) * 18, bulbY + Math.sin(a) * 18); ctx.lineTo(bulbX + Math.cos(a) * (20 + 7 * lit), bulbY + Math.sin(a) * (20 + 7 * lit)); ctx.stroke(); } }
+  // 전구에 흐르는 전류의 방향: 나오는 전류(⊙)가 흐르는 변과 이어진 브러시에서 나와 전구를 지난다
+  const dir = !on ? 0 : mode === 'dc' ? 1 : (k > 0 ? -1 : 1);   // +1: 왼쪽 → 오른쪽
+  if (dir){ const L = 12 + 22 * lit; arrow(ctx, bulbX - dir * (26 + L), bulbY + 22, bulbX - dir * 26 + dir * 0, bulbY + 22, RED, 2.5, 8); arrow(ctx, bulbX + dir * 26, bulbY + 22, bulbX + dir * (26 + L), bulbY + 22, RED, 2.5, 8); }
+  // 값
+  const deg = ((q.th * 180 / Math.PI) % 360 + 360) % 360;
+  setStats([['시간', fmt(t, 2) + ' s'], ['코일이 돈 각', fmt(deg, 0) + '°'], ['코일을 지나는 자기 선속', fmt(q.phi * 1000, 2) + ' mWb', GREEN], ['유도 기전력', fmt(q.out, 2) + ' V', RED], ['기전력의 최댓값', fmt(q.e0, 2) + ' V'],
+    ['전구에 흐르는 전류', dir === 0 ? '0' : dir > 0 ? '왼쪽 → 오른쪽' : '오른쪽 → 왼쪽', RED]]);
+  // 그래프: 최근 4초
+  const win = 4, t1 = Math.max(t, win), buf = []; for (let i = 0; i <= 240; i++){ const tt = t1 - win + win * i / 240; if (tt > t + 1e-9) break; if (tt < 0) continue; const h = at(tt); buf.push({ t: tt, e: h.out, p: h.phi * 1000 }); }
+  timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: ['p'], names: ['자기 선속 (mWb)'], colors: [GREEN], fixed: 6 }, { keys: ['e'], names: [mode === 'dc' ? '브러시 사이의 전압 (V)' : '유도 기전력 (V)'], colors: [RED], min: 0.5 }], win);
+}
+const TEXT = {
+  ac: ['자석 사이에서 코일을 돌리면 코일에 유도 전류가 흐릅니다. 코일의 두 변 a, b는 각각 슬립 링에 연결되어 있고, 링에 닿아 있는 브러시를 통해 전류가 전구로 흘러갑니다. 시간 막대를 움직이며 코일의 위치에 따른 전류의 방향과 세기를 확인하세요.',
+    '코일이 회전하면 코일을 지나는 자기 선속이 계속 변하므로 유도 기전력이 생깁니다(전자기 유도). 코일면이 자기장과 나란할 때 자기 선속은 0이지만 가장 빠르게 변하므로 유도 기전력이 최대이고, 코일면이 자기장에 수직일 때 자기 선속은 최대이지만 순간적으로 변하지 않으므로 유도 기전력이 0입니다. 슬립 링은 변 a, b와 항상 같은 브러시에 이어져 있으므로, 코일이 반 바퀴 돌 때마다 전구에 흐르는 전류의 방향이 바뀌는 교류가 만들어집니다. 코일을 빨리 돌리거나, 자기장이 세거나, 코일을 많이 감을수록 유도 기전력이 커집니다. 발전기는 역학적 에너지를 전기 에너지로 전환하는 장치로, 발전소에서는 물이나 수증기, 바람으로 터빈을 돌려 코일(또는 자석)을 회전시킵니다.'],
+  dc: ['슬립 링 대신 반으로 쪼개진 링(정류자)을 달았습니다. 코일이 반 바퀴 돌 때마다 브러시에 닿는 정류자 조각이 바뀝니다. 전구에 흐르는 전류의 방향이 어떻게 되는지 교류 발전기와 비교하세요.',
+    '코일에 흐르는 유도 전류의 방향은 교류 발전기와 똑같이 반 바퀴마다 바뀝니다. 그런데 정류자가 코일과 함께 돌면서, 유도 기전력이 0이 되는 순간(코일면이 자기장에 수직일 때)에 브러시와 닿는 조각이 서로 바뀝니다. 그래서 왼쪽 브러시에는 항상 전류가 나오는 변이, 오른쪽 브러시에는 항상 전류가 들어가는 변이 연결되어 전구에는 한쪽 방향으로만 전류가 흐릅니다. 다만 세기는 일정하지 않고 커졌다 작아졌다를 되풀이합니다. 이 구조는 직류 전동기와 같아서, 전동기의 축을 손으로 돌리면 발전기가 되고 발전기에 전류를 흘리면 전동기가 됩니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('goB').addEventListener('click', () => { run = !run; $('goB').textContent = run ? '일시 정지' : '계속'; });
+$('resetB').addEventListener('click', reset);
+$('fS').addEventListener('input', () => { t = 0; });
+loop(draw);
