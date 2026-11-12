@@ -37,6 +37,14 @@ label.chk input{width:18px;height:18px}
 .hide{display:none!important}
 .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
 @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+.tbar{margin-top:12px}
+.tbar .top{display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:8px;flex-wrap:wrap}
+.tbar .tb-r{display:flex;align-items:center;gap:6px}
+.tbar .tb-r button.b{padding:7px 10px;font-size:14px}
+.tbar input[type=number]{font:inherit;font-weight:700;color:var(--accent);width:78px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
+.tbar i{font-style:normal;font-weight:700;color:var(--accent)}
+.tbar input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.tbar .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
 
 </style>
 </head>
@@ -54,8 +62,10 @@ label.chk input{width:18px;height:18px}
     <div class="row">
       <button class="b primary" id="goB">출발</button>
       <button class="b" id="resetB">처음으로</button>
+      <button class="b" id="markB">지금 위치 남기기</button>
       <label class="chk m-ramp"><input type="checkbox" id="cDots" checked> 0.2초 간격 위치</label>
     </div>
+    <div id="tbar"></div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="card"><canvas id="graph" style="height:330px"></canvas></div>
@@ -156,20 +166,46 @@ function lamRGB(l){ let r = 0, g = 0, b = 0;
   const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
 const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
 
+// 시간 조절 칸: host 안에 숫자 입력 칸, 막대, 앞뒤 버튼을 만든다.
+// o: { max: () => 끝나는 시각(초), set: t => 그 시각으로 옮기기, step: 버튼 한 번에 움직이는 시간(기본 0.1), unit: 숫자 자리수(기본 2) }
+// 반환한 show(t)를 매 프레임 부르면 막대와 숫자가 지금 시각을 따라간다.
+function timeBar(host, o){
+  const st = o.step || 0.1, dg = o.unit === undefined ? 2 : o.unit;
+  host.className = 'tbar';
+  host.innerHTML = '<div class="top"><span>시간 t</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button><input type="number" min="0" step="' + st + '" inputmode="decimal" aria-label="시간(초)"><i>s</i></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
+  const num = host.querySelector('input[type=number]'), bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0;
+  const go = v => { const m = o.max(); o.set(Math.max(0, Math.min(isFinite(m) ? m : 1e9, v))); };
+  num.addEventListener('input', () => { const v = parseFloat(num.value); if (isFinite(v)) go(v); });
+  num.addEventListener('blur', () => { num.value = cur.toFixed(dg); });
+  bar.addEventListener('input', () => go(+bar.value));
+  host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const k = Math.round(cur / st + (+b.dataset.d > 0 ? 1e-6 : -1e-6) * 1); go((+b.dataset.d > 0 ? Math.floor(cur / st + 1e-6) + 1 : Math.ceil(cur / st - 1e-6) - 1) * st); }));
+  return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(dg) + ' s'; } bar.value = t; if (document.activeElement !== num) num.value = t.toFixed(dg); };
+}
+
 const g = 9.8;
 const S = $('sim'), G = $('graph'); let s, gr;
 const rs = () => { s = fitCanvas(S); gr = fitCanvas(G); }; window.addEventListener('resize', rs);
-let mode, run = false, t = 0, buf = [];
+let mode, run = false, t = 0, buf = [], marks = [];
 // 빗면
 const LEN = 2.0; let x = 0, v = 0;
 // 자동차
 let cx = 0, cv = 0, phase = 0;   // phase 0 대기, 1 반응, 2 제동, 3 정지
 bindLabels({ angS: ['angV', v => v + '°'], spS: ['spV', v => v + ' km/h'], rtS: ['rtV', v => v.toFixed(1) + ' s'] });
 
-function reset(){ run = false; t = 0; buf = []; x = 0; v = 0; cx = 0; cv = +$('spS').value / 3.6; phase = 0; $('goB').textContent = '출발'; }
+function reset(){ run = false; t = 0; buf = []; marks = []; x = 0; v = 0; cx = 0; cv = +$('spS').value / 3.6; phase = 0; $('goB').textContent = '출발'; }
+// 운동이 끝나는 시각
+function tEnd(){ if (mode === 'ramp') return Math.sqrt(2 * LEN / (g * Math.sin(+$('angS').value * Math.PI / 180))); return +$('rtS').value + (+$('spS').value / 3.6) / (+$('roadS').value * g); }
+// 시각 tt일 때의 상태 (식으로 바로 구한다)
+function rampAt(tt){ const a = g * Math.sin(+$('angS').value * Math.PI / 180); return { t: tt, s: Math.min(LEN, 0.5 * a * tt * tt), v: a * tt, a }; }
+function carAt(tt){ const v0 = +$('spS').value / 3.6, rt = +$('rtS').value, a = +$('roadS').value * g, te = rt + v0 / a, u = Math.min(tt, te) - rt;
+  if (tt <= 0) return { t: 0, x: 0, cv: v0, ph: 0 }; if (tt < rt) return { t: tt, x: v0 * tt, cv: v0, ph: 1 };
+  return { t: tt, x: v0 * rt + v0 * u - 0.5 * a * u * u, cv: Math.max(0, v0 - a * u), ph: tt >= te ? 3 : 2 }; }
+function history(){ buf = []; const n = Math.max(1, Math.ceil(t / 0.02)); for (let i = 0; i <= n; i++){ const tt = t * i / n; if (mode === 'ramp') buf.push(rampAt(tt)); else { const c = carAt(tt); buf.push({ t: tt, v: c.cv * 3.6, x: c.x }); } } }
+function setT(v){ run = false; t = Math.max(0, Math.min(tEnd(), v)); $('goB').textContent = t > 0 && t < tEnd() ? '계속' : '출발'; }
+function advance(dt){ if (!run) return; t += dt; if (t >= tEnd()){ t = tEnd(); run = false; $('goB').textContent = '출발'; } }
 function stepRamp(dt){
   const a = g * Math.sin(+$('angS').value * Math.PI / 180);
-  if (run && x < LEN){ x += v * dt + 0.5 * a * dt * dt; v += a * dt; t += dt; if (x >= LEN){ x = LEN; run = false; } buf.push({ t, s: x, v, a }); }
+  advance(dt); { const q = rampAt(t); x = q.s; v = q.v; history(); showT(t); }
   const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
   const ang = +$('angS').value * Math.PI / 180, x0 = 30, y0 = 30, len = Math.min((W - 60) / Math.cos(ang), (H - 60) / Math.sin(ang) * 0.95, W * 1.5);
   const P = d => [x0 + d / LEN * len * Math.cos(ang), y0 + d / LEN * len * Math.sin(ang)];
@@ -179,6 +215,8 @@ function stepRamp(dt){
   for (let d = 0; d <= LEN + 1e-9; d += 0.5){ const [px, py] = P(d); line(ctx, [[px, py + 8], [px + 6 * Math.sin(ang), py + 8 - 0]], SUB, 1); T(ctx, d.toFixed(1) + ' m', px + 10 * Math.sin(ang), py + 22, { size: 10 }); }
   if ($('cDots').checked) for (let tt = 0.2; tt <= t + 1e-9; tt += 0.2){ const d = Math.min(LEN, 0.5 * a * tt * tt), [px, py] = P(d);
     ctx.fillStyle = 'rgba(47,111,223,0.5)'; ctx.beginPath(); ctx.arc(px, py - 7, 4, 0, 7); ctx.fill(); }
+  marks.forEach(mt => { const d = rampAt(mt).s, [mx, my] = P(d); ctx.save(); ctx.translate(mx, my); ctx.rotate(ang); ctx.globalAlpha = 0.35; ctx.fillStyle = BLUE; ctx.fillRect(-16, -14, 32, 14); ctx.restore(); ctx.globalAlpha = 1;
+    T(ctx, mt.toFixed(2) + ' s', mx + 14 * Math.sin(ang), my - 26, { size: 10, color: BLUE, bold: true }); });
   // 수레
   const [px, py] = P(x); ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
   ctx.fillStyle = BLUE; ctx.fillRect(-16, -14, 32, 14); ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(-9, 3, 4, 0, 7); ctx.arc(9, 3, 4, 0, 7); ctx.fill(); ctx.restore();
@@ -188,13 +226,7 @@ function stepRamp(dt){
 }
 function stepCar(dt){
   const v0 = +$('spS').value / 3.6, rt = +$('rtS').value, mu = +$('roadS').value, a = mu * g;
-  if (run && phase < 3){
-    t += dt;
-    if (phase === 0) phase = 1;
-    if (phase === 1){ cx += v0 * dt; cv = v0; if (t >= rt) phase = 2; }
-    else if (phase === 2){ cv = Math.max(0, cv - a * dt); cx += cv * dt; if (cv <= 0){ phase = 3; run = false; } }
-    buf.push({ t, v: cv * 3.6, x: cx });
-  }
+  advance(dt); { const q = carAt(t); cx = q.x; cv = q.cv; phase = q.ph; history(); showT(t); }
   const dR = v0 * rt, dB = v0 * v0 / (2 * a), tot = dR + dB;
   const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
   const span = Math.max(60, niceMax(tot * 1.1)), L = 20, sc = (W - 40) / span, X = d => L + d * sc, roadY = H * 0.55;
@@ -211,6 +243,7 @@ function stepCar(dt){
   // 위험 표지
   ctx.fillStyle = YELLOW; ctx.beginPath(); ctx.moveTo(X(0), roadY - 72); ctx.lineTo(X(0) - 10, roadY - 54); ctx.lineTo(X(0) + 10, roadY - 54); ctx.closePath(); ctx.fill(); T(ctx, '!', X(0), roadY - 61, { color: INK, bold: true });
   T(ctx, '위험 발견', X(0) + 14, roadY - 62, { align: 'left', color: INK, size: 11 });
+  marks.forEach(mt => { const mx = X(carAt(mt).x); ctx.globalAlpha = 0.35; ctx.fillStyle = BLUE; ctx.fillRect(mx - 30, roadY - 22, 30, 14); ctx.fillRect(mx - 24, roadY - 30, 18, 9); ctx.globalAlpha = 1; T(ctx, mt.toFixed(2) + ' s', mx - 15, roadY + 16, { size: 10, color: '#fff', bold: true }); });
   // 자동차
   const carX = X(cx); ctx.fillStyle = phase === 2 ? '#c0392b' : BLUE;
   ctx.fillRect(carX - 30, roadY - 22, 30, 14); ctx.fillRect(carX - 24, roadY - 30, 18, 9);
@@ -233,7 +266,9 @@ const TEXT = {
   car: ['위험을 발견한 뒤 브레이크를 밟기까지(반응 시간) 자동차는 같은 속력으로 달리고, 그 뒤 마찰력에 의해 등가속도 운동으로 멈춥니다.',
     '공주 거리는 속력에 비례하고, 제동 거리는 속력의 제곱에 비례합니다(속력이 2배면 제동 거리는 4배). 휴대폰을 보거나 졸면 반응 시간이 길어지고, 젖거나 얼어붙은 도로에서는 마찰력이 작아 제동 거리가 크게 늘어납니다. 마찰계수는 대략적인 값입니다.'] };
 setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); reset(); });
-$('goB').addEventListener('click', () => { if (!run && (t > 0)) reset(); run = true; });
+const showT = timeBar($('tbar'), { max: tEnd, set: setT });
+$('goB').addEventListener('click', () => { if (run){ run = false; $('goB').textContent = '계속'; return; } if (t >= tEnd() - 1e-9){ const m = marks; reset(); marks = m; } run = true; $('goB').textContent = '일시 정지'; });
+$('markB').addEventListener('click', () => { if (marks.length >= 8) marks.shift(); marks.push(t); });
 $('resetB').addEventListener('click', reset);
 ['angS', 'spS', 'rtS', 'roadS'].forEach(id => $(id).addEventListener('input', reset));
 $('roadS').addEventListener('change', reset);

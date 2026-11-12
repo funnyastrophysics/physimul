@@ -27,6 +27,14 @@
   .sl input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
   .sl .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
   .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+  .tbar{margin-top:12px}
+  .tbar .top{display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:8px;flex-wrap:wrap}
+  .tbar .tb-r{display:flex;align-items:center;gap:6px}
+  .tbar .tb-r button.b{padding:7px 10px;font-size:14px}
+  .tbar input[type=number]{font:inherit;font-weight:700;color:var(--accent);width:78px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
+  .tbar i{font-style:normal;font-weight:700;color:var(--accent)}
+  .tbar input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+  .tbar .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
   button.b,select{font:inherit;font-size:15px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
   .checks{display:flex;flex-wrap:wrap;gap:14px;font-size:15px;margin-top:12px}
@@ -46,6 +54,7 @@
     <canvas id="sim"></canvas>
     <div class="row">
       <button class="b primary" id="goB">발사</button>
+      <button class="b" id="markB">지금 위치 남기기</button>
       <button class="b" id="clearB">궤적 지우기</button>
       <label style="font-size:15px">재생 속도
         <select id="speedS"><option value="1">1배</option><option value="0.5">0.5배</option><option value="0.25">0.25배</option></select>
@@ -55,6 +64,7 @@
       <label><input type="checkbox" id="cComp" checked> 속도 성분 화살표</label>
       <label><input type="checkbox" id="cDots" checked> 0.2초 간격 위치</label>
     </div>
+    <div id="tbar"></div>
     <div class="stats">
       <div class="stat"><div class="k">시간 t</div><div class="val" id="sT">-</div></div>
       <div class="stat"><div class="k">수평 속도 v<sub>x</sub></div><div class="val" id="sVx" style="color:var(--vx)">-</div></div>
@@ -94,6 +104,22 @@
 
   let v0, ang, h0, m, speed = 1;
   let shot = null;           // {vx, vy0, h0, t, tf, m}
+  let run = false, marks = [];   // 재생 중인지, 남겨 둔 시각들
+  // 시간 조절 칸: host 안에 숫자 입력 칸, 막대, 앞뒤 버튼을 만든다.
+  // o: { max: () => 끝나는 시각(초), set: t => 그 시각으로 옮기기, step: 버튼 한 번에 움직이는 시간(기본 0.1), unit: 숫자 자리수(기본 2) }
+  // 반환한 show(t)를 매 프레임 부르면 막대와 숫자가 지금 시각을 따라간다.
+  function timeBar(host, o){
+    const st = o.step || 0.1, dg = o.unit === undefined ? 2 : o.unit;
+    host.className = 'tbar';
+    host.innerHTML = '<div class="top"><span>시간 t</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button><input type="number" min="0" step="' + st + '" inputmode="decimal" aria-label="시간(초)"><i>s</i></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
+    const num = host.querySelector('input[type=number]'), bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0;
+    const go = v => { const m = o.max(); o.set(Math.max(0, Math.min(isFinite(m) ? m : 1e9, v))); };
+    num.addEventListener('input', () => { const v = parseFloat(num.value); if (isFinite(v)) go(v); });
+    num.addEventListener('blur', () => { num.value = cur.toFixed(dg); });
+    bar.addEventListener('input', () => go(+bar.value));
+    host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const k = Math.round(cur / st + (+b.dataset.d > 0 ? 1e-6 : -1e-6) * 1); go((+b.dataset.d > 0 ? Math.floor(cur / st + 1e-6) + 1 : Math.ceil(cur / st - 1e-6) - 1) * st); }));
+    return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(dg) + ' s'; } bar.value = t; if (document.activeElement !== num) num.value = t.toFixed(dg); };
+  }
   let traces = [];           // 지난 궤적 [{pts, color}]
   const TRACE_COLORS = ['#9aa3b2', '#b7a0d8', '#8cc0a8', '#d8b08c', '#8cb4d8'];
 
@@ -172,6 +198,8 @@
           sctx.beginPath(); sctx.moveTo(X(p.x), Y(p.y)); sctx.lineTo(X(p.x), Y(0)); sctx.stroke(); sctx.setLineDash([]); }
       }
     }
+    marks.forEach(mt => { const q = pos(shot, mt); sctx.fillStyle = 'rgba(90,100,120,0.35)'; sctx.strokeStyle = '#2f3542'; sctx.lineWidth = 1; sctx.beginPath(); sctx.arc(X(q.x), Y(q.y), 7, 0, 7); sctx.fill(); sctx.stroke();
+      sctx.font = 'bold 11px ' + FONT; sctx.fillStyle = INK; sctx.textAlign = 'center'; sctx.textBaseline = 'bottom'; sctx.fillText(mt.toFixed(2) + ' s', X(q.x), Y(q.y) - 10); });
     const p = pos(shot, tNow), vy = shot.vy0 - g * tNow;
     const r = 6 + 4 * Math.cbrt(m);
     sctx.fillStyle = '#5a6478'; sctx.strokeStyle = '#2f3542'; sctx.lineWidth = 1.5;
@@ -222,18 +250,25 @@
     traces.push({ pts, v: shot.v, a: shot.a, h: shot.h0, color: TRACE_COLORS[traces.length % TRACE_COLORS.length] });
     if (traces.length > 5) traces.shift();
   }
+  function newShot(){ if (shot && shot.t >= shot.tf) archive(); marks = [];
+    shot = { v: v0, a: ang, vx: v0 * Math.cos(ang), vy0: v0 * Math.sin(ang), h0, t: 0, tf: flight(v0, ang, h0) }; }
   $('goB').addEventListener('click', () => {
-    if (shot) archive();
-    shot = { v: v0, a: ang, vx: v0 * Math.cos(ang), vy0: v0 * Math.sin(ang), h0, t: 0, tf: flight(v0, ang, h0) };
+    if (run){ run = false; $('goB').textContent = '계속'; return; }
+    if (!shot || shot.t >= shot.tf) newShot();
+    run = true; $('goB').textContent = '일시 정지';
   });
-  $('clearB').addEventListener('click', () => { traces = []; shot = null; });
-  ['vS', 'aS', 'hS', 'mS'].forEach(id => $(id).addEventListener('input', () => { read(); if (shot && shot.t >= shot.tf){ archive(); shot = null; } }));
+  // 원하는 시각으로 옮기기: 발사 전이면 지금 조건으로 쏜 것으로 본다
+  const showT = timeBar($('tbar'), { max: () => shot ? shot.tf : flight(v0, ang, h0), set: v => { if (!shot) newShot(); run = false; shot.t = Math.min(shot.tf, v); $('goB').textContent = shot.t > 0 && shot.t < shot.tf ? '계속' : '발사'; } });
+  $('markB').addEventListener('click', () => { if (!shot) return; if (marks.length >= 8) marks.shift(); marks.push(shot.t); });
+  $('clearB').addEventListener('click', () => { traces = []; shot = null; marks = []; run = false; $('goB').textContent = '발사'; });
+  ['vS', 'aS', 'hS', 'mS'].forEach(id => $(id).addEventListener('input', () => { read(); if (shot && !run){ if (shot.t >= shot.tf) archive(); shot = null; marks = []; $('goB').textContent = '발사'; } }));
   $('speedS').addEventListener('change', () => { speed = +$('speedS').value; });
 
   let last = performance.now();
   function frame(now){
     const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)) * speed; last = now;
-    if (shot && shot.t < shot.tf) shot.t = Math.min(shot.tf, shot.t + dt);
+    if (shot && run){ shot.t = Math.min(shot.tf, shot.t + dt); if (shot.t >= shot.tf){ run = false; $('goB').textContent = '발사'; } }
+    showT(shot ? shot.t : 0);
     draw(); drawBars(); stats();
     requestAnimationFrame(frame);
   }

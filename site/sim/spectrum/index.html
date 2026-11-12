@@ -37,6 +37,14 @@ label.chk input{width:18px;height:18px}
 .hide{display:none!important}
 .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
 @media (max-width:640px){ .controls{grid-template-columns:1fr} h1{font-size:19px} }
+.tbar{margin-top:12px}
+.tbar .top{display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:8px;flex-wrap:wrap}
+.tbar .tb-r{display:flex;align-items:center;gap:6px}
+.tbar .tb-r button.b{padding:7px 10px;font-size:14px}
+.tbar input[type=number]{font:inherit;font-weight:700;color:var(--accent);width:78px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
+.tbar i{font-style:normal;font-weight:700;color:var(--accent)}
+.tbar input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:28px}
+.tbar .range{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
 
 </style>
 </head>
@@ -142,6 +150,22 @@ function lamRGB(l){ let r = 0, g = 0, b = 0;
   else if (l < 580){ r = (l - 510) / 70; g = 1; } else if (l < 645){ r = 1; g = -(l - 645) / 65; } else r = 1;
   const f = l < 380 || l > 750 ? 0 : l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 680 ? 0.3 + 0.7 * (750 - l) / 70 : 1; return [Math.max(0, r) * f, Math.max(0, g) * f, Math.max(0, b) * f]; }
 const rgbCss = (c, k = 1, a = 1) => `rgba(${Math.round(255 * Math.min(1, c[0] * k))},${Math.round(255 * Math.min(1, c[1] * k))},${Math.round(255 * Math.min(1, c[2] * k))},${a})`;
+
+// 시간 조절 칸: host 안에 숫자 입력 칸, 막대, 앞뒤 버튼을 만든다.
+// o: { max: () => 끝나는 시각(초), set: t => 그 시각으로 옮기기, step: 버튼 한 번에 움직이는 시간(기본 0.1), unit: 숫자 자리수(기본 2) }
+// 반환한 show(t)를 매 프레임 부르면 막대와 숫자가 지금 시각을 따라간다.
+function timeBar(host, o){
+  const st = o.step || 0.1, dg = o.unit === undefined ? 2 : o.unit;
+  host.className = 'tbar';
+  host.innerHTML = '<div class="top"><span>시간 t</span><span class="tb-r"><button class="b" type="button" data-d="-1">−' + st + '초</button><button class="b" type="button" data-d="1">+' + st + '초</button><input type="number" min="0" step="' + st + '" inputmode="decimal" aria-label="시간(초)"><i>s</i></span></div><input type="range" min="0" step="0.01" value="0" aria-label="시간 막대"><div class="range"><span>0 s</span><span class="tb-m"></span></div>';
+  const num = host.querySelector('input[type=number]'), bar = host.querySelector('input[type=range]'), mx = host.querySelector('.tb-m'); let cur = 0;
+  const go = v => { const m = o.max(); o.set(Math.max(0, Math.min(isFinite(m) ? m : 1e9, v))); };
+  num.addEventListener('input', () => { const v = parseFloat(num.value); if (isFinite(v)) go(v); });
+  num.addEventListener('blur', () => { num.value = cur.toFixed(dg); });
+  bar.addEventListener('input', () => go(+bar.value));
+  host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const k = Math.round(cur / st + (+b.dataset.d > 0 ? 1e-6 : -1e-6) * 1); go((+b.dataset.d > 0 ? Math.floor(cur / st + 1e-6) + 1 : Math.ceil(cur / st - 1e-6) - 1) * st); }));
+  return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(dg) + ' s'; } bar.value = t; if (document.activeElement !== num) num.value = t.toFixed(dg); };
+}
 
 const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
 let mode, n = 1, anim = null, lines = [], queue = [], msg = '';
