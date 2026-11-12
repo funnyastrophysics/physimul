@@ -41,3 +41,4 @@ label.chk input{width:18px;height:18px}
 .stat.tcell input{font:inherit;font-weight:700;color:var(--ink);width:72px;padding:1px 2px;border:0;border-bottom:1.5px solid var(--accent);border-radius:0;background:transparent;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
 .stat.tcell input::-webkit-outer-spin-button,.stat.tcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .stat.tcell i{font-style:normal;font-weight:700}
+.gx{font-size:13px;font-weight:400;color:var(--sub);white-space:nowrap}

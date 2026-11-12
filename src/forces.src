@@ -99,7 +99,7 @@ function drawSlope(dt){
   const state = !run ? '[놓기]를 누르세요' : moving ? '미끄러져 내려갑니다' : '정지해 있습니다 (중력의 빗면 성분 ≤ 최대 정지 마찰력)';
   T(ctx, state, 10, 14, { align: 'left', bold: true, color: moving ? ORANGE : INK, size: 12 });
   if (d >= Lpx - 31) run = false;
-  setStats([['중력의 빗면 방향 성분', Fpar.toFixed(1) + ' N', RED], ['수직 항력', N.toFixed(1) + ' N', BLUE], ['최대 정지 마찰력', fsMax.toFixed(1) + ' N', GREEN], ['알짜힘', (moving ? Fpar - muk * N : 0).toFixed(1) + ' N'], ['가속도', (moving ? a : 0).toFixed(2) + ' m/s²', ORANGE]]);
+  setStats([['중력의 빗면 방향 성분', Fpar.toFixed(1) + ' N', RED], ['수직 항력', N.toFixed(1) + ' N', BLUE], ['최대 정지 마찰력', fsMax.toFixed(1) + ' N', GREEN], ['알짜힘', (moving ? Fpar - muk * N : 0).toFixed(1) + ' N'], ['가속도', gAcc(moving ? a : 0), ORANGE]]);
 }
 const TEXT = {
   sum: ['화살표 끝을 끌어 두 힘의 크기와 방향을 바꾸고, 합력이 어떻게 정해지는지 관찰하세요.',

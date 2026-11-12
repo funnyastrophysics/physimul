@@ -72,7 +72,7 @@ function stepRamp(dt){
   const [px, py] = P(x); ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
   ctx.fillStyle = BLUE; ctx.fillRect(-16, -14, 32, 14); ctx.fillStyle = WIRE; ctx.beginPath(); ctx.arc(-9, 3, 4, 0, 7); ctx.arc(9, 3, 4, 0, 7); ctx.fill(); ctx.restore();
   T(ctx, '기울기 ' + $('angS').value + '°', W - 12, 16, { align: 'right', bold: true, color: INK });
-  setStats([['시간', t.toFixed(2) + ' s'], ['이동 거리', x.toFixed(2) + ' m', BLUE], ['속도', v.toFixed(2) + ' m/s', ORANGE], ['가속도', (g * Math.sin(ang)).toFixed(2) + ' m/s²', GREEN]]);
+  setStats([['시간', t.toFixed(2) + ' s'], ['이동 거리', x.toFixed(2) + ' m', BLUE], ['속도', v.toFixed(2) + ' m/s', ORANGE], ['가속도', gAcc(g * Math.sin(ang)), GREEN]]);
   timeGraph(gr.ctx, gr.W, gr.H, buf, t, [{ keys: ['s'], names: ['이동 거리 s (m)'], colors: [BLUE], min: 0.5, pos: true }, { keys: ['v'], names: ['속도 v (m/s)'], colors: [ORANGE], min: 1, pos: true }, { keys: ['a'], names: ['가속도 a (m/s²)'], colors: [GREEN], min: 1, pos: true }], 3);
 }
 function stepCar(dt){

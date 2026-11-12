@@ -111,9 +111,7 @@ function draw(dt){
   if (done) T(ctx, done, W / 2, mode === 'table' ? 24 : H - 4 - (mode === 'atwood' ? 16 : 0), { color: RED, bold: true, size: 12, base: mode === 'table' ? 'middle' : 'bottom' });
   // 값
   const f2 = (val, u) => fmt(val, 2) + ' ' + u;
-  // 가속도를 중력 가속도 g의 몇 배인지로 나타낸다. 간단한 분수이면 분수로, 아니면 소수로.
-  const inG = a => { const r = Math.abs(a) / g; if (r < 0.0005) return '0'; for (let d = 1; d <= 12; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.0006) return (a < 0 ? '−' : '') + (d === 1 ? (n === 1 ? '' : n) : n + '/' + d + ' ') + 'g'; } return fmt(a / g, 2) + ' g'; };
-  const acc = a => f2(a, 'm/s²') + ' <span style="font-size:13px;font-weight:400;color:#5b6475">= ' + inG(a) + '</span>';
+  const acc = gAcc;
   if (mode === 'incl'){
     const aAll = accel(o), aA = cut ? g * o[0].k : aAll, aR = cut ? accel(o.slice(1)) : aAll, Tn = cut ? [0].concat(tensions(o.slice(1), aR)) : tensions(o, aAll);
     setStats([['A의 가속도', acc(aA), BLUE], ['B, C의 가속도', acc(aR), GREEN], ['A–B 실이 당기는 힘(장력)', cut ? '끊어짐' : f2(Tn[0], 'N')], ['B–C 실이 당기는 힘(장력)', f2(Tn[1], 'N')],

@@ -81,7 +81,7 @@ function drawOrbit(dt){
   const q = place(o, simT), kms = v => (v / 1000).toFixed(2) + ' km/s', vAt = r => Math.sqrt(GM * (2 / (r * RE) - 1 / (o.a * RE)));
   if (e > 0.02) setStats([['지금 지구 중심까지 거리', q.r.toFixed(2) + ' R'], ['지금 속력', kms(q.v), '#2f6fdf'], ['주기', fmtT(T0)],
     ['가장 가까울 때 (' + (o.a * (1 - e)).toFixed(2) + ' R)', kms(vAt(o.a * (1 - e)))], ['가장 멀 때 (' + (o.a * (1 + e)).toFixed(2) + ' R)', kms(vAt(o.a * (1 + e)))], ['같은 시간 동안 휩쓴 넓이', '어디서나 같음', ORANGE]]);
-  else setStats([['속력', kms(q.v)], ['주기', fmtT(T0)], ['구심 가속도 (중력 가속도)', (GM / (o.a * RE) ** 2).toFixed(2) + ' m/s²']]);
+  else setStats([['속력', kms(q.v)], ['주기', fmtT(T0)], ['구심 가속도 (중력 가속도)', gAcc(GM / (o.a * RE) ** 2)]]);
 }
 function drawEsc(dt){
   const P = PL[$('planetS').value], vesc = Math.sqrt(2 * P.GM / P.R);

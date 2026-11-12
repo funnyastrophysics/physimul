@@ -49,6 +49,7 @@ label.chk input{width:18px;height:18px}
 .stat.tcell input{font:inherit;font-weight:700;color:var(--ink);width:72px;padding:1px 2px;border:0;border-bottom:1.5px solid var(--accent);border-radius:0;background:transparent;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
 .stat.tcell input::-webkit-outer-spin-button,.stat.tcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .stat.tcell i{font-style:normal;font-weight:700}
+.gx{font-size:13px;font-weight:400;color:var(--sub);white-space:nowrap}
 
 </style>
 </head>
@@ -176,6 +177,38 @@ function timeBar(host, o){
   return t => { cur = t; const m = o.max(), M = isFinite(m) ? m : Math.max(10, Math.ceil(t / 10) * 10); if (+bar.max !== M){ bar.max = M; mx.textContent = M.toFixed(2) + ' s'; } bar.value = t;
     if (!num || !num.isConnected) attach(); if (num && document.activeElement !== num) num.value = t.toFixed(2); };
 }
+
+// 가속도가 중력 가속도 g의 몇 배인지: 간단한 분수이면 분수로, 아니면 소수로 (예: 4/5 g, 0.17 g)
+function gTxt(a){ const r = Math.abs(a) / 9.8; if (r < 0.0005) return '0'; for (let d = 1; d <= 12; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.0006) return (a < 0 ? '−' : '') + (d === 1 ? (n === 1 ? '' : n) : n + '/' + d + ' ') + 'g'; } return fmt(a / 9.8, 2) + ' g'; }
+const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>';
+/*SLIDER-EDIT*/
+// 슬라이더 옆의 값을 누르면 숫자를 직접 입력할 수 있게 한다. (값 글자의 숫자가 슬라이더 값과 같을 때만)
+setTimeout(function(){
+  document.querySelectorAll('input[type=range]').forEach(function(r){
+    if (r.closest('.tbar')) return; var box = r.parentElement, b = null;
+    for (var i = 0; i < 2 && box; i++){ if (box.querySelectorAll('input[type=range]').length === 1){ b = box.querySelector('b'); if (b) break; } box = box.parentElement; }
+    if (!b || b.querySelector('input')) return;
+    function same(){ var m = (b.textContent || '').replace(/−/g, '-').match(/-?\d+(\.\d+)?/); if (!m) return false; var dec = m[1] ? m[1].length - 1 : 0; return Math.abs(parseFloat(m[0]) - (+r.value)) <= 0.5 * Math.pow(10, -dec) + 1e-9; }
+    if (!same()) return;
+    b.style.borderBottom = '1px dashed currentColor'; b.style.cursor = 'text'; b.title = '눌러서 숫자 입력';
+    r.addEventListener('pointerdown', function(){ if (r.dataset.step){ r.step = r.dataset.step; delete r.dataset.step; } });
+    b.addEventListener('click', function(){
+      if (r.disabled || !same() || b.style.display === 'none') return;
+      var n = document.createElement('input'); n.type = 'number'; n.min = r.min; n.max = r.max; n.step = 'any'; n.value = r.value; n.setAttribute('inputmode', 'decimal'); n.setAttribute('aria-label', '값 직접 입력');
+      n.style.cssText = 'font:inherit;font-weight:700;color:inherit;width:84px;padding:2px 6px;border:1.5px solid currentColor;border-radius:6px;text-align:right;background:#fff';
+      b.style.display = 'none'; b.parentNode.insertBefore(n, b.nextSibling); n.focus(); n.select();
+      var done = false;
+      function finish(apply){ if (done) return; done = true; var v = parseFloat(n.value);
+        if (apply && isFinite(v)){ v = Math.max(+r.min, Math.min(+r.max, v)); var st = parseFloat(r.dataset.step || r.step) || 1, q = (v - (+r.min)) / st;
+          if (Math.abs(q - Math.round(q)) > 1e-6){ if (!r.dataset.step) r.dataset.step = r.step; r.step = 'any'; } else if (r.dataset.step){ r.step = r.dataset.step; delete r.dataset.step; }
+          r.value = v; r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); }
+        n.remove(); b.style.display = ''; }
+      n.addEventListener('keydown', function(e){ if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+      n.addEventListener('blur', function(){ finish(true); });
+    });
+  });
+}, 0);
+/*SLIDER-EDIT-END*/
 
 const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
 let mode, n = 1, anim = null, lines = [], queue = [], msg = '';
