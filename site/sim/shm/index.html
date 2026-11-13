@@ -71,7 +71,7 @@
     <div class="stats">
       <div class="stat" id="stTime"><div class="k">시간</div><div class="val"></div></div>
       <div class="stat"><div class="k">주기 T</div><div class="val" id="sT">-</div></div>
-      <div class="stat"><div class="k">진폭 A</div><div class="val" id="sA">-</div></div>
+      <div class="stat tcell" id="stA"><div class="k">진폭 A</div><div class="val"><input type="number" id="aIn" min="0" step="0.01" inputmode="decimal" aria-label="진폭(m) 직접 입력"><i>m</i></div><div class="gx" id="aRatio" style="display:none"></div></div>
       <div class="stat"><div class="k" id="kX">변위 x</div><div class="val" id="sX" style="color:var(--xc)">-</div></div>
       <div class="stat"><div class="k" id="kV">속도 v</div><div class="val" id="sV" style="color:var(--vc)">-</div></div>
       <div class="stat"><div class="k">가속도 a</div><div class="val" id="sAc" style="color:var(--ac)">-</div></div>
@@ -140,8 +140,8 @@ function timeBar(host, o){
 }
 
 // 가속도가 중력 가속도 g의 몇 배인지: 간단한 분수이면 분수로, 아니면 소수로 (예: 4/5 g, 0.17 g)
-function gTxt(a){ const r = Math.abs(a) / 9.8; if (r < 0.0005) return '0'; for (let d = 1; d <= 12; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.0006) return (a < 0 ? '−' : '') + (d === 1 ? (n === 1 ? '' : n) : n + '/' + d + ' ') + 'g'; } return fmt(a / 9.8, 2) + ' g'; }
-function fmt(v, d){ const s = v.toFixed(d); return (s === (-0).toFixed(d) ? (0).toFixed(d) : s).replace('-', '−'); }
+function gTxt(a){ const r = Math.abs(a) / 9.8; if (r < 0.0005) return '0'; for (let d = 1; d <= 12; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.0006) return (a < 0 ? '−' : '') + (d === 1 ? (n === 1 ? '' : n + ' ') : n + '/' + d + ' ') + 'g'; } return fmt(a / 9.8, 2) + ' g'; }
+function fmt(v, d){ if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0; const s = v.toFixed(d); return (s === (-0).toFixed(d) ? (0).toFixed(d) : s).replace('-', '−'); }
 const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>';
 </script>
 <script>
@@ -154,7 +154,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   const speedS = document.getElementById('speedS');
   const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 
-  const MAXX = 0.5;     // 당길 수 있는 최대 변위 (m)
+  const MAXX = 0.5;     // 수평 진동에서 당길 수 있는 최대 변위 (m). 수직 진동은 3mg/k까지
   const WINDOW = 10;    // 그래프 시간 폭 (s)
   const G = 9.8;
 
@@ -205,8 +205,9 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     modeBtns.forEach(b => b.classList.toggle('on', b.dataset.m === md));
     simC.style.height = md === 'v' ? '400px' : '230px';
     document.getElementById('hint').textContent = md === 'v'
-      ? '천장에 매단 용수철에 물체를 걸면 mg/k만큼 늘어난 곳이 새로운 평형점(x = 0)입니다. 물체를 위아래로 당겼다 놓으면 그 순간이 t = 0입니다. 위쪽이 (+), 공기 저항은 없다고 가정합니다.'
-      : '물체를 잡아 옆으로 당겼다 놓으면 그 순간이 t = 0이고, 그때부터 시간과 그래프가 흐릅니다. 오른쪽이 (+), 마찰은 없다고 가정합니다.';
+      ? '천장에 매단 용수철에 물체를 걸면 mg/k만큼 늘어난 곳이 새로운 평형점(x = 0)입니다. 물체를 위아래로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(아래쪽 −A에서 놓음) 그 순간이 t = 0입니다. 진폭은 3mg/k까지, 위쪽이 (+), 공기 저항은 없다고 가정합니다.'
+      : '물체를 잡아 옆으로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(+A에서 놓음) 그 순간이 t = 0이고, 그때부터 시간과 그래프가 흐릅니다. 진폭은 0.5 m까지, 오른쪽이 (+), 마찰은 없다고 가정합니다.';
+    document.getElementById('aRatio').style.display = md === 'v' ? '' : 'none';
     document.getElementById('kX').textContent = md === 'v' ? '변위 x (위 +)' : '변위 x';
     document.getElementById('kV').textContent = md === 'v' ? '속도 v (위 +)' : '속도 v';
     document.getElementById('formula').innerHTML = md === 'v'
@@ -241,7 +242,8 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   Q.forEach(q => document.getElementById(q.id).addEventListener('change', resize));
   window.addEventListener('resize', resize);
 
-  const range = () => Math.max(MAXX, phase === 'run' ? A0 : 0);
+  const maxA = () => mode === 'v' ? 3 * sag() : MAXX;
+  const range = () => Math.max(maxA(), phase === 'run' ? A0 : 0);
   const blockSize = () => (40 * Math.cbrt(m) + 10) * Math.max(0.7, Math.min(1, W / 600));
   function geomH(){
     const wallX = 26, s = blockSize(), R = range();
@@ -253,7 +255,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   function geomV(){
     const s = blockSize(), R = range(), sg = sag(), minSp = 24;
     const avail = H - 28 - s - 34;
-    const sc = Math.min(240, (avail - 70) / (sg + R), (avail - minSp) / (2 * R));
+    const sc = Math.min((avail - 70) / (sg + R), (avail - minSp) / (2 * R));
     const L0 = Math.max(70, minSp + (R - sg) * sc);
     const top = 28 + Math.max(0, (avail - L0 - (sg + R) * sc) / 2);   // 남는 공간은 위아래로 나눈다
     const yN = top + L0;
@@ -430,7 +432,11 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   function updateStats(st){
     const run = phase === 'run';
     document.getElementById('sT').textContent = (2 * Math.PI / omega()).toFixed(2) + ' s';
-    document.getElementById('sA').textContent = (phase === 'drag' ? Math.abs(dragX) : run ? A0 : 0).toFixed(2) + ' m';
+    const A = phase === 'drag' ? Math.abs(dragX) : run ? A0 : 0;
+    aIn.max = maxA().toFixed(2);
+    if (document.activeElement !== aIn) aIn.value = A.toFixed(2);
+    const rt = mode === 'v' ? '= ' + ratioTxt(A / sag()) : '';
+    if (aRatio.textContent !== rt) aRatio.textContent = rt;
     document.getElementById('sX').textContent = fmt(st.x, 2) + ' m';
     document.getElementById('sV').textContent = fmt(st.v, 2) + ' m/s';
     const a = acc(st.x), el = document.getElementById('sAc');
@@ -501,7 +507,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     const g = geomH(), bx = g.eqX + x * g.scale;
     return Math.abs(p.x - bx) <= s / 2 + 22 && p.y >= g.floorY - s - 30 && p.y <= g.floorY + 24;
   }
-  const clampX = v => Math.max(-MAXX, Math.min(MAXX, v));
+  const clampX = v => Math.max(-maxA(), Math.min(maxA(), v));
   simC.addEventListener('pointerdown', e => {
     const p = local(e);
     if (!onBlock(p)) return;
@@ -531,6 +537,25 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   }
   simC.addEventListener('pointerup', release);
   simC.addEventListener('pointercancel', release);
+
+  // ---------- 진폭 직접 입력 ----------
+  // 진폭 A를 넣으면 그 진폭으로 당겼다 놓은 것으로 보고 t = 0부터 시작한다 (수평: +A에서, 수직: 아래쪽 −A에서 놓음).
+  const aIn = document.getElementById('aIn'), aRatio = document.getElementById('aRatio');
+  aIn.addEventListener('change', () => {
+    const v = parseFloat(aIn.value); if (!isFinite(v) || phase === 'drag') return;
+    const a = Math.min(maxA(), Math.max(0, v));
+    aIn.value = a.toFixed(2);
+    if (a < 0.003){ reset(); return; }
+    phase = 'run'; A0 = a; ph0 = mode === 'v' ? Math.PI : 0;
+    simTime = 0; buf = [sample(0)]; setPaused(false);
+  });
+  aIn.addEventListener('keydown', e => { if (e.key === 'Enter') aIn.blur(); });
+  // 진폭이 mg/k의 몇 배인지 (예: 2 mg/k, 3/2 mg/k, 1.37 mg/k)
+  function ratioTxt(r){
+    if (r < 0.0005) return '0';
+    for (let d = 1; d <= 4; d++){ const n = Math.round(r * d); if (n > 0 && Math.abs(r - n / d) < 0.004) return (d === 1 ? (n === 1 ? '' : n + ' ') : n + '/' + d + ' ') + 'mg/k'; }
+    return r.toFixed(2) + ' mg/k';
+  }
 
   // ---------- 시각 고르기 ----------
   const showT = timeBar(document.getElementById('tbar'), { cell: () => document.getElementById('stTime'), max: () => Math.max(10, Math.ceil(simTime / 10) * 10), set: val => {
