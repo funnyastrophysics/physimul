@@ -1,8 +1,8 @@
 # 문항마다 2022 개정 성취기준(new), 주제(topic), 출제 당시 교육과정(era)·성취기준(old)을 붙여 src/practice/codes.json 을 만듭니다.
 # 사용: python3 src/practice/classify.py [문항 그림 폴더(기본 practice-src/cut)]
 #
-# 1순위: codes_detail.json (선생님이 정한 분류. 이 프로그램은 이 파일을 고치지 않습니다)
-# 2순위: codes_detail.json에 없는 문항(예: 새로 넣은 6월·9월 모의평가)만 아래 규칙으로 분류합니다.
+# 1순위: codes_detail.json (선생님이 정한 수능 분류), codes_mock.json (6월·9월 모의평가 분류). 이 프로그램은 두 파일을 고치지 않습니다.
+# 2순위: 두 파일에 없는 문항만 아래 규칙으로 분류합니다(모의평가는 draft_mock.py로 초안을 먼저 만드는 것이 좋습니다).
 #        근거: map.json의 시뮬레이션, 출처 과목(Ⅰ/Ⅱ), 학년도, 해설 제목·문제 글에 나오는 낱말.
 # 마지막: codes_fix.json 에 {"p1_2024_11_05": {"new": "12역학03-02", "topic": "..."}} 처럼 적은 것이 위의 모든 것보다 우선합니다.
 # 문항 id = 과목_학년도_월_번호 (월: 06, 09, 11=수능)
@@ -12,9 +12,11 @@ here = os.path.dirname(os.path.abspath(__file__)); root = os.path.join(here, '..
 cut = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'practice-src', 'cut')
 MAP = json.load(open(os.path.join(here, 'map.json'), encoding='utf-8'))
 DETAIL = {}
-for k, v in json.load(open(os.path.join(here, 'codes_detail.json'), encoding='utf-8')).items():
-    if k.startswith('_'): continue
-    p = k.split('_'); DETAIL['_'.join(p[:2] + ['11'] + p[2:]) if len(p) == 3 else k] = v   # 예전 형식(p1_2024_05)은 수능으로 본다
+for f in ('codes_mock.json', 'codes_detail.json'):   # 모의평가 분류(draft_mock.py 초안을 검토한 것), 수능 분류(선생님)
+    if not os.path.exists(os.path.join(here, f)): continue
+    for k, v in json.load(open(os.path.join(here, f), encoding='utf-8')).items():
+        if k.startswith('_'): continue
+        p = k.split('_'); DETAIL['_'.join(p[:2] + ['11'] + p[2:]) if len(p) == 3 else k] = v   # 예전 형식(p1_2024_05)은 수능으로 본다
 FIX = json.load(open(os.path.join(here, 'codes_fix.json'), encoding='utf-8')) if os.path.exists(os.path.join(here, 'codes_fix.json')) else {}
 
 def has(t, *words): return any(w in t for w in words)
@@ -116,5 +118,5 @@ json.dump(out, open(os.path.join(here, 'codes.json'), 'w', encoding='utf-8'), en
 from collections import Counter
 cnt = Counter(v['new'] for v in out.values())
 for k in sorted(cnt): print(k, cnt[k])
-print('문항', len(out), '/ codes_detail.json에서', len(out) - len(by_rule), '/ 규칙으로 분류', len(by_rule))
+print('문항', len(out), '/ codes_detail·codes_mock에서', len(out) - len(by_rule), '/ 규칙으로 분류', len(by_rule))
 if by_rule: print('규칙으로 분류한 문항(주제 없음, 확인 필요):', ' '.join(by_rule))

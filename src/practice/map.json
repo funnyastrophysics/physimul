@@ -19,6 +19,7 @@
   "p1_2024_11": ["", "", "magnet", "spectrum", "wave", "wave", "collision", "collision", "forces", "accel", "engine", "relativity", "diode", "optics", "efield", "slit", "induction", "bfield", "accel", "energy"],
   "p1_2025_11": ["", "", "spectrum", "slit", "forces", "collision", "magnet", "wave", "relativity", "collision", "soundinterf", "diode", "efield", "optics", "engine", "accel", "bfield", "accel", "induction", "energy"],
   "p1_2026_11": ["", "magnet", "", "spectrum", "wave", "soundinterf", "collision", "relativity", "forces", "collision", "optics", "slit", "diode", "accel", "bfield", "gas", "induction", "accel", "energy", "efield"],
+  "p1_2027_06": ["", "accel", "", "wave", "spectrum", "soundinterf", "magnet", "engine", "optics", "forces", "collision", "relativity", "slit", "collision", "induction", "diode", "energy", "accel", "bfield", "efield"],
   "p2_2008_11": ["accel", "orbit", "", "shm", "", "gas", "lorentz", "", "", "circular", "engine", "efield", "", "", "", "capacitor", "", "lorentz", "spectrum", "circular"],
   "p2_2009_11": ["accel", "projectile", "", "", "orbit", "engine", "", "circular", "gas", "", "efield", "lorentz", "", "", "", "spectrum", "spectrum", "", "", "circular"],
   "p2_2010_11": ["", "shm", "", "", "orbit", "projectile", "circular", "gas", "gas", "efield", "", "", "capacitor", "", "", "spectrum", "efield", "shm", "efield", ""],
