@@ -153,6 +153,6 @@
   if (m) ready('../../practice/data/').then(function (d) {   // 시뮬레이션 화면
     if (!d || !d.sims || !d.sims[m[1]]) return;
     var box = el('section'); (document.querySelector('.wrap') || document.body).appendChild(box);
-    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 수능 기출문제 ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
+    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 기출문제(수능, 6월·9월 모의평가) ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
   }).catch(function () {});
 })();

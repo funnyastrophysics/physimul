@@ -29,7 +29,7 @@
 <div class="wrap">
   <a class="back" href="../">← 처음으로</a>
   <h1>단원별 기출문제</h1>
-  <p class="hint">수능 기출문제를 2022 개정 교육과정의 과목과 단원에 맞추어 모았어요. 어느 성취기준에도 맞지 않는 문항은 「미분류」에 있어요. 단원을 고르면 아래에 문제가 나옵니다. 수업 코드가 필요해요.</p>
+  <p class="hint">수능과 6월·9월 모의평가 기출문제를 2022 개정 교육과정의 과목과 단원에 맞추어 모았어요. 어느 성취기준에도 맞지 않는 문항은 「미분류」에 있어요. 단원을 고르면 아래에 문제가 나옵니다. 수업 코드가 필요해요.</p>
   <div id="subjects"></div>
   <p class="msg" id="msg">문제 목록을 불러오는 중…</p>
   <section id="panel" style="display:none"></section>
@@ -58,7 +58,7 @@
   function open(k, n, quiet) {
     Object.keys(btns).forEach(function (x) { btns[x].classList.toggle('on', x === k); });
     var box = document.createElement('section'); panel.innerHTML = ''; panel.style.display = 'block'; panel.appendChild(box);
-    PQ.mount(box, { base: 'data/', file: 'u_' + k + '.bin', title: k === 'x' ? '미분류' : UNITS[k][0] + ' · ' + UNITS[k][1], sub: '수능 기출문제 ' + n + '개. ' + (k === 'x' ? '2022 개정 교육과정의 성취기준에 넣지 않은 문항이에요. 주제별로 골라 볼 수 있어요.' : '성취기준과 주제별로 골라 볼 수 있어요.'), names: NAMES, codes: CODES, simBase: '../sim/', auto: true });
+    PQ.mount(box, { base: 'data/', file: 'u_' + k + '.bin', title: k === 'x' ? '미분류' : UNITS[k][0] + ' · ' + UNITS[k][1], sub: '기출문제 ' + n + '개. ' + (k === 'x' ? '2022 개정 교육과정의 성취기준에 넣지 않은 문항이에요. 주제별로 골라 볼 수 있어요.' : '성취기준과 주제별로 골라 볼 수 있어요.'), names: NAMES, codes: CODES, simBase: '../sim/', auto: true });
     try { history.replaceState(null, '', '#' + k); } catch (e) {}
     if (!quiet) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
