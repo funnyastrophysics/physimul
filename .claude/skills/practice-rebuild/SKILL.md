@@ -14,9 +14,11 @@ description: 기출문제를 시뮬레이션·성취기준에 다시 연결하�
 4. 수업 코드는 선생님께 받는다. 저장소 어디에도 적지 않는다.
 
 ## 연결 바꾸기
-- 문항→시뮬레이션: `src/practice/map.json` (과목_학년도마다 1~20번 순서, 빈 문자열은 제외)
-- 새 시뮬레이션 이름을 쓰면 `src/practice/classify.py`의 `new_code`와 `old_code`에 그 이름의 규칙을 넣는다.
-- 문항 하나의 성취기준만 바꿀 때: `src/practice/codes_fix.json`에 `{"p1_2024_05": {"new": "12역학03-02"}}`
+- 문항 id는 `p1_2024_11_05`(과목_학년도_월_번호, 11=수능).
+- 문항→시뮬레이션: `src/practice/map.json` (키 `p1_2024_11`, 1~20번 순서, 빈 문자열은 시뮬레이션 연결만 없음). 바꿔도 수능 문항의 단원 분류는 그대로다.
+- 단원 분류(2022 성취기준·주제·출제 당시)의 기준은 `src/practice/codes_detail.json`(선생님이 정함). 프로그램이 덮어쓰지 않는다. 선생님이 새 분류표를 주면 이 파일을 바꾼다(예전 id 형식 p1_2024_05도 읽힘).
+- 새 시뮬레이션 이름을 쓰면 `src/practice/classify.py`의 `new_code`와 `old_code`에 그 이름의 규칙을 넣는다(codes_detail.json에 없는 문항을 분류할 때 쓰임, 없으면 오류).
+- 문항 하나만 바꿀 때: `src/practice/codes_fix.json`에 `{"p1_2024_11_05": {"new": "12역학03-02", "topic": "…"}}`
 - 문항 내용을 확인할 때는 `practice-src/cut/<회차>/info.json`의 texts·titles를 먼저 보고, 애매할 때만 q??.webp 그림을 연다(사용량 절약).
 
 ## 다시 만들기

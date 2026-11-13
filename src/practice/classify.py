@@ -1,13 +1,22 @@
-# 문항마다 옛 교육과정의 성취기준(old)과 2022 개정 성취기준(new)을 붙여 src/practice/codes.json 을 만듭니다.
+# 문항마다 2022 개정 성취기준(new), 주제(topic), 출제 당시 교육과정(era)·성취기준(old)을 붙여 src/practice/codes.json 을 만듭니다.
 # 사용: python3 src/practice/classify.py [문항 그림 폴더(기본 practice-src/cut)]
 #
-# 근거: map.json의 주제(시뮬레이션), 출처 과목(Ⅰ/Ⅱ), 학년도, 그리고 해설 제목·문제 글에 나오는 낱말.
-# 문항 하나만 따로 정하려면 src/practice/codes_fix.json 에 {"p1_2024_05": {"new": "12역학03-02"}} 처럼 적습니다.
+# 1순위: codes_detail.json (선생님이 정한 수능 분류), codes_mock.json (6월·9월 모의평가 분류). 이 프로그램은 두 파일을 고치지 않습니다.
+# 2순위: 두 파일에 없는 문항만 아래 규칙으로 분류합니다(모의평가는 draft_mock.py로 초안을 먼저 만드는 것이 좋습니다).
+#        근거: map.json의 시뮬레이션, 출처 과목(Ⅰ/Ⅱ), 학년도, 해설 제목·문제 글에 나오는 낱말.
+# 마지막: codes_fix.json 에 {"p1_2024_11_05": {"new": "12역학03-02", "topic": "..."}} 처럼 적은 것이 위의 모든 것보다 우선합니다.
+# 문항 id = 과목_학년도_월_번호 (월: 06, 09, 11=수능)
 import json, os, re, sys
 
 here = os.path.dirname(os.path.abspath(__file__)); root = os.path.join(here, '..', '..')
 cut = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'practice-src', 'cut')
 MAP = json.load(open(os.path.join(here, 'map.json'), encoding='utf-8'))
+DETAIL = {}
+for f in ('codes_mock.json', 'codes_detail.json'):   # 모의평가 분류(draft_mock.py 초안을 검토한 것), 수능 분류(선생님)
+    if not os.path.exists(os.path.join(here, f)): continue
+    for k, v in json.load(open(os.path.join(here, f), encoding='utf-8')).items():
+        if k.startswith('_'): continue
+        p = k.split('_'); DETAIL['_'.join(p[:2] + ['11'] + p[2:]) if len(p) == 3 else k] = v   # 예전 형식(p1_2024_05)은 수능으로 본다
 FIX = json.load(open(os.path.join(here, 'codes_fix.json'), encoding='utf-8')) if os.path.exists(os.path.join(here, 'codes_fix.json')) else {}
 
 def has(t, *words): return any(w in t for w in words)
@@ -88,19 +97,26 @@ def old_code(sim, one, year, t):
         return '물리Ⅱ ' + c if c else ''
     return ''
 
-out = {}
-for exam in sorted(k for k in MAP if re.match(r'^p[12]_\d{4}$', k)):
-    info = json.load(open(os.path.join(cut, exam, 'info.json'), encoding='utf-8')); sub, ys = exam.split('_'); year = int(ys); one = sub == 'p1'
+def era_of(year): return '2015 개정' if year >= 2021 else '2009 개정' if year >= 2014 else '7차'
+
+out = {}; by_rule = []
+for exam in sorted(k for k in MAP if re.match(r'^p[12]_\d{4}_\d{2}$', k)):
+    sub, ys, mm = exam.split('_'); year = int(ys); one = sub == 'p1'; info = None
     for i, sim in enumerate(MAP[exam]):
-        if not sim: continue
-        n = str(i + 1); title = info['titles'].get(n, '')
-        if year < 2012 or re.search(r'[㐀-䶿]', title): title = ''   # 제목이 없거나 글자가 깨진 회차
-        t = title + ' ' + info['texts'].get(n, '')[:260]
         qid = f'{exam}_{i + 1:02d}'
-        c = {'old': old_code(sim, one, year, t), 'new': new_code(sim, one, t)}
+        if qid in DETAIL:
+            d = DETAIL[qid]; c = {k: d.get(k, '') for k in ('new', 'topic', 'era', 'old')}
+        else:
+            if info is None: info = json.load(open(os.path.join(cut, exam, 'info.json'), encoding='utf-8'))
+            n = str(i + 1); title = info['titles'].get(n, '')
+            if year < 2012 or re.search(r'[㐀-䶿]', title): title = ''   # 제목이 없거나 글자가 깨진 회차
+            t = title + ' ' + info['texts'].get(n, '')[:260]
+            c = {'new': new_code(sim, one, t) if sim else '미분류', 'topic': '', 'era': era_of(year), 'old': old_code(sim, one, year, t) if sim else ''}
+            by_rule.append(qid)
         c.update(FIX.get(qid, {})); out[qid] = c
 json.dump(out, open(os.path.join(here, 'codes.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
 from collections import Counter
 cnt = Counter(v['new'] for v in out.values())
 for k in sorted(cnt): print(k, cnt[k])
-print('문항', len(out), '/ 옛 성취기준이 붙은 문항', sum(1 for v in out.values() if v['old']))
+print('문항', len(out), '/ codes_detail·codes_mock에서', len(out) - len(by_rule), '/ 규칙으로 분류', len(by_rule))
+if by_rule: print('규칙으로 분류한 문항(주제 없음, 확인 필요):', ' '.join(by_rule))

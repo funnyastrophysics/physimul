@@ -17,6 +17,7 @@
     '.pq .pq-ch button.ok{border-color:#2e9e6a;background:#e3f4ec;font-weight:700}.pq .pq-ch button.no{border-color:#d64541;background:#fbe9e8}' +
     '.pq .pq-res{font-weight:700;margin:10px 0 0}.pq .pq-exp{border-top:1px solid #d9dde4;padding:10px 0 0;margin:10px 0 0}.pq .pq-exp b{display:block;font-size:13px;color:#5b6475;margin:0 0 6px}' +
     '.pq .pq-rec{font-size:13px;color:#5b6475;margin:0 0 8px}.pq .pq-rec a{color:#5b6475;margin-left:6px}.pq .pq-err{color:#d64541;font-size:14px;margin:8px 0 0}.pq .pq-copy{font-size:12px;color:#5b6475;margin:12px 0 0}' +
+    '.pq .pq-meta{font-size:14px;margin:0 0 2px;line-height:1.5}.pq .pq-meta b{margin-right:6px}.pq .pq-meta span{color:#2f6fdf;display:inline-block}.pq .pq-era{font-size:12px;color:#5b6475;margin:0 0 10px}' +
     '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:block;font-size:15px;color:#2f6fdf;font-weight:700;text-decoration:none;text-align:center;border:1px solid #2f6fdf;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#f3f7ff}';
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -36,8 +37,9 @@
 
   // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, title, sub, simBase: 시뮬레이션 폴더 경로, names: {시뮬레이션 이름: 제목}, codes: {성취기준: 짧은 이름} }
   function mount(box, o) {
-    var key = null, all = null, list = null, idx = 0, picked = 0, topic = '', mode = '', urls = [], cache = {};
-    function scope() { return topic ? all.filter(function (x) { return x.c === topic; }) : all; }
+    var key = null, all = null, list = null, idx = 0, picked = 0, std = '', tp = '', mode = '', urls = [], cache = {};
+    // std: 고른 2022 성취기준, tp: 고른 주제
+    function scope() { return all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }); }
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
     function freeUrls() { urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = []; }
@@ -49,7 +51,7 @@
     }
     function open(code, onFail) {
       makeKey(code).then(function (k) {
-        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); topic = ''; mode = ''; apply(); cache = {}; show(); });
+        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); std = ''; tp = ''; mode = ''; apply(); cache = {}; show(); });
       }).catch(function (e) {
         if (e && e.message === 'key') { setCode(''); onFail('수업 코드가 맞지 않습니다. 대문자와 소문자, 띄어쓰기를 확인하세요.'); }
         else onFail('문제를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); });
@@ -76,12 +78,23 @@
       var sc = scope(), nDone = 0, nOk = 0; sc.forEach(function (x) { var r = g[x.id]; if (r) { nDone++; if (r[0]) nOk++; } });
       var recRow = el('p', 'pq-rec'); recRow.appendChild(document.createTextNode('내 기록: ' + sc.length + '문제 중 ' + nDone + '문제 풀었어요' + (nDone ? ' (맞음 ' + nOk + ', 틀림 ' + (nDone - nOk) + ')' : '') + ' '));
       if (nDone) { var rz = el('a', '', '기록 지우기'); rz.href = '#'; rz.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('여기 보이는 ' + sc.length + '문제의 기록을 지울까요?')) { clearLog(sc.map(function (x) { return x.id; })); apply(); show(); } }); recRow.appendChild(rz); }
-      if (o.codes) {   // 성취기준별로 골라 보기
+      if (o.codes) {   // 성취기준별로, 그 안에서 주제별로 골라 보기
         var cnt = {}, ord = []; all.forEach(function (x) { if (!cnt[x.c]) { cnt[x.c] = 0; ord.push(x.c); } cnt[x.c]++; }); ord.sort();
-        var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
-        var o0 = el('option', '', '전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
-        ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = topic;
-        ts.addEventListener('change', function () { topic = ts.value; apply(); show(); }); box.appendChild(ts);
+        if (ord.length > 1) {
+          var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
+          var o0 = el('option', '', '성취기준: 전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
+          ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = std;
+          ts.addEventListener('change', function () { std = ts.value; tp = ''; apply(); show(); }); box.appendChild(ts);
+        }
+        var base = std ? all.filter(function (x) { return x.c === std; }) : all, tc = {}, tf = {}, tord = [];
+        base.forEach(function (x) { if (!(x.t in tc)) { tc[x.t] = 0; tf[x.t] = x.c; tord.push(x.t); } tc[x.t]++; });
+        tord.sort(function (a, b) { return tf[a] < tf[b] ? -1 : tf[a] > tf[b] ? 1 : a.localeCompare(b, 'ko'); });
+        if (tord.length > 1) {
+          var tt = el('select'); tt.setAttribute('aria-label', '주제 고르기');
+          var t0 = el('option', '', '주제: 전체 (' + base.length + '문제)'); t0.value = ''; tt.appendChild(t0);
+          tord.forEach(function (t) { var op = el('option', '', (t || '주제 없음') + ' (' + tc[t] + '문제)'); op.value = t; tt.appendChild(op); }); tt.value = tp;
+          tt.addEventListener('change', function () { tp = tt.value; apply(); show(); }); box.appendChild(tt);
+        }
       }
       box.appendChild(recRow);
       var ms = el('select'); ms.setAttribute('aria-label', '볼 문제 고르기');
@@ -91,6 +104,10 @@
       var sel = el('select'); sel.setAttribute('aria-label', '문제 고르기');
       list.forEach(function (x, k) { var r = g[x.id], op = el('option', '', (r ? (r[0] ? '✓ ' : '✗ ') : '') + (k + 1) + '. ' + x.src); op.value = k; sel.appendChild(op); }); sel.value = idx;
       sel.addEventListener('change', function () { idx = +sel.value; show(); }); box.appendChild(sel);
+      var mt = el('p', 'pq-meta'); mt.appendChild(el('b', '', it.src));
+      if (it.c) mt.appendChild(el('span', '', '[' + it.c + '] ' + (it.t || (o.codes && o.codes[it.c]) || '')));
+      box.appendChild(mt);
+      if (it.e) box.appendChild(el('p', 'pq-era', '출제 당시: ' + it.e + ' 교육과정' + (it.e !== '7차' && it.o ? ' ' + it.o : '')));
       if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; box.appendChild(sa); }
       var area = el('div', 'pq-load', '문제를 불러오는 중…'); box.appendChild(area);
       var ch = el('div', 'pq-ch'), marks = ['①', '②', '③', '④', '⑤'], btns = [];
@@ -136,6 +153,6 @@
   if (m) ready('../../practice/data/').then(function (d) {   // 시뮬레이션 화면
     if (!d || !d.sims || !d.sims[m[1]]) return;
     var box = el('section'); (document.querySelector('.wrap') || document.body).appendChild(box);
-    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 수능 기출문제 ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
+    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 기출문제(수능, 6월·9월 모의평가) ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
   }).catch(function () {});
 })();
