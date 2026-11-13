@@ -24,6 +24,7 @@ def build(name):
 <div class="wrap">
   <a class="back" id="back" href="../../">← 목록으로</a>
 {body.strip()}
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
 </div>
 <script>
 (function(){{
