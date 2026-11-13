@@ -1,7 +1,7 @@
 # 수능 문제지·해설 PDF에서 문항별 그림을 잘라냅니다.
 # 사용: python3 src/practice/extract.py <원본 폴더> <출력 폴더>
 #   원본 폴더: p1/d1(문제) p1/d2(정답) p1/d3(해설), p2/... 구조. 파일 이름은 p1_2026_11.pdf 형식.
-#   출력 폴더: <과목>_<연도>/q01.webp, e01.webp, info.json(정답, 문항 글자)
+#   출력 폴더: <과목>_<학년도>_<월>/q01.webp, e01.webp, info.json(정답, 문항 글자)
 import sys, os, re, json, glob, io
 import pymupdf
 from PIL import Image, ImageChops
@@ -128,10 +128,10 @@ if __name__ == '__main__':
     src, out = sys.argv[1], sys.argv[2]
     for sub in ['p1', 'p2']:
         for q in sorted(glob.glob(f'{src}/{sub}/d1/*.pdf')):
-            name = os.path.basename(q)[:-4]; year = name.split('_')[1]
-            od = os.path.join(out, f'{sub}_{year}'); os.makedirs(od, exist_ok=True)
+            name = os.path.basename(q)[:-4]; _, year, month = name.split('_')   # 월: 06, 09, 11(수능)
+            od = os.path.join(out, f'{sub}_{year}_{month}'); os.makedirs(od, exist_ok=True)
             e = f'{src}/{sub}/d3/{name}.pdf'; af = (glob.glob(f'{src}/{sub}/d2/{name}.*') or [None])[0]
             nq, texts = cut_questions(q, od); ne, titles = cut_explanations(e, od); a, b = answers(e, af, sub)
             ok = '정답 없음!' if (a is None and b is None) else '한쪽만' if (a is None or b is None) else 'ok' if a == b else 'MISMATCH'
             json.dump({'answers': a, 'official': b, 'texts': texts, 'titles': titles}, open(os.path.join(od, 'info.json'), 'w'), ensure_ascii=False)
-            print(f'{sub}_{year}: 문제 {nq}/20  해설 {ne}/20  정답 {ok} (해설 {"O" if a else "X"}, 정답표 {"O" if b else "X"})')
+            print(f'{sub}_{year}_{month}: 문제 {nq}/20  해설 {ne}/20  정답 {ok} (해설 {"O" if a else "X"}, 정답표 {"O" if b else "X"})')
