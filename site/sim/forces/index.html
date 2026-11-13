@@ -52,6 +52,15 @@ label.chk input{width:18px;height:18px}
 .gx{font-size:13px;font-weight:400;color:var(--sub);white-space:nowrap}
 .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
 
+.fin{display:grid;gap:8px;margin-top:12px}
+.fin .fr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:15px}
+.fin .fn{font-weight:700;width:26px}
+.fin label{display:flex;align-items:center;gap:4px}
+.fin input{font:inherit;font-weight:700;width:68px;padding:5px 6px;border:1.5px solid var(--line);border-radius:6px;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.fin input:focus{outline:none;border-color:var(--accent)}
+.fin input::-webkit-outer-spin-button,.fin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.fin .fnote{font-size:12px;color:var(--sub)}
+
 </style>
 </head>
 <body>
@@ -70,6 +79,7 @@ label.chk input{width:18px;height:18px}
       <label class="chk"><input type="checkbox" id="cEq"> 평형을 이루는 힘</label>
       <label class="chk"><input type="checkbox" id="cThird"> 세 번째 힘 추가</label>
     </div>
+    <div class="fin m-sum" id="fin"></div>
     <div class="row m-slope">
       <button class="b primary" id="goB">놓기</button>
       <button class="b" id="resetB">처음으로</button>
@@ -255,15 +265,47 @@ let mode;
 bindLabels({ angS: ['angV', v => v + '°'], mS: ['mV', v => v.toFixed(1) + ' kg'], musS: ['musV', v => v.toFixed(2)], mukS: ['mukV', v => v.toFixed(2)] });
 
 // ---------- 힘의 합성 (단위: N, 화면 1 N = k px) ----------
-let F = [{ x: 4, y: 1, c: BLUE, n: 'F₁' }, { x: 1, y: 3.5, c: ORANGE, n: 'F₂' }, { x: -2, y: -2.5, c: GREEN, n: 'F₃' }], drag = -1;
-function sumView(){ const { W, H } = s; return { ox: W / 2, oy: H / 2 + 20, k: Math.min(W, H) / 13 }; }
+let F = [{ x: 4, y: 1, c: BLUE, n: 'F₁' }, { x: 1, y: 3.5, c: ORANGE, n: 'F₂' }, { x: -2, y: -2.5, c: GREEN, n: 'F₃' }], drag = -1, dragU = 0;
+F.forEach(f => { f.a = Math.atan2(f.y, f.x); });
+const shownF = () => $('cThird').checked ? F : F.slice(0, 2);
+// 격자 1칸의 크기(N): 힘이 커지면 1 → 2 → 5 → 10 N으로 늘려 화면 안에 들어오게 한다. 끄는 동안에는 고정.
+function gridUnit(){
+  if (dragU) return dragU;
+  const list = shownF(), R = list.reduce((a, f) => ({ x: a.x + f.x, y: a.y + f.y }), { x: 0, y: 0 });
+  const ext = Math.max(...list.concat([R]).map(f => Math.max(Math.abs(f.x), Math.abs(f.y))));
+  return [1, 2, 5, 10].find(u => ext / u <= 5.6) || 10;
+}
+function sumView(){ const { W, H } = s, u = gridUnit(); return { ox: W / 2, oy: H / 2 + 20, k: Math.min(W, H) / 13 / u, u }; }
+
+// 크기·방향 직접 입력 (방향: +x축에서 시계 반대 방향으로 잰 각, 0°~360°)
+const FMAX = 20;
+$('fin').innerHTML = F.map((f, i) => '<div class="fr" data-i="' + i + '"><span class="fn" style="color:' + f.c + '">' + f.n + '</span>' +
+  '<label>크기 <input type="number" data-k="r" min="0" max="' + FMAX + '" step="any" inputmode="decimal" aria-label="' + f.n + ' 크기(N)"> N</label>' +
+  '<label>방향 <input type="number" data-k="a" min="0" max="360" step="any" inputmode="decimal" aria-label="' + f.n + ' 방향(도)"> °</label></div>').join('') +
+  '<div class="fnote">방향은 +x축(오른쪽)에서 시계 반대 방향으로 잰 각입니다. 크기는 ' + FMAX + ' N까지.</div>';
+const finRows = [...document.querySelectorAll('#fin .fr')];
+const r2 = v => String(Math.round(v * 100) / 100);
+const degOf = f => { let d = f.a * 180 / Math.PI % 360; if (d < 0) d += 360; return Math.round(d * 10) / 10 % 360; };
+finRows.forEach((row, i) => {
+  const [ri, ai] = row.querySelectorAll('input');
+  const apply = () => { const r = parseFloat(ri.value), d = parseFloat(ai.value); if (!isFinite(r) || !isFinite(d)) return;
+    const rr = Math.max(0, Math.min(FMAX, r)); F[i].a = d * Math.PI / 180; F[i].x = rr * Math.cos(F[i].a); F[i].y = rr * Math.sin(F[i].a); };
+  [ri, ai].forEach(n => { n.addEventListener('input', apply); n.addEventListener('keydown', e => { if (e.key === 'Enter') n.blur(); }); n.addEventListener('blur', () => syncFin(true)); });
+});
+function syncFin(force){
+  finRows.forEach((row, i) => { row.style.display = i < shownF().length ? '' : 'none';
+    const [ri, ai] = row.querySelectorAll('input'), f = F[i];
+    const rv = r2(Math.hypot(f.x, f.y)), av = String(degOf(f));
+    if (force || document.activeElement !== ri){ if (ri.value !== rv) ri.value = rv; }
+    if (force || document.activeElement !== ai){ if (ai.value !== av) ai.value = av; } });
+}
 function drawSum(){
   const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H);
-  const { ox, oy, k } = sumView(), list = $('cThird').checked ? F : F.slice(0, 2);
-  // 격자 (1 N)
+  const { ox, oy, k, u } = sumView(), list = shownF();
+  // 격자 (1칸 = u N)
   ctx.strokeStyle = '#eef0f4'; ctx.lineWidth = 1;
-  for (let i = -8; i <= 8; i++){ ctx.beginPath(); ctx.moveTo(ox + i * k, 0); ctx.lineTo(ox + i * k, H); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, oy + i * k); ctx.lineTo(W, oy + i * k); ctx.stroke(); }
-  T(ctx, '격자 1칸 = 1 N, 화살표 끝을 끌어 보세요', 8, 12, { align: 'left', size: 11 });
+  for (let i = -12; i <= 12; i++){ ctx.beginPath(); ctx.moveTo(ox + i * k * u, 0); ctx.lineTo(ox + i * k * u, H); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, oy + i * k * u); ctx.lineTo(W, oy + i * k * u); ctx.stroke(); }
+  T(ctx, '격자 1칸 = ' + u + ' N, 화살표 끝을 끌어 보세요', 8, 12, { align: 'left', size: 11 });
   const R = list.reduce((a, f) => ({ x: a.x + f.x, y: a.y + f.y }), { x: 0, y: 0 });
   if ($('cPar').checked && list.length === 2){
     const [a, b] = list; line(ctx, [[ox + a.x * k, oy - a.y * k], [ox + R.x * k, oy - R.y * k]], b.c, 1.2, true); line(ctx, [[ox + b.x * k, oy - b.y * k], [ox + R.x * k, oy - R.y * k]], a.c, 1.2, true);
@@ -277,14 +319,17 @@ function drawSum(){
   if (Rm > 0.05) T(ctx, '합력', ox + R.x * k + 14, oy - R.y * k - 12, { color: PURPLE, bold: true, size: 14 });
   if ($('cEq').checked && Rm > 0.05){ arrow(ctx, ox, oy, ox - R.x * k, oy + R.y * k, RED, 3, 12); T(ctx, '평형을 이루는 힘', ox - R.x * k, oy + R.y * k + 16, { color: RED, bold: true }); }
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(ox, oy, 6, 0, 7); ctx.fill();
-  const ang = Math.atan2(R.y, R.x) * 180 / Math.PI;
+  const ang = (Math.atan2(R.y, R.x) * 180 / Math.PI + 360) % 360;
+  syncFin(false);
   setStats(list.map(f => [f.n + ' 크기', Math.hypot(f.x, f.y).toFixed(2) + ' N', f.c]).concat([['합력의 크기', Rm.toFixed(2) + ' N', PURPLE], ['합력의 방향', Rm > 0.05 ? '+x축에서 ' + fmt(ang, 0) + '°' : '-']]));
 }
 pointer(S, (x, y) => {
-  if (mode !== 'sum') return false; const { ox, oy, k } = sumView(), list = $('cThird').checked ? F : F.slice(0, 2);
+  if (mode !== 'sum') return false; const { ox, oy, k, u } = sumView(), list = shownF();
   drag = -1; let best = 30; list.forEach((f, i) => { const d = Math.hypot(ox + f.x * k - x, oy - f.y * k - y); if (d < best){ best = d; drag = i; } });
-  return drag >= 0 ? undefined : false;
-}, (x, y) => { const { ox, oy, k } = sumView(); F[drag].x = Math.round((x - ox) / k * 2) / 2; F[drag].y = Math.round((oy - y) / k * 2) / 2; });
+  if (drag < 0) return false; dragU = u; if (document.activeElement && document.activeElement.closest('#fin')) document.activeElement.blur();
+}, (x, y) => { const { ox, oy, k, u } = sumView(), f = F[drag]; f.x = Math.round((x - ox) / k * 2 / u) / 2 * u; f.y = Math.round((oy - y) / k * 2 / u) / 2 * u;
+  if (Math.hypot(f.x, f.y) > FMAX){ const q = FMAX / Math.hypot(f.x, f.y); f.x *= q; f.y *= q; }
+  if (f.x || f.y) f.a = Math.atan2(f.y, f.x); }, () => { dragU = 0; });
 
 // ---------- 빗면 ----------
 let pos = 0, vel = 0, run = false;
@@ -319,7 +364,7 @@ function drawSlope(dt){
   setStats([['중력의 빗면 방향 성분', Fpar.toFixed(1) + ' N', RED], ['수직 항력', N.toFixed(1) + ' N', BLUE], ['최대 정지 마찰력', fsMax.toFixed(1) + ' N', GREEN], ['알짜힘', (moving ? Fpar - muk * N : 0).toFixed(1) + ' N'], ['가속도', gAcc(moving ? a : 0), ORANGE]]);
 }
 const TEXT = {
-  sum: ['화살표 끝을 끌어 두 힘의 크기와 방향을 바꾸고, 합력이 어떻게 정해지는지 관찰하세요.',
+  sum: ['화살표 끝을 끌거나 그림 아래 칸에 크기와 방향을 입력해 두 힘을 바꾸고, 합력이 어떻게 정해지는지 관찰하세요.',
     '두 힘의 합력은 두 힘을 이웃한 변으로 하는 평행사변형의 대각선입니다. 여러 힘은 화살표를 꼬리에 머리를 잇듯 이어 붙여 더할 수 있습니다. 합력과 크기가 같고 방향이 반대인 힘을 더하면 알짜힘이 0이 되어 물체는 평형을 이룹니다.'],
   slope: ['빗면의 기울기와 마찰 계수를 바꾸며 물체에 작용하는 힘을 분석하세요. 중력을 빗면에 나란한 성분과 수직인 성분으로 나누면 운동을 예측할 수 있습니다.',
     '중력의 빗면 방향 성분은 mg sinθ, 수직 성분은 mg cosθ이며 수직 항력과 크기가 같습니다. 중력의 빗면 방향 성분이 최대 정지 마찰력(μₛN)보다 크면 물체가 미끄러지고, 그때 가속도는 (mg sinθ − μₖN)/m입니다. 화살표 길이는 힘의 크기에 비례합니다.'] };
