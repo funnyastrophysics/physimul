@@ -154,7 +154,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   const speedS = document.getElementById('speedS');
   const FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 
-  const MAXX = 0.5;     // 수평 진동에서 당길 수 있는 최대 변위 (m). 수직 진동은 3mg/k까지
+  const MAXX = 0.5;     // 수평 진동에서 당길 수 있는 최대 변위 (m). 수직 진동은 3mg/k까지(작으면 0.5 m까지)
   const WINDOW = 10;    // 그래프 시간 폭 (s)
   const G = 9.8;
 
@@ -205,7 +205,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     modeBtns.forEach(b => b.classList.toggle('on', b.dataset.m === md));
     simC.style.height = md === 'v' ? '400px' : '230px';
     document.getElementById('hint').textContent = md === 'v'
-      ? '천장에 매단 용수철에 물체를 걸면 mg/k만큼 늘어난 곳이 새로운 평형점(x = 0)입니다. 물체를 위아래로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(아래쪽 −A에서 놓음) 그 순간이 t = 0입니다. 진폭은 3mg/k까지, 위쪽이 (+), 공기 저항은 없다고 가정합니다.'
+      ? '천장에 매단 용수철에 물체를 걸면 mg/k만큼 늘어난 곳이 새로운 평형점(x = 0)입니다. 물체를 위아래로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(아래쪽 −A에서 놓음) 그 순간이 t = 0입니다. 진폭은 3mg/k까지(최소 0.5 m까지는 언제나), 위쪽이 (+), 공기 저항은 없다고 가정합니다.'
       : '물체를 잡아 옆으로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(+A에서 놓음) 그 순간이 t = 0이고, 그때부터 시간과 그래프가 흐릅니다. 진폭은 0.5 m까지, 오른쪽이 (+), 마찰은 없다고 가정합니다.';
     document.getElementById('aRatio').style.display = md === 'v' ? '' : 'none';
     document.getElementById('kX').textContent = md === 'v' ? '변위 x (위 +)' : '변위 x';
@@ -242,7 +242,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   Q.forEach(q => document.getElementById(q.id).addEventListener('change', resize));
   window.addEventListener('resize', resize);
 
-  const maxA = () => mode === 'v' ? 3 * sag() : MAXX;
+  const maxA = () => mode === 'v' ? Math.max(MAXX, 3 * sag()) : MAXX;
   const range = () => Math.max(maxA(), phase === 'run' ? A0 : 0);
   const blockSize = () => (40 * Math.cbrt(m) + 10) * Math.max(0.7, Math.min(1, W / 600));
   function geomH(){
