@@ -10,7 +10,7 @@
 // 만들어지는 파일
 //   data/index.json  : { salt, iter, sims: { 시뮬레이션: 문항 수 } }   (암호화하지 않음)
 //   data/<시뮬레이션>.bin : 문항 목록 [{ id, src, a, c, t, e, o }]     (암호화)
-//   data/u_<영역>.bin     : 문항 목록 [{ id, src, a, s, c, t, e, o }]  (암호화) s=시뮬레이션, c=2022 성취기준, t=주제, e=출제 당시 교육과정, o=당시 성취기준
+//   data/u_<영역>.bin     : 문항 목록 [{ id, src, a, s, c, t, e, o, p, r }]  (암호화) s=시뮬레이션, c=2022 성취기준, t=주제, e=출제 당시 교육과정, o=당시 성취기준, p=배점, r=정답률(2016학년도~)
 //   data/q/<id>.bin  : [문제 그림 길이 4바이트][문제 그림][해설 그림]  (암호화)
 // 암호화: PBKDF2-SHA256으로 만든 키, AES-256-GCM. 파일 = iv(12바이트) + 암호문 + 태그.
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
@@ -60,7 +60,7 @@ for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}_\d{2}$/.test(k)).s
     const item = { id, src: `${year}학년도 ${exam_name(mm)} ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
     const cc = CODES[id] || {}, c = cc.new, unit = c && unitOf(c);
     if (!unit || !U.codes[c]) { console.error('성취기준이 없습니다(classify.py를 먼저 실행하세요): ' + id); process.exit(1); }
-    Object.assign(item, { c, t: cc.topic || '', e: cc.era || '', o: cc.old || '' });
+    Object.assign(item, { c, t: cc.topic || '', e: cc.era || '', o: cc.old || '', p: cc['배점'], r: cc['정답률'] });
     if (sim) (sims[sim] = sims[sim] || []).push(item);
     (units[unit] = units[unit] || []).push(item);
   });
@@ -71,12 +71,12 @@ for (const f of fs.readdirSync(outDir)) if (/\.(bin|json)$/.test(f) && f !== 'in
 const index = { v: 2, iter: ITER, salt: salt.toString('base64'), sims: {}, units: {} };
 const order = (x, y) => y.year - x.year || (x.sub < y.sub ? -1 : x.sub > y.sub ? 1 : 0) || (x.id < y.id ? -1 : 1);
 for (const sim of Object.keys(sims).sort()) {
-  const list = sims[sim].sort(order).map(({ id, src, a, c, t, e, o }) => ({ id, src, a, c, t, e, o }));
+  const list = sims[sim].sort(order).map(({ id, src, a, c, t, e, o, p, r }) => ({ id, src, a, c, t, e, o, p, r }));
   fs.writeFileSync(path.join(outDir, sim + '.bin'), seal(Buffer.from(JSON.stringify(list), 'utf8')));
   index.sims[sim] = list.length;
 }
 for (const u of Object.keys(U.units)) {
-  const list = (units[u] || []).sort(order).map(({ id, src, a, s, c, t, e, o }) => ({ id, src, a, s, c, t, e, o }));
+  const list = (units[u] || []).sort(order).map(({ id, src, a, s, c, t, e, o, p, r }) => ({ id, src, a, s, c, t, e, o, p, r }));
   const f = path.join(outDir, 'u_' + u + '.bin');
   if (list.length) { fs.writeFileSync(f, seal(Buffer.from(JSON.stringify(list), 'utf8'))); index.units[u] = list.length; } else if (fs.existsSync(f)) fs.unlinkSync(f);
 }
