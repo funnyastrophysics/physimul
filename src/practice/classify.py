@@ -106,6 +106,7 @@ for exam in sorted(k for k in MAP if re.match(r'^p[12]_\d{4}_\d{2}$', k)):
         qid = f'{exam}_{i + 1:02d}'
         if qid in DETAIL:
             d = DETAIL[qid]; c = {k: d.get(k, '') for k in ('new', 'topic', 'era', 'old')}
+            c.update({k: d[k] for k in ('배점', '정답률') if k in d})   # 학생 화면에 "배점 3점, 정답률 47%"
         else:
             if info is None: info = json.load(open(os.path.join(cut, exam, 'info.json'), encoding='utf-8'))
             n = str(i + 1); title = info['titles'].get(n, '')
