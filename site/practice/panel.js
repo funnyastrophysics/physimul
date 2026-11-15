@@ -115,7 +115,7 @@
       return { el: wrap, row: row };
     }
     function show() {
-      var it = list[idx], g = getLog(), view = getView(); freeUrls(); head();
+      var it = list[idx], g = getLog(), view = getView(); freeUrls(); head(); box.classList.toggle('pq-all', view === 'all' && !!it);
       var sc = scope(), nDone = 0, nOk = 0; sc.forEach(function (x) { var r = g[x.id]; if (r) { nDone++; if (r[0]) nOk++; } });
       var recRow = el('p', 'pq-rec'); recRow.appendChild(document.createTextNode('내 기록: ' + sc.length + '문제 중 ' + nDone + '문제 풀었어요' + (nDone ? ' (맞음 ' + nOk + ', 틀림 ' + (nDone - nOk) + ')' : '') + ' '));
       if (nDone) { var rz = el('a', '', '기록 지우기'); rz.href = '#'; rz.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('여기 보이는 ' + sc.length + '문제의 기록을 지울까요?')) { clearLog(sc.map(function (x) { return x.id; })); apply(); show(); } }); recRow.appendChild(rz); }
