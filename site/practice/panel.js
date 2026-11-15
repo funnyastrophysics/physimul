@@ -17,8 +17,9 @@
     '.pq .pq-ch button.ok{border-color:#2e9e6a;background:#e3f4ec;font-weight:700}.pq .pq-ch button.no{border-color:#d64541;background:#fbe9e8}' +
     '.pq .pq-res{font-weight:700;margin:10px 0 0}.pq .pq-exp{border-top:1px solid #d9dde4;padding:10px 0 0;margin:10px 0 0}.pq .pq-exp b{display:block;font-size:13px;color:#5b6475;margin:0 0 6px}' +
     '.pq .pq-rec{font-size:13px;color:#5b6475;margin:0 0 8px}.pq .pq-rec a{color:#5b6475;margin-left:6px}.pq .pq-err{color:#d64541;font-size:14px;margin:8px 0 0}.pq .pq-copy{font-size:12px;color:#5b6475;margin:12px 0 0}' +
+    '.pq .pq-meta{font-size:14px;margin:0 0 2px;line-height:1.5}.pq .pq-meta b{margin-right:6px}.pq .pq-meta span{color:#2f6fdf;display:inline-block}.pq .pq-pt{font-size:13px;color:#1d2330;margin:2px 0 0}.pq .pq-era{font-size:12px;color:#5b6475;margin:0 0 10px}' +
     '.pq .pq-seg{display:flex;margin:0 0 10px}.pq .pq-seg button{flex:1;padding:9px 6px;font-weight:700}.pq .pq-seg button:first-child{border-radius:8px 0 0 8px}.pq .pq-seg button:last-child{border-radius:0 8px 8px 0;border-left:0}.pq .pq-seg button.on{background:#2f6fdf;border-color:#2f6fdf;color:#fff}' +
-    '.pq .pq-item{border-top:2px solid #d9dde4;padding-top:12px;margin-top:18px}.pq .pq-item h3{font-size:16px;margin:0 0 8px}' +
+    '.pq .pq-item{border-top:2px solid #d9dde4;padding-top:12px;margin-top:18px}.pq .pq-item .pq-meta b{font-size:16px}.pq .pq-tag{font-style:normal}' +
     '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:block;font-size:15px;color:#2f6fdf;font-weight:700;text-decoration:none;text-align:center;border:1px solid #2f6fdf;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#f3f7ff}';
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -38,8 +39,9 @@
 
   // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, title, sub, simBase: 시뮬레이션 폴더 경로, names: {시뮬레이션 이름: 제목}, codes: {성취기준: 짧은 이름} }
   function mount(box, o) {
-    var key = null, all = null, list = null, idx = 0, topic = '', mode = '', urls = [], cache = {};
-    function scope() { return topic ? all.filter(function (x) { return x.c === topic; }) : all; }
+    var key = null, all = null, list = null, idx = 0, std = '', tp = '', mode = '', urls = [], cache = {};
+    // std: 고른 2022 성취기준, tp: 고른 주제
+    function scope() { return all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }); }
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
     function freeUrls() { urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = []; }
@@ -51,7 +53,7 @@
     }
     function open(code, onFail) {
       makeKey(code).then(function (k) {
-        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); topic = ''; mode = ''; apply(); cache = {}; show(); });
+        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); std = ''; tp = ''; mode = ''; apply(); cache = {}; show(); });
       }).catch(function (e) {
         if (e && e.message === 'key') { setCode(''); onFail('수업 코드가 맞지 않습니다. 대문자와 소문자, 띄어쓰기를 확인하세요.'); }
         else onFail('문제를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); });
@@ -78,8 +80,15 @@
     function getView() { try { var v = localStorage.getItem(VKEY); if (v === 'one' || v === 'all') return v; } catch (e) {} return o.codes ? 'all' : 'one'; }
     function setView(v) { try { localStorage.setItem(VKEY, v); } catch (e) {} }
     // 문제 하나: 시뮬레이션 연결, 그림, 답 고르기, 정답 확인, 해설. lazy이면 화면 가까이 왔을 때 그림을 불러온다.
-    function item(it, lazy, onMark) {
-      var wrap = el('div'), picked = 0, data = null;
+    function item(it, lazy, num, onMark) {
+      var wrap = el('div'), picked = 0, data = null, g = getLog(), r = g[it.id];
+      var mt = el('p', 'pq-meta'), hb = el('b'), tag = el('i', 'pq-tag');
+      if (num) { var setTag = function (v) { tag.textContent = v == null ? '' : v ? '✓ ' : '✗ '; tag.style.color = v ? '#2e9e6a' : '#d64541'; }; setTag(r ? r[0] : null); hb.appendChild(tag); hb.appendChild(document.createTextNode(num + '. ')); }
+      hb.appendChild(document.createTextNode(it.src)); mt.appendChild(hb);
+      if (it.c) mt.appendChild(el('span', '', '[' + it.c + '] ' + (it.t || (o.codes && o.codes[it.c]) || '')));
+      wrap.appendChild(mt);
+      if (it.p) wrap.appendChild(el('p', 'pq-pt', '배점 ' + it.p + '점' + (it.r != null ? ', 정답률 ' + it.r + '%' : '')));
+      if (it.e) wrap.appendChild(el('p', 'pq-era', '출제 당시: ' + it.e + ' 교육과정' + (it.e !== '7차' && it.o ? ' ' + it.o : '')));
       if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; wrap.appendChild(sa); }
       var area = el('div', 'pq-load', '문제를 불러오는 중…'); wrap.appendChild(area);
       var ch = el('div', 'pq-ch'), btns = [];
@@ -97,7 +106,7 @@
       else fetchPic();
       chk.addEventListener('click', function () {
         if (!picked) { res.textContent = '답을 먼저 고르세요.'; res.style.color = '#5b6475'; return; }
-        ch.dataset.done = '1'; var ok = picked === it.a; mark(it.id, ok); if (onMark) onMark(ok);
+        ch.dataset.done = '1'; var ok = picked === it.a; mark(it.id, ok); if (num) setTag(ok);
         btns.forEach(function (x, k) { x.classList.remove('on'); if (k + 1 === it.a) x.classList.add('ok'); else if (k + 1 === picked) x.classList.add('no'); });
         res.textContent = ok ? '정답입니다.' : '정답은 ' + marks[it.a - 1] + '입니다.'; res.style.color = ok ? '#2e9e6a' : '#d64541';
         if (data && data.e.size) { exp.appendChild(el('b', '', '해설 (EBS)')); exp.appendChild(pic(data.e, '해설')); exp.style.display = 'block'; }
@@ -110,12 +119,23 @@
       var sc = scope(), nDone = 0, nOk = 0; sc.forEach(function (x) { var r = g[x.id]; if (r) { nDone++; if (r[0]) nOk++; } });
       var recRow = el('p', 'pq-rec'); recRow.appendChild(document.createTextNode('내 기록: ' + sc.length + '문제 중 ' + nDone + '문제 풀었어요' + (nDone ? ' (맞음 ' + nOk + ', 틀림 ' + (nDone - nOk) + ')' : '') + ' '));
       if (nDone) { var rz = el('a', '', '기록 지우기'); rz.href = '#'; rz.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('여기 보이는 ' + sc.length + '문제의 기록을 지울까요?')) { clearLog(sc.map(function (x) { return x.id; })); apply(); show(); } }); recRow.appendChild(rz); }
-      if (o.codes) {   // 성취기준별로 골라 보기
+      if (o.codes) {   // 성취기준별로, 그 안에서 주제별로 골라 보기
         var cnt = {}, ord = []; all.forEach(function (x) { if (!cnt[x.c]) { cnt[x.c] = 0; ord.push(x.c); } cnt[x.c]++; }); ord.sort();
-        var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
-        var o0 = el('option', '', '전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
-        ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = topic;
-        ts.addEventListener('change', function () { topic = ts.value; apply(); show(); }); box.appendChild(ts);
+        if (ord.length > 1) {
+          var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
+          var o0 = el('option', '', '성취기준: 전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
+          ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = std;
+          ts.addEventListener('change', function () { std = ts.value; tp = ''; apply(); show(); }); box.appendChild(ts);
+        }
+        var base = std ? all.filter(function (x) { return x.c === std; }) : all, tc = {}, tf = {}, tord = [];
+        base.forEach(function (x) { if (!(x.t in tc)) { tc[x.t] = 0; tf[x.t] = x.c; tord.push(x.t); } tc[x.t]++; });
+        tord.sort(function (a, b) { return tf[a] < tf[b] ? -1 : tf[a] > tf[b] ? 1 : a.localeCompare(b, 'ko'); });
+        if (tord.length > 1) {
+          var tt = el('select'); tt.setAttribute('aria-label', '주제 고르기');
+          var t0 = el('option', '', '주제: 전체 (' + base.length + '문제)'); t0.value = ''; tt.appendChild(t0);
+          tord.forEach(function (t) { var op = el('option', '', (t || '주제 없음') + ' (' + tc[t] + '문제)'); op.value = t; tt.appendChild(op); }); tt.value = tp;
+          tt.addEventListener('change', function () { tp = tt.value; apply(); show(); }); box.appendChild(tt);
+        }
       }
       box.appendChild(recRow);
       var ms = el('select'); ms.setAttribute('aria-label', '볼 문제 고르기');
@@ -136,10 +156,7 @@
         more.type = 'button'; moreRow.appendChild(more); moreRow.appendChild(out);
         var addMore = function () {
           list.slice(shown, shown + PAGE).forEach(function (x, j) {
-            var k = shown + j, r = g[x.id], card = el('div', 'pq-item'), h = el('h3');
-            var tag = el('span', '', r ? (r[0] ? '✓ ' : '✗ ') : ''); tag.style.color = r ? (r[0] ? '#2e9e6a' : '#d64541') : '';
-            h.appendChild(tag); h.appendChild(document.createTextNode((k + 1) + '. ' + x.src)); card.appendChild(h);
-            card.appendChild(item(x, true, function (ok) { tag.textContent = ok ? '✓ ' : '✗ '; tag.style.color = ok ? '#2e9e6a' : '#d64541'; }).el);
+            var card = el('div', 'pq-item'); card.appendChild(item(x, true, shown + j + 1).el);
             holder.appendChild(card); });
           shown = Math.min(list.length, shown + PAGE);
           var left = list.length - shown; more.style.display = left ? '' : 'none';
@@ -152,7 +169,7 @@
       var sel = el('select'); sel.setAttribute('aria-label', '문제 고르기');
       list.forEach(function (x, k) { var r = g[x.id], op = el('option', '', (r ? (r[0] ? '✓ ' : '✗ ') : '') + (k + 1) + '. ' + x.src); op.value = k; sel.appendChild(op); }); sel.value = idx;
       sel.addEventListener('change', function () { idx = +sel.value; show(); }); box.appendChild(sel);
-      var one = item(it, false), prev = el('button', '', '이전'), next = el('button', '', '다음 문제');
+      var one = item(it, false, 0), prev = el('button', '', '이전'), next = el('button', '', '다음 문제');
       prev.disabled = idx === 0; next.disabled = idx === list.length - 1;
       prev.addEventListener('click', function () { idx--; show(); }); next.addEventListener('click', function () { idx++; show(); });
       one.row.appendChild(prev); one.row.appendChild(next); one.row.appendChild(out);
@@ -178,6 +195,6 @@
   if (m) ready('../../practice/data/').then(function (d) {   // 시뮬레이션 화면
     if (!d || !d.sims || !d.sims[m[1]]) return;
     var box = el('section'); (document.querySelector('.wrap') || document.body).appendChild(box);
-    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 수능 기출문제 ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
+    mount(box, { base: '../../practice/data/', file: m[1] + '.bin', title: '연결된 기출문제', sub: '이 시뮬레이션과 관련된 기출문제(수능, 6월·9월 모의평가) ' + d.sims[m[1]] + '개를 풀어 볼 수 있어요.' });
   }).catch(function () {});
 })();
