@@ -17,6 +17,8 @@
     '.pq .pq-ch button.ok{border-color:#2e9e6a;background:#e3f4ec;font-weight:700}.pq .pq-ch button.no{border-color:#d64541;background:#fbe9e8}' +
     '.pq .pq-res{font-weight:700;margin:10px 0 0}.pq .pq-exp{border-top:1px solid #d9dde4;padding:10px 0 0;margin:10px 0 0}.pq .pq-exp b{display:block;font-size:13px;color:#5b6475;margin:0 0 6px}' +
     '.pq .pq-rec{font-size:13px;color:#5b6475;margin:0 0 8px}.pq .pq-rec a{color:#5b6475;margin-left:6px}.pq .pq-err{color:#d64541;font-size:14px;margin:8px 0 0}.pq .pq-copy{font-size:12px;color:#5b6475;margin:12px 0 0}' +
+    '.pq .pq-seg{display:flex;margin:0 0 10px}.pq .pq-seg button{flex:1;padding:9px 6px;font-weight:700}.pq .pq-seg button:first-child{border-radius:8px 0 0 8px}.pq .pq-seg button:last-child{border-radius:0 8px 8px 0;border-left:0}.pq .pq-seg button.on{background:#2f6fdf;border-color:#2f6fdf;color:#fff}' +
+    '.pq .pq-item{border-top:2px solid #d9dde4;padding-top:12px;margin-top:18px}.pq .pq-item h3{font-size:16px;margin:0 0 8px}' +
     '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:block;font-size:15px;color:#2f6fdf;font-weight:700;text-decoration:none;text-align:center;border:1px solid #2f6fdf;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#f3f7ff}';
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -36,7 +38,7 @@
 
   // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, title, sub, simBase: 시뮬레이션 폴더 경로, names: {시뮬레이션 이름: 제목}, codes: {성취기준: 짧은 이름} }
   function mount(box, o) {
-    var key = null, all = null, list = null, idx = 0, picked = 0, topic = '', mode = '', urls = [], cache = {};
+    var key = null, all = null, list = null, idx = 0, topic = '', mode = '', urls = [], cache = {};
     function scope() { return topic ? all.filter(function (x) { return x.c === topic; }) : all; }
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
@@ -71,8 +73,40 @@
         var n = new DataView(buf).getUint32(0), d = { q: new Blob([new Uint8Array(buf, 4, n)], { type: 'image/webp' }), e: new Blob([new Uint8Array(buf, 4 + n)], { type: 'image/webp' }) };
         cache[it.id] = d; return d; });
     }
+    // 보기 방식: 'one' 한 문제씩, 'all' 한꺼번에(10문제씩 이어서). 고른 방식은 이 기기에 기억한다.
+    var VKEY = 'pq-view-' + (o.codes ? 'unit' : 'sim'), PAGE = 10, marks = ['①', '②', '③', '④', '⑤'];
+    function getView() { try { var v = localStorage.getItem(VKEY); if (v === 'one' || v === 'all') return v; } catch (e) {} return o.codes ? 'all' : 'one'; }
+    function setView(v) { try { localStorage.setItem(VKEY, v); } catch (e) {} }
+    // 문제 하나: 시뮬레이션 연결, 그림, 답 고르기, 정답 확인, 해설. lazy이면 화면 가까이 왔을 때 그림을 불러온다.
+    function item(it, lazy, onMark) {
+      var wrap = el('div'), picked = 0, data = null;
+      if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; wrap.appendChild(sa); }
+      var area = el('div', 'pq-load', '문제를 불러오는 중…'); wrap.appendChild(area);
+      var ch = el('div', 'pq-ch'), btns = [];
+      marks.forEach(function (mk, k) { var b = el('button', '', mk); b.type = 'button'; b.setAttribute('aria-label', (k + 1) + '번');
+        b.addEventListener('click', function () { if (ch.dataset.done) return; picked = k + 1; btns.forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); }); btns.push(b); ch.appendChild(b); });
+      wrap.appendChild(ch);
+      var res = el('p', 'pq-res'), exp = el('div', 'pq-exp'); exp.style.display = 'none';
+      var row = el('div', 'pq-row'), chk = el('button', 'pq-main', '정답 확인'); chk.disabled = true; row.appendChild(chk);
+      function fetchPic() {
+        getItem(it).then(function (d) { if (!area.isConnected) return; data = d; area.className = ''; area.textContent = ''; area.appendChild(pic(d.q, it.src)); area.appendChild(el('p', 'pq-tip', '그림을 누르면 크게 볼 수 있어요.')); chk.disabled = false;
+        }).catch(function () { if (!area.isConnected) return; area.textContent = '문제를 불러오지 못했습니다. '; var again = el('a', '', '다시 불러오기'); again.href = '#';
+          again.addEventListener('click', function (e) { e.preventDefault(); area.textContent = '문제를 불러오는 중…'; fetchPic(); }); area.appendChild(again); });
+      }
+      if (lazy && window.IntersectionObserver) { var ob = new IntersectionObserver(function (es) { if (es.some(function (x) { return x.isIntersecting; })) { ob.disconnect(); fetchPic(); } }, { rootMargin: '800px 0px' }); ob.observe(area); }
+      else fetchPic();
+      chk.addEventListener('click', function () {
+        if (!picked) { res.textContent = '답을 먼저 고르세요.'; res.style.color = '#5b6475'; return; }
+        ch.dataset.done = '1'; var ok = picked === it.a; mark(it.id, ok); if (onMark) onMark(ok);
+        btns.forEach(function (x, k) { x.classList.remove('on'); if (k + 1 === it.a) x.classList.add('ok'); else if (k + 1 === picked) x.classList.add('no'); });
+        res.textContent = ok ? '정답입니다.' : '정답은 ' + marks[it.a - 1] + '입니다.'; res.style.color = ok ? '#2e9e6a' : '#d64541';
+        if (data && data.e.size) { exp.appendChild(el('b', '', '해설 (EBS)')); exp.appendChild(pic(data.e, '해설')); exp.style.display = 'block'; }
+        chk.disabled = true; });
+      wrap.appendChild(res); wrap.appendChild(exp); wrap.appendChild(row);
+      return { el: wrap, row: row };
+    }
     function show() {
-      var it = list[idx], g = getLog(); picked = 0; freeUrls(); head();
+      var it = list[idx], g = getLog(), view = getView(); freeUrls(); head();
       var sc = scope(), nDone = 0, nOk = 0; sc.forEach(function (x) { var r = g[x.id]; if (r) { nDone++; if (r[0]) nOk++; } });
       var recRow = el('p', 'pq-rec'); recRow.appendChild(document.createTextNode('내 기록: ' + sc.length + '문제 중 ' + nDone + '문제 풀었어요' + (nDone ? ' (맞음 ' + nOk + ', 틀림 ' + (nDone - nOk) + ')' : '') + ' '));
       if (nDone) { var rz = el('a', '', '기록 지우기'); rz.href = '#'; rz.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('여기 보이는 ' + sc.length + '문제의 기록을 지울까요?')) { clearLog(sc.map(function (x) { return x.id; })); apply(); show(); } }); recRow.appendChild(rz); }
@@ -87,34 +121,42 @@
       var ms = el('select'); ms.setAttribute('aria-label', '볼 문제 고르기');
       [['', '모든 문제 보기'], ['new', '아직 안 푼 문제만 보기'], ['wrong', '틀린 문제만 보기']].forEach(function (a) { var op = el('option', '', a[1]); op.value = a[0]; ms.appendChild(op); }); ms.value = mode;
       ms.addEventListener('change', function () { mode = ms.value; apply(); show(); }); box.appendChild(ms);
+      var seg = el('div', 'pq-seg');
+      [['one', '한 문제씩'], ['all', '한꺼번에 보기']].forEach(function (a) { var b = el('button', a[0] === view ? 'on' : '', a[1]); b.type = 'button';
+        b.addEventListener('click', function () { if (a[0] !== getView()) { setView(a[0]); show(); } }); seg.appendChild(b); });
+      box.appendChild(seg);
+      var out = el('a', 'pq-link', '수업 코드 지우기'); out.href = '#';
+      out.addEventListener('click', function (e) { e.preventDefault(); setCode(''); keyP = {}; key = null; all = list = null; cache = {}; freeUrls(); start(); });
+      function tail() {
+        box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제의 저작권은 한국교육과정평가원에, 해설의 저작권은 EBS에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
+      }
       if (!it) { box.appendChild(el('p', 'pq-load', mode === 'wrong' ? '틀린 문제가 없어요.' : '안 푼 문제가 없어요. 모두 풀었어요!')); return; }
+      if (view === 'all') {
+        var holder = el('div'), moreRow = el('div', 'pq-row'), more = el('button', '', ''), shown = 0;
+        more.type = 'button'; moreRow.appendChild(more); moreRow.appendChild(out);
+        var addMore = function () {
+          list.slice(shown, shown + PAGE).forEach(function (x, j) {
+            var k = shown + j, r = g[x.id], card = el('div', 'pq-item'), h = el('h3');
+            var tag = el('span', '', r ? (r[0] ? '✓ ' : '✗ ') : ''); tag.style.color = r ? (r[0] ? '#2e9e6a' : '#d64541') : '';
+            h.appendChild(tag); h.appendChild(document.createTextNode((k + 1) + '. ' + x.src)); card.appendChild(h);
+            card.appendChild(item(x, true, function (ok) { tag.textContent = ok ? '✓ ' : '✗ '; tag.style.color = ok ? '#2e9e6a' : '#d64541'; }).el);
+            holder.appendChild(card); });
+          shown = Math.min(list.length, shown + PAGE);
+          var left = list.length - shown; more.style.display = left ? '' : 'none';
+          more.textContent = '다음 ' + Math.min(PAGE, left) + '문제 더 보기 (남은 문제 ' + left + '개)';
+        };
+        more.addEventListener('click', addMore);
+        box.appendChild(el('p', 'pq-rec', '모두 ' + list.length + '문제입니다. 아래로 내리며 풀어 보세요.'));
+        box.appendChild(holder); addMore(); box.appendChild(moreRow); tail(); return;
+      }
       var sel = el('select'); sel.setAttribute('aria-label', '문제 고르기');
       list.forEach(function (x, k) { var r = g[x.id], op = el('option', '', (r ? (r[0] ? '✓ ' : '✗ ') : '') + (k + 1) + '. ' + x.src); op.value = k; sel.appendChild(op); }); sel.value = idx;
       sel.addEventListener('change', function () { idx = +sel.value; show(); }); box.appendChild(sel);
-      if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; box.appendChild(sa); }
-      var area = el('div', 'pq-load', '문제를 불러오는 중…'); box.appendChild(area);
-      var ch = el('div', 'pq-ch'), marks = ['①', '②', '③', '④', '⑤'], btns = [];
-      marks.forEach(function (mk, k) { var b = el('button', '', mk); b.type = 'button'; b.setAttribute('aria-label', (k + 1) + '번');
-        b.addEventListener('click', function () { if (ch.dataset.done) return; picked = k + 1; btns.forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); }); btns.push(b); ch.appendChild(b); });
-      box.appendChild(ch);
-      var res = el('p', 'pq-res'), exp = el('div', 'pq-exp'); exp.style.display = 'none';
-      var row = el('div', 'pq-row'), chk = el('button', 'pq-main', '정답 확인'), prev = el('button', '', '이전'), next = el('button', '', '다음 문제'), out = el('a', 'pq-link', '수업 코드 지우기');
-      out.href = '#'; prev.disabled = idx === 0; next.disabled = idx === list.length - 1; chk.disabled = true;
-      var data = null;
-      getItem(it).then(function (d) { if (list[idx] !== it || !area.isConnected) return; data = d; area.className = ''; area.textContent = ''; area.appendChild(pic(d.q, it.src)); area.appendChild(el('p', 'pq-tip', '그림을 누르면 크게 볼 수 있어요.')); chk.disabled = false;
-      }).catch(function () { if (area.isConnected) area.textContent = '문제를 불러오지 못했습니다. 인터넷 연결을 확인하고 다른 문제를 골랐다가 다시 골라 주세요.'; });
-      chk.addEventListener('click', function () {
-        if (!picked) { res.textContent = '답을 먼저 고르세요.'; res.style.color = '#5b6475'; return; }
-        ch.dataset.done = '1'; var ok = picked === it.a; mark(it.id, ok);
-        btns.forEach(function (x, k) { x.classList.remove('on'); if (k + 1 === it.a) x.classList.add('ok'); else if (k + 1 === picked) x.classList.add('no'); });
-        res.textContent = ok ? '정답입니다.' : '정답은 ' + marks[it.a - 1] + '입니다.'; res.style.color = ok ? '#2e9e6a' : '#d64541';
-        if (data && data.e.size) { exp.appendChild(el('b', '', '해설 (EBS)')); exp.appendChild(pic(data.e, '해설')); exp.style.display = 'block'; }
-        chk.disabled = true; });
+      var one = item(it, false), prev = el('button', '', '이전'), next = el('button', '', '다음 문제');
+      prev.disabled = idx === 0; next.disabled = idx === list.length - 1;
       prev.addEventListener('click', function () { idx--; show(); }); next.addEventListener('click', function () { idx++; show(); });
-      out.addEventListener('click', function (e) { e.preventDefault(); setCode(''); keyP = {}; key = null; all = list = null; cache = {}; freeUrls(); start(); });
-      row.appendChild(chk); row.appendChild(prev); row.appendChild(next); row.appendChild(out);
-      box.appendChild(res); box.appendChild(exp); box.appendChild(row);
-      box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제의 저작권은 한국교육과정평가원에, 해설의 저작권은 EBS에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
+      one.row.appendChild(prev); one.row.appendChild(next); one.row.appendChild(out);
+      box.appendChild(one.el); tail();
     }
     function start() {
       head();
