@@ -69,7 +69,7 @@
   <p class="hint" id="hint"></p>
 
   <div class="card">
-    <div class="seg" id="modeSeg"><button type="button" data-m="h" class="on">수평 진동</button><button type="button" data-m="v">수직 진동</button></div>
+    <div class="seg" id="modeSeg"><button type="button" data-m="h" class="on">수평 진동</button><button type="button" data-m="v">수직 진동</button><button type="button" data-m="i">빗면</button></div>
     <canvas id="sim"></canvas>
     <div id="tbar"></div>
     <div class="stats">
@@ -79,6 +79,8 @@
       <div class="stat"><div class="k" id="kX">변위 x</div><div class="val" id="sX" style="color:var(--xc)">-</div></div>
       <div class="stat"><div class="k" id="kV">속도 v</div><div class="val" id="sV" style="color:var(--vc)">-</div></div>
       <div class="stat"><div class="k">가속도 a</div><div class="val" id="sAc" style="color:var(--ac)">-</div></div>
+      <div class="stat lOnly"><div class="k">분리될 때 속력</div><div class="val" id="sSep" style="color:#c47a2c">-</div></div>
+      <div class="stat lOnly"><div class="k" id="kUp">B가 더 올라가는 높이</div><div class="val" id="sUp" style="color:#c47a2c">-</div><div class="gx" id="sUp2"></div></div>
     </div>
     <div class="formula" id="formula"></div>
   </div>
@@ -95,7 +97,18 @@
         <input type="range" id="mS" min="0.5" max="5" step="0.1" value="1">
         <div class="range"><span>0.5 kg</span><span>5.0 kg</span></div>
       </div>
+      <div class="sl iOnly">
+        <div class="top"><span>빗면의 기울기 θ</span><b id="thVal"></b></div>
+        <input type="range" id="thS" min="0" max="90" step="1" value="30">
+        <div class="range"><span>0° (수평)</span><span>90° (수직)</span></div>
+      </div>
+      <div class="sl lOnly">
+        <div class="top"><span>물체 B의 질량</span><b id="mbVal"></b></div>
+        <input type="range" id="mbS" min="0.5" max="5" step="0.1" value="1">
+        <div class="range"><span>0.5 kg</span><span>5.0 kg</span></div>
+      </div>
     </div>
+    <div class="checks iOnly" style="margin-top:12px"><label><input type="checkbox" id="bChk"> 물체 B를 A 위에 올려놓기 (분리·발사)</label></div>
     <div class="row">
       <button id="pauseB" class="primary">일시 정지</button>
       <button id="resetB">처음으로</button>
@@ -162,7 +175,9 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   const WINDOW = 10;    // 그래프 시간 폭 (s)
   const G = 9.8;
 
-  let mode = 'h';       // 'h' 수평 진동, 'v' 수직 진동 (천장에 매단 용수철)
+  let mode = 'h';       // 'h' 수평 진동, 'v' 수직 진동 (천장에 매단 용수철), 'i' 빗면 (아래 끝에 고정한 용수철)
+  const thS = document.getElementById('thS'), mbS = document.getElementById('mbS'), bChk = document.getElementById('bChk');
+  let th = +thS.value, mB = +mbS.value, withB = false, L = null;   // L: 발사(분리) 계산 결과
   let k = +kS.value, m = +mS.value;
   // phase: 'idle' 시작 전(평형점에 정지), 'drag' 잡고 있는 중(시간 멈춤), 'run' 놓은 뒤(놓은 순간이 t = 0)
   let phase = 'idle', A0 = 0, ph0 = 0, simTime = 0;
@@ -170,35 +185,56 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   let dragX = 0, grabOff = 0;
   let buf = [];
 
-  const omega = () => Math.sqrt(k / m);
-  const sag = () => m * G / k;              // 평형점에서 늘어난 길이 mg/k
-  const acc = x => -k / m * x;
+  const launch = () => mode === 'i' && withB;          // 빗면에서 B를 올려놓은 경우
+  const mTot = () => launch() ? m + mB : m;
+  const omega = () => Math.sqrt(k / mTot());
+  // 평형점이 원래 길이에서 벗어난 거리: 수직 mg/k, 빗면 (A(+B)의 질량)g sinθ/k, 수평 0
+  const sag = () => mode === 'v' ? m * G / k : mode === 'i' ? mTot() * G * Math.sin(th * Math.PI / 180) / k : 0;
+  const acc = x => -k / mTot() * x;
   // 놓은 뒤의 운동: x = A cos(ωt + φ)  (수직 진동에서는 새로운 평형점 기준, 위쪽이 +)
+  // 발사에서 분리된 뒤(t ≥ ts): A는 혼자 진동, B는 빗면을 따라 올라갔다 내려온다. x, v, a는 A의 값.
   function stateAt(t){
-    if (phase === 'idle') return { x: 0, v: 0 };
-    const w = omega(), th = w * t + ph0;
-    return { x: A0 * Math.cos(th), v: -A0 * w * Math.sin(th) };
+    if (phase === 'idle') return { x: 0, v: 0, a: 0, xb: 0 };
+    if (launch() && L && L.ts != null && t >= L.ts){
+      if (L.tc != null && t > L.tc) t = L.tc;
+      const tau = t - L.ts, c = Math.cos(L.wA * tau), sn = Math.sin(L.wA * tau);
+      const u = L.dA * c + L.vs / L.wA * sn;
+      return { x: L.xAeq + u, v: -L.dA * L.wA * sn + L.vs * c, a: -k / m * u, xb: L.d0 + L.vs * tau - L.gs * tau * tau / 2, sep: true };
+    }
+    const w = omega(), ph = w * t + ph0, x = A0 * Math.cos(ph);
+    return { x, v: -A0 * w * Math.sin(ph), a: acc(x), xb: x };
   }
-  function state(){ return phase === 'drag' ? { x: dragX, v: 0 } : stateAt(simTime); }
-  function sample(t){ const st = stateAt(t); return { t, x: st.x, v: st.v, a: acc(st.x) }; }
+  function state(){ return phase === 'drag' ? { x: dragX, v: 0, a: acc(dragX), xb: dragX } : stateAt(simTime); }
+  function sample(t){ const st = stateAt(t); return { t, x: st.x, v: st.v, a: st.a }; }
+  // 놓는 순간(t = 0)부터 시작: 변위 x0에서 정지 상태로 놓는다
+  function startRun(x0){
+    phase = 'run'; A0 = Math.abs(x0); ph0 = x0 < 0 ? Math.PI : 0;
+    L = launch() ? launchInfo(x0, true) : null;
+    simTime = 0; buf = [sample(0)]; setPaused(false);
+  }
 
-  function updateLabels(){ kVal.textContent = k + ' N/m'; mVal.textContent = m.toFixed(1) + ' kg'; }
+  function updateLabels(){ kVal.textContent = k + ' N/m'; mVal.textContent = m.toFixed(1) + ' kg';
+    document.getElementById('thVal').textContent = th + '°'; document.getElementById('mbVal').textContent = mB.toFixed(1) + ' kg'; }
 
   // k, m을 바꿀 때: 운동 중이면 지금 위치(수직 진동은 용수철이 늘어난 길이)와 속도를 이어 가도록 진폭과 위상을 다시 정한다.
   function change(apply){
     const st = state(), s0 = sag();
     apply(); updateLabels();
+    if (launch()){ if (phase === 'run') reset(); return; }   // 발사는 처음부터 다시
     if (phase !== 'run') return;
-    const x = mode === 'v' ? st.x + (sag() - s0) : st.x, w = omega();
+    const x = mode !== 'h' ? st.x + (sag() - s0) : st.x, w = omega();
     A0 = Math.hypot(x, st.v / w);
     ph0 = Math.atan2(-st.v / w, x) - w * simTime;
   }
   kS.addEventListener('input', () => change(() => { k = +kS.value; }));
   mS.addEventListener('input', () => change(() => { m = +mS.value; }));
+  thS.addEventListener('input', () => change(() => { th = +thS.value; }));
+  mbS.addEventListener('input', () => change(() => { mB = +mbS.value; }));
+  bChk.addEventListener('change', () => { withB = bChk.checked; reset(); showParts(); });
 
   function setPaused(p){ paused = p; pauseB.textContent = p ? '계속' : '일시 정지'; }
   pauseB.addEventListener('click', () => setPaused(!paused));
-  function reset(){ phase = 'idle'; A0 = 0; ph0 = 0; simTime = 0; buf = []; setPaused(false); }
+  function reset(){ phase = 'idle'; A0 = 0; ph0 = 0; simTime = 0; buf = []; L = null; setPaused(false); }
   resetB.addEventListener('click', reset);
   speedS.addEventListener('change', () => { speed = +speedS.value; });
 
@@ -207,17 +243,26 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   function setMode(md){
     mode = md; reset();
     modeBtns.forEach(b => b.classList.toggle('on', b.dataset.m === md));
-    simC.style.height = md === 'v' ? '400px' : '230px';
-    document.getElementById('hint').textContent = md === 'v'
+    simC.style.height = md === 'v' ? '400px' : md === 'i' ? '380px' : '230px';
+    showParts();
+    document.getElementById('hint').textContent = md === 'i'
+      ? '빗면 아래 끝에 고정한 용수철에 물체 A가 붙어 있습니다(마찰 없음). 기울기 θ를 0°(수평)부터 90°(수직)까지 바꿀 수 있습니다. 물체를 빗면을 따라 당겼다 놓거나 진폭 A 칸에 값을 넣으면(아래쪽 −A에서 놓음) 그 순간이 t = 0입니다. 빗면 위쪽이 (+). 「물체 B 올려놓기」를 켜면 B가 A와 함께 움직이다가 용수철이 원래 길이가 되는 순간 떨어져 날아갑니다. 이때 x, v, a는 물체 A의 값이고, x는 A와 B를 함께 올려놓았을 때의 평형점이 기준입니다.'
+      : md === 'v'
       ? '천장에 매단 용수철에 물체를 걸면 mg/k만큼 늘어난 곳이 새로운 평형점(x = 0)입니다. 물체를 위아래로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(아래쪽 −A에서 놓음) 그 순간이 t = 0입니다. 진폭은 3mg/k까지(최소 0.5 m까지는 언제나), 위쪽이 (+), 공기 저항은 없다고 가정합니다.'
       : '물체를 잡아 옆으로 당겼다 놓거나 진폭 A 칸에 값을 넣으면(+A에서 놓음) 그 순간이 t = 0이고, 그때부터 시간과 그래프가 흐릅니다. 진폭은 0.5 m까지, 오른쪽이 (+), 마찰은 없다고 가정합니다.';
-    document.getElementById('aRatio').style.display = md === 'v' ? '' : 'none';
-    document.getElementById('kX').textContent = md === 'v' ? '변위 x (위 +)' : '변위 x';
-    document.getElementById('kV').textContent = md === 'v' ? '속도 v (위 +)' : '속도 v';
-    document.getElementById('formula').innerHTML = md === 'v'
+    document.getElementById('aRatio').style.display = md !== 'h' ? '' : 'none';
+    document.getElementById('kX').textContent = md !== 'h' ? '변위 x (위 +)' : '변위 x';
+    document.getElementById('kV').textContent = md !== 'h' ? '속도 v (위 +)' : '속도 v';
+    document.getElementById('formula').innerHTML = md === 'i'
+      ? '<span>T = 2π√(m / k)</span>, <span>평형점에서 줄어든 길이 = mg sinθ / k</span> <span>(B를 올리면 m 대신 m<sub>A</sub>+m<sub>B</sub>, 분리는 용수철이 원래 길이일 때)</span>'
+      : md === 'v'
       ? '<span>T = 2π√(m / k)</span>, <span>평형점에서 늘어난 길이 = mg / k</span> <span>(g = 9.8 m/s²)</span>'
       : 'T = 2π√(m / k)';
     resize();
+  }
+  function showParts(){
+    document.querySelectorAll('.iOnly').forEach(e => { e.style.display = mode === 'i' ? '' : 'none'; });
+    document.querySelectorAll('.lOnly').forEach(e => { e.style.display = launch() ? '' : 'none'; });
   }
   modeBtns.forEach(b => b.addEventListener('click', () => { if (b.dataset.m !== mode) setMode(b.dataset.m); }));
 
@@ -246,7 +291,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   Q.forEach(q => document.getElementById(q.id).addEventListener('change', resize));
   window.addEventListener('resize', resize);
 
-  const maxA = () => mode === 'v' ? Math.max(MAXX, 3 * sag()) : MAXX;
+  const maxA = () => mode !== 'h' ? Math.max(MAXX, 3 * sag()) : MAXX;
   const range = () => Math.max(maxA(), phase === 'run' ? A0 : 0);
   const blockSize = () => (40 * Math.cbrt(m) + 10) * Math.max(0.7, Math.min(1, W / 600));
   function geomH(){
@@ -264,6 +309,95 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     const top = 28 + Math.max(0, (avail - L0 - (sg + R) * sc) / 2);   // 남는 공간은 위아래로 나눈다
     const yN = top + L0;
     return { top, cx: W * 0.52, sc, yN, yE: yN + sg * sc };
+  }
+
+  // ---------- 빗면 (각도 θ 조절, 용수철은 빗면 아래 끝에 고정) ----------
+  // 기준: s = 빗면을 따라 P0(용수철 고정점)에서 잰 거리(px), h = 빗면에서 수직으로 잰 높이(px)
+  const blockSizeOf = mm => (40 * Math.cbrt(mm) + 10) * Math.max(0.7, Math.min(1, W / 600));
+  function geomI(){
+    const t = th * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    const bsA = blockSizeOf(m), bsB = launch() ? blockSizeOf(mB) : 0, d0 = sag(), R = range();
+    const P0 = { x: 16 + 205 * s, y: H - 34 };
+    const Lmax = Math.min((W - P0.x - 8) / Math.max(c, 1e-6), (P0.y - 14) / Math.max(s, 1e-6));
+    const sc = Math.max(20, Math.min(260, (0.92 * Lmax - 24 - bsA - bsB) / (2 * R), (0.55 * Lmax - 24) / (d0 + R)));
+    const Ls = Math.max(60, 24 + (d0 + R) * sc);
+    return { t, c, s, P0, Lmax, sc, Ls, d0, bsA, bsB, sEq: Ls - d0 * sc };
+  }
+  const wpt = (g, sa, h) => ({ x: g.P0.x + sa * g.c - h * g.s, y: g.P0.y - sa * g.s - h * g.c });
+  const sOf = (g, x) => g.sEq + x * g.sc;            // 변위 x일 때 A의 아랫면 위치
+  function drawI(st){
+    const g = geomI(), lb = launch();
+    const A = sOf(g, st.x);
+    // 빗면
+    const Pe = wpt(g, g.Lmax, 0);
+    sctx.fillStyle = '#e6e9ef'; sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5;
+    sctx.beginPath(); sctx.moveTo(g.P0.x, g.P0.y); sctx.lineTo(Pe.x, Pe.y); sctx.lineTo(Pe.x, g.P0.y); sctx.closePath(); sctx.fill();
+    sctx.beginPath(); sctx.moveTo(0, g.P0.y); sctx.lineTo(W, g.P0.y); sctx.moveTo(g.P0.x, g.P0.y); sctx.lineTo(Pe.x, Pe.y); sctx.stroke();
+    sctx.font = 'bold 13px ' + FONT; sctx.fillStyle = '#3a4252';
+    if (th > 0.5 && th < 89.5){
+      sctx.lineWidth = 1; sctx.beginPath(); sctx.arc(g.P0.x, g.P0.y, 30, -g.t, 0); sctx.stroke();
+      sctx.textAlign = 'center'; sctx.textBaseline = 'middle'; sctx.fillText('θ', g.P0.x + 42 * Math.cos(g.t / 2), g.P0.y - 42 * Math.sin(g.t / 2));
+    }
+    sctx.textAlign = 'right'; sctx.textBaseline = 'bottom';
+    sctx.fillText('θ = ' + th + '°', W - 8, H - 6);
+    // 회전한 좌표계에서 벽·용수철·물체
+    sctx.save(); sctx.translate(g.P0.x, g.P0.y); sctx.rotate(-g.t);
+    const wh = Math.max(g.bsA, g.bsB) + 16;
+    sctx.fillStyle = '#e6e9ef'; sctx.fillRect(-12, -wh, 12, wh);
+    sctx.strokeStyle = '#3a4252'; sctx.lineWidth = 1.5; sctx.beginPath(); sctx.moveTo(0, -wh); sctx.lineTo(0, 0); sctx.stroke();
+    drawSpring(0, A, -g.bsA / 2, 1.2 + k / 45);
+    const dr = phase === 'drag';
+    const box = (x0, s, fill) => { sctx.fillStyle = fill; sctx.strokeStyle = dr ? '#2f6fdf' : '#2f3542'; sctx.lineWidth = dr ? 2.5 : 1.5;
+      sctx.beginPath(); sctx.roundRect ? sctx.roundRect(x0, -s, s, s, 4) : sctx.rect(x0, -s, s, s); sctx.fill(); sctx.stroke(); };
+    box(A, g.bsA, dr ? '#46536b' : '#5a6478');
+    let B = null;
+    if (lb){ B = st.sep ? sOf(g, st.xb) + g.bsA : A + g.bsA; box(B, g.bsB, '#c47a2c'); }
+    // 변위 화살표 (평형점 → A)
+    if (Math.abs(st.x) * g.sc > 8) arrow(sctx, g.sEq, -wh - 4, A, '#2f6fdf');
+    sctx.restore();
+    // 원래 길이·평형점 표시 (빗면에 수직인 점선)
+    const marks = g.d0 * g.sc > 3
+      ? [{ s: g.Ls, len: wh + 28, text: '원래 길이', color: '#7b8494' }, { s: g.sEq, len: wh + 28, text: '평형점 (x = 0)', color: '#2f6fdf' }]
+      : [{ s: g.sEq, len: wh + 28, text: '평형점 = 원래 길이', color: '#2f6fdf' }];
+    sctx.setLineDash([5, 4]); sctx.lineWidth = 1.2;
+    const tags = marks.map(M => { const a = wpt(g, M.s, 0), b = wpt(g, M.s, M.len);
+      sctx.strokeStyle = M.color; sctx.beginPath(); sctx.moveTo(a.x, a.y); sctx.lineTo(b.x, b.y); sctx.stroke(); return { ...M, p: wpt(g, M.s, M.len + 4) }; });
+    sctx.setLineDash([]);
+    sctx.font = 'bold 12px ' + FONT;
+    // 이름표 두 개가 겹치면 '원래 길이'를 위로 올리고 점선을 이어 준다
+    if (tags.length === 2){
+      const box = T => { const w = sctx.measureText(T.text).width, x0 = th < 45 ? T.p.x - w / 2 : T.p.x - w; return [x0, x0 + w, T.p.y - 14, T.p.y]; };
+      const hit = () => { const a = box(tags[0]), b = box(tags[1]); return a[0] < b[1] + 4 && b[0] < a[1] + 4 && a[2] < b[3] + 2 && b[2] < a[3] + 2; };
+      const base = { x: tags[0].p.x, y: tags[0].p.y };
+      for (let i = 0; i < 6 && hit(); i++) tags[0].p.y -= 15;
+      if (tags[0].p.y !== base.y){ sctx.setLineDash([2, 3]); sctx.strokeStyle = tags[0].color; sctx.beginPath(); sctx.moveTo(base.x, base.y); sctx.lineTo(tags[0].p.x, tags[0].p.y + (th < 45 ? 0 : 7)); sctx.stroke(); sctx.setLineDash([]); }
+    }
+    tags.forEach(T => { sctx.fillStyle = T.color; if (th < 45){ sctx.textAlign = 'center'; sctx.textBaseline = 'bottom'; } else { sctx.textAlign = 'right'; sctx.textBaseline = 'middle'; } sctx.fillText(T.text, T.p.x, T.p.y); });
+    // 물체 글자
+    sctx.fillStyle = '#fff'; sctx.font = 'bold 12px ' + FONT; sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
+    const ca = wpt(g, A + g.bsA / 2, g.bsA / 2); sctx.fillText(lb ? 'A' : m.toFixed(1) + ' kg', ca.x, ca.y);
+    if (B != null){ const cb = wpt(g, B + g.bsB / 2, g.bsB / 2); sctx.fillText('B', cb.x, cb.y); }
+    if (Math.abs(st.x) * g.sc > 8){ const xl = wpt(g, (g.sEq + A) / 2, wh - 8); sctx.fillStyle = '#2f6fdf'; sctx.font = 'bold 13px ' + FONT; sctx.fillText('x', xl.x, xl.y); }
+    sctx.textAlign = 'left'; sctx.textBaseline = 'top'; sctx.font = 'bold 13px ' + FONT;
+    if (phase === 'idle'){ sctx.fillStyle = '#2f6fdf'; sctx.fillText('물체를 잡아 빗면을 따라 당겨 보세요', 8, 8); }
+    else if (lb && L && L.tc != null && simTime >= L.tc - 1e-6){ sctx.fillStyle = '#c0392b'; sctx.fillText('B가 다시 A에 닿았습니다 (그 뒤는 계산하지 않음)', 8, 8); }
+    else if (lb && st.sep){ sctx.fillStyle = '#c47a2c'; sctx.fillText('B가 A에서 떨어졌습니다', 8, 8); }
+  }
+
+  // 발사: A+B가 함께 진동하다가 용수철이 원래 길이(x = d0)가 되는 순간 분리된다.
+  function launchInfo(x0, withTc){
+    const d0 = sag(), w = omega();
+    if (!(x0 < 0 && -x0 > d0 + 1e-9)) return { ts: null };
+    const ts = Math.acos(d0 / x0) / w, vs = -x0 * w * Math.sin(w * ts);
+    const wA = Math.sqrt(k / m), dA = m * G * Math.sin(th * Math.PI / 180) / k, gs = G * Math.sin(th * Math.PI / 180);
+    const Li = { ts, vs, wA, dA, xAeq: d0 - dA, gs, d0, tc: null };
+    if (withTc && gs > 1e-6){
+      const gap = tau => (d0 + vs * tau - gs * tau * tau / 2) - (Li.xAeq + dA * Math.cos(wA * tau) + vs / wA * Math.sin(wA * tau));
+      let a = 0.004, b = null;
+      for (let tau = 0.004; tau < 120; tau += 0.002){ if (gap(tau) <= 0){ b = tau; break; } a = tau; }
+      if (b != null){ for (let i = 0; i < 40; i++){ const mid = (a + b) / 2; if (gap(mid) <= 0) b = mid; else a = mid; } Li.tc = ts + b; }
+    }
+    return Li;
   }
 
   // ---------- 그리기: 시뮬레이션 ----------
@@ -431,20 +565,28 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     }
   }
 
-  function drawSim(st){ sctx.clearRect(0, 0, W, H); mode === 'v' ? drawV(st) : drawH(st); }
+  function drawSim(st){ sctx.clearRect(0, 0, W, H); mode === 'i' ? drawI(st) : mode === 'v' ? drawV(st) : drawH(st); }
 
   function updateStats(st){
     const run = phase === 'run';
-    document.getElementById('sT').textContent = (2 * Math.PI / omega()).toFixed(2) + ' s';
-    const A = phase === 'drag' ? Math.abs(dragX) : run ? A0 : 0;
+    const sep = !!st.sep, Li = phase === 'drag' && launch() ? launchInfo(dragX, false) : L;
+    document.getElementById('sT').textContent = (2 * Math.PI * (sep ? Math.sqrt(m / k) : 1 / omega())).toFixed(2) + ' s';
+    const A = phase === 'drag' ? Math.abs(dragX) : sep ? Math.hypot(L.dA, L.vs / L.wA) : run ? A0 : 0;
+    if (launch()){
+      const has = Li && Li.ts != null, up = document.getElementById('sUp'), up2 = document.getElementById('sUp2');
+      document.getElementById('sSep').textContent = has ? Li.vs.toFixed(2) + ' m/s' : (phase === 'idle' ? '-' : '분리 안 됨');
+      document.getElementById('kUp').textContent = th > 0 ? 'B가 더 올라가는 높이' : 'B의 운동';
+      up.textContent = !has ? '-' : th > 0 ? (Li.vs * Li.vs / (2 * G)).toFixed(2) + ' m' : '등속 운동';
+      up2.textContent = has && th > 0 && th < 90 ? '빗면을 따라 ' + (Li.vs * Li.vs / (2 * Li.gs)).toFixed(2) + ' m' : '';
+    }
     aIn.max = maxA().toFixed(2);
     if (document.activeElement !== aIn) aIn.value = A.toFixed(2);
-    const rt = mode === 'v' ? '= ' + ratioTxt(A / sag()) : '';
+    const rt = mode === 'v' ? '= ' + ratioTxt(A / sag()) : mode === 'i' && !launch() && sag() > 1e-3 ? '= ' + ratioTxt(A / sag()).replace('mg/k', 'mg sinθ/k') : '';
     if (aRatio.textContent !== rt) aRatio.textContent = rt;
     document.getElementById('sX').textContent = fmt(st.x, 2) + ' m';
     document.getElementById('sV').textContent = fmt(st.v, 2) + ' m/s';
-    const a = acc(st.x), el = document.getElementById('sAc');
-    const html = mode === 'v' ? gAcc(a) : fmt(a, 2) + ' m/s²';
+    const a = st.a, el = document.getElementById('sAc');
+    const html = mode !== 'h' ? gAcc(a) : fmt(a, 2) + ' m/s²';
     if (el.innerHTML !== html) el.innerHTML = html;
   }
 
@@ -504,6 +646,10 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   function local(e){ const r = simC.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   function onBlock(p){
     const s = blockSize(), x = state().x;
+    if (mode === 'i'){
+      const g = geomI(), A = sOf(g, x), al = (p.x - g.P0.x) * g.c - (p.y - g.P0.y) * g.s, pe = -(p.x - g.P0.x) * g.s - (p.y - g.P0.y) * g.c;
+      return al >= A - 20 && al <= A + g.bsA + (launch() && !state().sep ? g.bsB : 0) + 20 && pe >= -24 && pe <= Math.max(g.bsA, g.bsB) + 24;
+    }
     if (mode === 'v'){
       const g = geomV(), yb = g.yE - x * g.sc;
       return Math.abs(p.x - g.cx) <= s / 2 + 22 && p.y >= yb - 24 && p.y <= yb + s + 24;
@@ -511,12 +657,15 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     const g = geomH(), bx = g.eqX + x * g.scale;
     return Math.abs(p.x - bx) <= s / 2 + 22 && p.y >= g.floorY - s - 30 && p.y <= g.floorY + 24;
   }
-  const clampX = v => Math.max(-maxA(), Math.min(maxA(), v));
+  // 발사: B가 A 위에 있으려면 용수철이 원래 길이보다 늘어나면 안 된다 (x ≤ 평형점에서 원래 길이까지)
+  const clampX = v => Math.max(-maxA(), Math.min(launch() ? sag() : maxA(), v));
+  const along = (g, p) => (p.x - g.P0.x) * g.c - (p.y - g.P0.y) * g.s;
   simC.addEventListener('pointerdown', e => {
     const p = local(e);
     if (!onBlock(p)) return;
     dragX = clampX(state().x); phase = 'drag';          // 잡는 동안 시간은 멈춘다
-    if (mode === 'v'){ const g = geomV(); grabOff = p.y - (g.yE - dragX * g.sc); }
+    if (mode === 'i'){ const g = geomI(); grabOff = along(g, p) - sOf(g, dragX); }
+    else if (mode === 'v'){ const g = geomV(); grabOff = p.y - (g.yE - dragX * g.sc); }
     else { const g = geomH(); grabOff = p.x - (g.eqX + dragX * g.scale); }
     simC.setPointerCapture(e.pointerId);
     simC.style.cursor = 'grabbing';
@@ -525,7 +674,8 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   simC.addEventListener('pointermove', e => {
     const p = local(e);
     if (phase === 'drag'){
-      if (mode === 'v'){ const g = geomV(); dragX = clampX((g.yE - (p.y - grabOff)) / g.sc); }
+      if (mode === 'i'){ const g = geomI(); dragX = clampX((along(g, p) - grabOff - g.sEq) / g.sc); }
+      else if (mode === 'v'){ const g = geomV(); dragX = clampX((g.yE - (p.y - grabOff)) / g.sc); }
       else { const g = geomH(); dragX = clampX((p.x - grabOff - g.eqX) / g.scale); }
     } else {
       simC.style.cursor = onBlock(p) ? 'grab' : 'default';
@@ -535,9 +685,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     if (phase !== 'drag') return;
     simC.style.cursor = 'grab';
     if (Math.abs(dragX) < 0.003){ reset(); return; }
-    // 놓는 순간이 t = 0
-    phase = 'run'; A0 = Math.abs(dragX); ph0 = dragX < 0 ? Math.PI : 0;
-    simTime = 0; buf = [sample(0)]; setPaused(false);
+    startRun(dragX);   // 놓는 순간이 t = 0
   }
   simC.addEventListener('pointerup', release);
   simC.addEventListener('pointercancel', release);
@@ -550,8 +698,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     const a = Math.min(maxA(), Math.max(0, v));
     aIn.value = a.toFixed(2);
     if (a < 0.003){ reset(); return; }
-    phase = 'run'; A0 = a; ph0 = mode === 'v' ? Math.PI : 0;
-    simTime = 0; buf = [sample(0)]; setPaused(false);
+    startRun(mode === 'h' ? a : -a);
   });
   aIn.addEventListener('keydown', e => { if (e.key === 'Enter') aIn.blur(); });
   // 진폭이 mg/k의 몇 배인지 (예: 2 mg/k, 3/2 mg/k, 1.37 mg/k)
@@ -562,7 +709,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
   }
 
   // ---------- 시각 고르기 ----------
-  const showT = timeBar(document.getElementById('tbar'), { cell: () => document.getElementById('stTime'), max: () => Math.max(10, Math.ceil(simTime / 10) * 10), set: val => {
+  const showT = timeBar(document.getElementById('tbar'), { cell: () => document.getElementById('stTime'), max: () => launch() && L && L.tc != null ? L.tc : Math.max(10, Math.ceil(simTime / 10) * 10), set: val => {
     if (phase !== 'run') return;
     setPaused(true); simTime = val; buf = [];
     for (let tt = Math.max(0, val - WINDOW); tt <= val + 1e-9; tt += 0.02) buf.push(sample(tt));
@@ -574,6 +721,7 @@ const gAcc = a => fmt(a, 2) + ' m/s² <span class="gx">= ' + gTxt(a) + '</span>'
     const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
     if (!paused && phase === 'run'){
       simTime += dt * speed;
+      if (launch() && L && L.tc != null && simTime >= L.tc){ simTime = L.tc; setPaused(true); }   // B가 다시 A에 닿으면 멈춤
       buf.push(sample(simTime));
       while (buf.length && buf[0].t < simTime - WINDOW - 0.5) buf.shift();
     }
@@ -616,6 +764,6 @@ setTimeout(function(){
 }, 0);
 /*SLIDER-EDIT-END*/
 </script>
-<script src="../../practice/panel.js?v=20261115c" defer></script>
+<script src="../../practice/panel.js?v=20261118" defer></script>
 </body>
 </html>

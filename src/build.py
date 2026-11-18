@@ -32,7 +32,7 @@ def build(name):
 {script.strip()}
 }})();
 </script>
-<script src="../../practice/panel.js?v=20261115c" defer></script>
+<script src="../../practice/panel.js?v=20261118" defer></script>
 </body>
 </html>
 '''

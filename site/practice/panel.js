@@ -10,7 +10,11 @@
     '.pq button{cursor:pointer}.pq button:disabled{opacity:.45}.pq button.pq-main{background:#2f6fdf;border-color:#2f6fdf;color:#fff;font-weight:700}' +
     '.pq .pq-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}.pq input{flex:1 1 140px;min-width:0}' +
     '.pq select{width:100%;max-width:100%;margin:0 0 10px}' +
-    '.pq .pq-zoom{overflow-x:auto;margin:0 0 10px;-webkit-overflow-scrolling:touch}.pq img{display:block;width:100%;max-width:none;height:auto;cursor:zoom-in}.pq img.big{width:190%;cursor:zoom-out}.pq .pq-tip{font-size:12px;color:#5b6475;margin:-4px 0 10px}' +
+    '.pq .pq-zoom{overflow-x:auto;margin:0 0 10px;-webkit-overflow-scrolling:touch}.pq img{display:block;width:100%;max-width:none;height:auto;cursor:zoom-in}.pq .pq-tip{font-size:12px;color:#5b6475;margin:-4px 0 10px}' +
+    '.pq-pop{position:fixed;inset:0;z-index:9999;background:rgba(20,24,32,.94);display:none;flex-direction:column}' +
+    '.pq-pbar{display:flex;gap:8px;align-items:center;padding:10px 12px;background:#1d2330}.pq-pbar button{font:inherit;font-size:16px;font-weight:700;min-width:42px;padding:8px 10px;white-space:nowrap;border-radius:8px;border:1px solid #5b6475;background:#2a3140;color:#fff;touch-action:manipulation}.pq-pbar button:disabled{opacity:.35}' +
+    '.pq-pbar .pq-px{margin-left:auto;background:#2f6fdf;border-color:#2f6fdf}.pq-plv{color:#fff;font-size:14px;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}' +
+    '.pq-pscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#fff}.pq-pscroll img{display:block;width:100%;max-width:none;height:auto}' +
     '.pq .pq-load{color:#5b6475;font-size:14px;margin:0 0 10px;min-height:120px}' +
     '.pq .pq-ch{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.pq .pq-ch button{padding:11px 4px;font-size:17px}' +
     '.pq .pq-ch button.on{border-color:#2f6fdf;background:#e8eefb;font-weight:700}' +
@@ -21,6 +25,29 @@
     '.pq .pq-seg{display:flex;margin:0 0 10px}.pq .pq-seg button{flex:1;padding:9px 6px;font-weight:700}.pq .pq-seg button:first-child{border-radius:8px 0 0 8px}.pq .pq-seg button:last-child{border-radius:0 8px 8px 0;border-left:0}.pq .pq-seg button.on{background:#2f6fdf;border-color:#2f6fdf;color:#fff}' +
     '.pq .pq-item{border-top:2px solid #d9dde4;padding-top:12px;margin-top:18px;min-width:0}.pq .pq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,max(420px,calc(50% - 14px))),1fr));gap:0 28px;align-items:start}.pq .pq-item .pq-meta b{font-size:16px}.pq .pq-tag{font-style:normal}' +
     '.pq a.pq-link{font-size:13px;color:#5b6475;margin-left:auto}.pq a.pq-sim{display:block;font-size:15px;color:#2f6fdf;font-weight:700;text-decoration:none;text-align:center;border:1px solid #2f6fdf;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#f3f7ff}';
+
+  // 그림 크게 보기: 화면 전체를 덮는 창. 처음에는 화면 폭에 맞추고, +/− 로 키우며 위아래·옆으로 밀어 본다.
+  // 휴대폰의 '뒤로' 버튼을 누르면 창만 닫힌다.
+  var zp = null;
+  function zoomPop(src, alt) {
+    if (!zp) {
+      zp = el('div', 'pq-pop'); var bar = el('div', 'pq-pbar'), sc = el('div', 'pq-pscroll'), im = el('img'), lv = el('span', 'pq-plv');
+      var minus = el('button', '', '−'), plus = el('button', '', '+'), fit = el('button', '', '맞춤'), x = el('button', 'pq-px', '닫기 ✕');
+      [minus, plus, fit, x].forEach(function (b) { b.type = 'button'; });
+      bar.appendChild(minus); bar.appendChild(lv); bar.appendChild(plus); bar.appendChild(fit); bar.appendChild(x); sc.appendChild(im); zp.appendChild(bar); zp.appendChild(sc);
+      var Z = [1, 1.5, 2, 3, 4]; zp.zi = 0;
+      zp.set = function (i) { zp.zi = Math.max(0, Math.min(Z.length - 1, i)); im.style.width = (Z[zp.zi] * 100) + '%'; lv.textContent = Math.round(Z[zp.zi] * 100) + '%'; minus.disabled = zp.zi === 0; plus.disabled = zp.zi === Z.length - 1; };
+      minus.addEventListener('click', function () { zp.set(zp.zi - 1); }); plus.addEventListener('click', function () { zp.set(zp.zi + 1); }); fit.addEventListener('click', function () { zp.set(0); sc.scrollTo(0, 0); });
+      zp.close = function () { if (!zp.open) return; zp.open = false; zp.style.display = 'none'; document.documentElement.style.overflow = ''; };
+      x.addEventListener('click', function () { if (zp.hist) history.back(); else zp.close(); });
+      window.addEventListener('popstate', function () { if (zp.open) { zp.hist = false; zp.close(); } });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && zp.open) x.click(); });
+      zp.im = im; zp.sc = sc; document.body.appendChild(zp);
+    }
+    zp.im.src = src; zp.im.alt = alt || ''; zp.set(0); zp.style.display = 'flex'; zp.open = true; zp.sc.scrollTo(0, 0);
+    document.documentElement.style.overflow = 'hidden';
+    zp.hist = false; try { history.pushState({ pqzoom: 1 }, ''); zp.hist = true; } catch (e) {}
+  }
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function b64(s) { var bin = atob(s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
@@ -45,7 +72,7 @@
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
     function freeUrls() { urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = []; }
-    function pic(blob, alt) { var u = URL.createObjectURL(blob); urls.push(u); var w = el('div', 'pq-zoom'), im = el('img'); im.alt = alt; im.src = u; im.addEventListener('click', function () { im.classList.toggle('big'); }); w.appendChild(im); return w; }
+    function pic(blob, alt) { var u = URL.createObjectURL(blob); urls.push(u); var w = el('div', 'pq-zoom'), im = el('img'); im.alt = alt; im.src = u; im.addEventListener('click', function () { zoomPop(u, alt); }); w.appendChild(im); return w; }
     // 파일 = iv(12바이트) + 암호문. 실패 이유를 구분한다: 'net'(받지 못함) / 'key'(코드가 틀림)
     function load(name, k) {
       return fetch(o.base + name).then(function (r) { if (!r.ok) throw new Error('net'); return r.arrayBuffer(); }, function () { throw new Error('net'); })
