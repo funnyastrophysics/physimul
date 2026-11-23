@@ -66,6 +66,7 @@ practice-src/         기출문제 원본 그림 (GitHub에 올리지 않음, �
 | `timeBar(host, o)` | 시간 막대, ±버튼, '시간' 값 칸을 직접 입력 칸으로 |
 | `loopT(fn, o)` | 시계가 달린 반복 실행. 뒤로 갈 때는 `reset` 뒤 그 시각까지 다시 계산 |
 | `gTxt(a)`, `gAcc(a)` | 가속도를 g의 배수로 (예: `7.84 m/s² = 4/5 g`) |
+| 그림 위 화면 밀기 | 그림(canvas)은 `touch-action: pan-y pinch-zoom`. 빈 곳을 밀면 화면이 움직이고, 시뮬레이션이 `setPointerCapture`로 물체를 잡았을 때만 화면을 멈춤. 처음 받은 11개에는 `/*TOUCH-SCROLL*/` 조각 |
 | 슬라이더 값 직접 입력 | 슬라이더 옆 값을 누르면 숫자 입력. 처음 받은 11개에는 같은 조각을 페이지 안에 넣어 두었습니다(`/*SLIDER-EDIT*/` 표시) |
 
 시간 막대와 시각 직접 입력이 들어간 곳: accel, projectile, pulley, circular, superposition, generator, forces(빗면), wave(횡파와 종파), relativity, shm, collision, energy.

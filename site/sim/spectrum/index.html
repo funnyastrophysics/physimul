@@ -17,7 +17,7 @@ h1{font-size:22px;margin:4px 0}
 .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .tabs button{flex:1 1 0;min-width:72px;font:inherit;font-size:14px;padding:10px 2px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-canvas{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-top:10px}
 .stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
 .stat .k{font-size:12px;color:var(--sub)}
@@ -233,6 +233,21 @@ setTimeout(function(){
   });
 }, 0);
 /*SLIDER-EDIT-END*/
+/*TOUCH-SCROLL*/
+// 휴대폰: 그림(canvas)의 빈 곳을 밀면 화면이 위아래로 움직이고, 끌 수 있는 것을 잡았을 때만 화면을 멈춘다.
+// (그림의 touch-action은 pan-y. 각 시뮬레이션이 잡을 때 부르는 setPointerCapture를 '잡았다'는 신호로 쓴다.)
+(function(){
+  function hook(c){
+    if (c.dataset.ts) return; c.dataset.ts = '1'; var grab = false, sp = c.setPointerCapture;
+    c.setPointerCapture = function(id){ grab = true; try { return sp.call(c, id); } catch (e) {} };
+    c.addEventListener('pointerdown', function(){ grab = false; }, true);
+    ['pointerup', 'pointercancel'].forEach(function(ev){ c.addEventListener(ev, function(){ setTimeout(function(){ grab = false; }, 0); }); });
+    ['touchstart', 'touchmove'].forEach(function(ev){ c.addEventListener(ev, function(e){ if (grab && e.cancelable) e.preventDefault(); }, { passive: false }); });
+  }
+  function all(){ document.querySelectorAll('canvas').forEach(hook); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', all); else all();
+})();
+/*TOUCH-SCROLL-END*/
 
 const S = $('sim'); let s; const rs = () => { s = fitCanvas(S); }; window.addEventListener('resize', rs);
 let mode, n = 1, anim = null, lines = [], queue = [], msg = '';

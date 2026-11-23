@@ -152,3 +152,18 @@ setTimeout(function(){
   });
 }, 0);
 /*SLIDER-EDIT-END*/
+/*TOUCH-SCROLL*/
+// 휴대폰: 그림(canvas)의 빈 곳을 밀면 화면이 위아래로 움직이고, 끌 수 있는 것을 잡았을 때만 화면을 멈춘다.
+// (그림의 touch-action은 pan-y. 각 시뮬레이션이 잡을 때 부르는 setPointerCapture를 '잡았다'는 신호로 쓴다.)
+(function(){
+  function hook(c){
+    if (c.dataset.ts) return; c.dataset.ts = '1'; var grab = false, sp = c.setPointerCapture;
+    c.setPointerCapture = function(id){ grab = true; try { return sp.call(c, id); } catch (e) {} };
+    c.addEventListener('pointerdown', function(){ grab = false; }, true);
+    ['pointerup', 'pointercancel'].forEach(function(ev){ c.addEventListener(ev, function(){ setTimeout(function(){ grab = false; }, 0); }); });
+    ['touchstart', 'touchmove'].forEach(function(ev){ c.addEventListener(ev, function(e){ if (grab && e.cancelable) e.preventDefault(); }, { passive: false }); });
+  }
+  function all(){ document.querySelectorAll('canvas').forEach(hook); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', all); else all();
+})();
+/*TOUCH-SCROLL-END*/
