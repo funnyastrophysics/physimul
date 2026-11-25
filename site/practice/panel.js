@@ -49,6 +49,10 @@
     zp.hist = false; try { history.pushState({ pqzoom: 1 }, ''); zp.hist = true; } catch (e) {}
   }
 
+  // 난이도: 정답률(%) 기준 6단계. 정답률이 없는 문항(2015학년도 이전)은 'none'
+  var LV = [['최상', '최상 (정답률 30% 미만)'], ['상', '상 (정답률 30~49%)'], ['중상', '중상 (정답률 50~59%)'], ['중', '중 (정답률 60~79%)'], ['중하', '중하 (정답률 80~89%)'], ['하', '하 (정답률 90% 이상)'], ['none', '정답률 없음 (2015학년도 이전)']];
+  function lvOf(x) { var r = x.r; if (r == null || r === '') return 'none'; r = +r; return r < 30 ? '최상' : r < 50 ? '상' : r < 60 ? '중상' : r < 80 ? '중' : r < 90 ? '중하' : '하'; }
+
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function b64(s) { var bin = atob(s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
   function getCode() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
@@ -66,9 +70,9 @@
 
   // box: 붙일 요소, o: { base: data 폴더 경로, file: 목록 파일 이름, title, sub, simBase: 시뮬레이션 폴더 경로, names: {시뮬레이션 이름: 제목}, codes: {성취기준: 짧은 이름} }
   function mount(box, o) {
-    var key = null, all = null, list = null, idx = 0, std = '', tp = '', mode = '', urls = [], cache = {};
+    var key = null, all = null, list = null, idx = 0, std = '', tp = '', lv = '', mode = '', urls = [], cache = {};
     // std: 고른 2022 성취기준, tp: 고른 주제
-    function scope() { return all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }); }
+    function scope() { return all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp) && (!lv || lvOf(x) === lv); }); }
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
     function freeUrls() { urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = []; }
@@ -80,7 +84,7 @@
     }
     function open(code, onFail) {
       makeKey(code).then(function (k) {
-        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); std = ''; tp = ''; mode = ''; apply(); cache = {}; show(); });
+        return load(o.file, k).then(function (buf) { key = k; setCode(code.trim()); all = JSON.parse(new TextDecoder().decode(buf)); std = ''; tp = ''; lv = ''; mode = ''; apply(); cache = {}; show(); });
       }).catch(function (e) {
         if (e && e.message === 'key') { setCode(''); onFail('수업 코드가 맞지 않습니다. 대문자와 소문자, 띄어쓰기를 확인하세요.'); }
         else onFail('문제를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.'); });
@@ -114,7 +118,7 @@
       hb.appendChild(document.createTextNode(it.src)); mt.appendChild(hb);
       if (it.c) mt.appendChild(el('span', '', '[' + it.c + '] ' + (it.t || (o.codes && o.codes[it.c]) || '')));
       wrap.appendChild(mt);
-      if (it.p) wrap.appendChild(el('p', 'pq-pt', '배점 ' + it.p + '점' + (it.r != null ? ', 정답률 ' + it.r + '%' : '')));
+      if (it.p) wrap.appendChild(el('p', 'pq-pt', '배점 ' + it.p + '점' + (it.r != null ? ', 정답률 ' + it.r + '% (난이도 ' + lvOf(it) + ')' : '')));
       if (it.e) wrap.appendChild(el('p', 'pq-era', '출제 당시: ' + it.e + ' 교육과정' + (it.e !== '7차' && it.o ? ' ' + it.o : '')));
       if (o.names && it.s) { var sa = el('a', 'pq-sim', '▶ 시뮬레이션 열기: ' + (o.names[it.s] || it.s)); sa.href = o.simBase + it.s + '/'; wrap.appendChild(sa); }
       var area = el('div', 'pq-load', '문제를 불러오는 중…'); wrap.appendChild(area);
@@ -164,6 +168,15 @@
           tt.addEventListener('change', function () { tp = tt.value; apply(); show(); }); box.appendChild(tt);
         }
       }
+      // 난이도별로 골라 보기 (정답률 기준, 2016학년도부터)
+      var lbase = all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }), lc = {};
+      lbase.forEach(function (x) { var l = lvOf(x); lc[l] = (lc[l] || 0) + 1; });
+      if (LV.some(function (L) { return L[0] !== 'none' && lc[L[0]]; })) {
+        var ls = el('select'); ls.setAttribute('aria-label', '난이도 고르기');
+        var l0 = el('option', '', '난이도: 전체 (' + lbase.length + '문제)'); l0.value = ''; ls.appendChild(l0);
+        LV.forEach(function (L) { if (!lc[L[0]] && lv !== L[0]) return; var op = el('option', '', L[1] + ' (' + (lc[L[0]] || 0) + '문제)'); op.value = L[0]; ls.appendChild(op); }); ls.value = lv;
+        ls.addEventListener('change', function () { lv = ls.value; apply(); show(); }); box.appendChild(ls);
+      }
       box.appendChild(recRow);
       var ms = el('select'); ms.setAttribute('aria-label', '볼 문제 고르기');
       [['', '모든 문제 보기'], ['new', '아직 안 푼 문제만 보기'], ['wrong', '틀린 문제만 보기']].forEach(function (a) { var op = el('option', '', a[1]); op.value = a[0]; ms.appendChild(op); }); ms.value = mode;
@@ -177,7 +190,7 @@
       function tail() {
         box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제의 저작권은 한국교육과정평가원에, 해설의 저작권은 EBS에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
       }
-      if (!it) { box.appendChild(el('p', 'pq-load', mode === 'wrong' ? '틀린 문제가 없어요.' : '안 푼 문제가 없어요. 모두 풀었어요!')); return; }
+      if (!it) { box.appendChild(el('p', 'pq-load', !sc.length ? '이 조건에 맞는 문제가 없어요. 난이도나 주제를 바꿔 보세요.' : mode === 'wrong' ? '틀린 문제가 없어요.' : '안 푼 문제가 없어요. 모두 풀었어요!')); return; }
       if (view === 'all') {
         var holder = el('div', 'pq-grid'), moreRow = el('div', 'pq-row'), more = el('button', '', ''), shown = 0;
         more.type = 'button'; moreRow.appendChild(more); moreRow.appendChild(out);
