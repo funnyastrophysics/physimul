@@ -16,16 +16,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # ① site 폴더를 묶어 올린다
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+  # ② 묶음이 다 올라간 뒤 따로 공개한다 (한 단계에서 하면 묶음을 못 찾는 일이 있었음, 2026-11)
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
