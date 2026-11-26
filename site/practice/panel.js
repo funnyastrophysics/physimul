@@ -53,6 +53,10 @@
   var LV = [['최상', '최상 (정답률 30% 미만)'], ['상', '상 (정답률 30~49%)'], ['중상', '중상 (정답률 50~59%)'], ['중', '중 (정답률 60~79%)'], ['중하', '중하 (정답률 80~89%)'], ['하', '하 (정답률 90% 이상)'], ['none', '정답률 없음 (2015학년도 이전)']];
   function lvOf(x) { var r = x.r; if (r == null || r === '') return 'none'; r = +r; return r < 30 ? '최상' : r < 50 ? '상' : r < 60 ? '중상' : r < 80 ? '중' : r < 90 ? '중하' : '하'; }
 
+  // 출처: 평가원(수능·6월·9월 모의평가) / 교육청(학력평가). 고른 탭은 기기에 기억
+  function isEdu(x) { return !/_(06|09|11)_\d\d$/.test(x.id); }
+  function getOrg() { try { return localStorage.getItem('pq-org') === 'edu' ? 'edu' : 'kice'; } catch (e) { return 'kice'; } }
+  function setOrg(v) { try { localStorage.setItem('pq-org', v); } catch (e) {} }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function b64(s) { var bin = atob(s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
   function getCode() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
@@ -72,7 +76,9 @@
   function mount(box, o) {
     var key = null, all = null, list = null, idx = 0, std = '', tp = '', lv = '', mode = '', urls = [], cache = {};
     // std: 고른 2022 성취기준, tp: 고른 주제
-    function scope() { return all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp) && (!lv || lvOf(x) === lv); }); }
+    function pool() { var h = hasBoth(); return all.filter(function (x) { return !h || isEdu(x) === (getOrg() === 'edu'); }); }
+    function hasBoth() { return all.some(isEdu) && all.some(function (x) { return !isEdu(x); }); }
+    function scope() { return pool().filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp) && (!lv || lvOf(x) === lv); }); }
     function apply() { var g = getLog(); list = scope().filter(function (x) { var r = g[x.id]; return mode === 'new' ? !r : mode === 'wrong' ? r && !r[0] : true; }); idx = 0; }
     box.className = 'pq';
     function freeUrls() { urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = []; }
@@ -150,15 +156,22 @@
       var sc = scope(), nDone = 0, nOk = 0; sc.forEach(function (x) { var r = g[x.id]; if (r) { nDone++; if (r[0]) nOk++; } });
       var recRow = el('p', 'pq-rec'); recRow.appendChild(document.createTextNode('내 기록: ' + sc.length + '문제 중 ' + nDone + '문제 풀었어요' + (nDone ? ' (맞음 ' + nOk + ', 틀림 ' + (nDone - nOk) + ')' : '') + ' '));
       if (nDone) { var rz = el('a', '', '기록 지우기'); rz.href = '#'; rz.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('여기 보이는 ' + sc.length + '문제의 기록을 지울까요?')) { clearLog(sc.map(function (x) { return x.id; })); apply(); show(); } }); recRow.appendChild(rz); }
+      if (hasBoth()) {   // 평가원 기출 / 교육청 기출 탭
+        var org = getOrg(), og = el('div', 'pq-seg pq-org'), ne = all.filter(isEdu).length;
+        [['kice', '평가원 기출', all.length - ne], ['edu', '교육청 기출', ne]].forEach(function (a) { var b = el('button', a[0] === org ? 'on' : '', a[1] + ' (' + a[2] + ')'); b.type = 'button';
+          b.addEventListener('click', function () { if (a[0] !== getOrg()) { setOrg(a[0]); std = ''; tp = ''; lv = ''; apply(); show(); } }); og.appendChild(b); });
+        box.appendChild(og);
+      }
+      var P = pool();
       if (o.codes) {   // 성취기준별로, 그 안에서 주제별로 골라 보기
-        var cnt = {}, ord = []; all.forEach(function (x) { if (!cnt[x.c]) { cnt[x.c] = 0; ord.push(x.c); } cnt[x.c]++; }); ord.sort();
+        var cnt = {}, ord = []; P.forEach(function (x) { if (!cnt[x.c]) { cnt[x.c] = 0; ord.push(x.c); } cnt[x.c]++; }); ord.sort();
         if (ord.length > 1) {
           var ts = el('select'); ts.setAttribute('aria-label', '성취기준 고르기');
-          var o0 = el('option', '', '성취기준: 전체 (' + all.length + '문제)'); o0.value = ''; ts.appendChild(o0);
+          var o0 = el('option', '', '성취기준: 전체 (' + P.length + '문제)'); o0.value = ''; ts.appendChild(o0);
           ord.forEach(function (c) { var op = el('option', '', '[' + c + '] ' + (o.codes[c] || '') + ' (' + cnt[c] + '문제)'); op.value = c; ts.appendChild(op); }); ts.value = std;
           ts.addEventListener('change', function () { std = ts.value; tp = ''; apply(); show(); }); box.appendChild(ts);
         }
-        var base = std ? all.filter(function (x) { return x.c === std; }) : all, tc = {}, tf = {}, tord = [];
+        var base = std ? P.filter(function (x) { return x.c === std; }) : P, tc = {}, tf = {}, tord = [];
         base.forEach(function (x) { if (!(x.t in tc)) { tc[x.t] = 0; tf[x.t] = x.c; tord.push(x.t); } tc[x.t]++; });
         tord.sort(function (a, b) { return tf[a] < tf[b] ? -1 : tf[a] > tf[b] ? 1 : a.localeCompare(b, 'ko'); });
         if (tord.length > 1) {
@@ -169,7 +182,7 @@
         }
       }
       // 난이도별로 골라 보기 (정답률 기준, 2016학년도부터)
-      var lbase = all.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }), lc = {};
+      var lbase = P.filter(function (x) { return (!std || x.c === std) && (!tp || x.t === tp); }), lc = {};
       lbase.forEach(function (x) { var l = lvOf(x); lc[l] = (lc[l] || 0) + 1; });
       if (LV.some(function (L) { return L[0] !== 'none' && lc[L[0]]; })) {
         var ls = el('select'); ls.setAttribute('aria-label', '난이도 고르기');
