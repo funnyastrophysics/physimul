@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>소리 발생기</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  .card h2{font-size:16px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  canvas{display:block;width:100%;height:160px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select,input.num{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  input.num{width:110px;cursor:text;font-variant-numeric:tabular-nums}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  button.b.stop{background:#d64541;color:#fff;border-color:#d64541;font-weight:700}
+  button.b.sm{padding:8px 10px;min-width:46px}
+  .big{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;margin:8px 0 0}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer}
+  label.chk input{width:18px;height:18px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}.seg button{flex:1 1 70px}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .off{opacity:.45;pointer-events:none}
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>소리 발생기</h1>
+  <p class="hint">진동수와 파형을 골라 스피커로 소리를 내요. 두 번째 음을 켜면 두 음이 겹쳐 맥놀이를 들을 수 있어요.</p>
+
+  <div class="card">
+    <button class="b primary" id="playB" style="width:100%;font-size:17px">▶ 소리 내기</button>
+    <div class="row"><span>음량</span><input type="range" id="vol" min="0" max="100" value="40" style="flex:1;margin:0"></div>
+    <p class="note">처음에는 음량을 작게 하세요. 휴대폰이 무음(매너) 모드이면 아이폰에서는 소리가 나지 않을 수 있어요.</p>
+  </div>
+
+  <div class="card" id="c1">
+    <h2>음 1</h2>
+    <div class="row" style="margin-top:0"><span class="big" id="f1t">440</span><span>Hz</span></div>
+    <input type="range" id="f1r" min="0" max="1000" step="1">
+    <div class="row">
+      <button class="b sm" data-d="-10">−10</button><button class="b sm" data-d="-1">−1</button><button class="b sm" data-d="1">+1</button><button class="b sm" data-d="10">+10</button>
+      <input class="num" id="f1n" type="number" inputmode="decimal" min="20" max="20000" step="0.1" aria-label="음 1 진동수(Hz)">
+    </div>
+    <div class="row seg" id="w1"></div>
+    <div class="row" id="notes"></div>
+  </div>
+
+  <div class="card" id="c2">
+    <h2><label class="chk"><input type="checkbox" id="on2"> 음 2 함께 내기 (맥놀이)</label></h2>
+    <div id="b2" class="off">
+      <div class="row" style="margin-top:0"><span class="big" id="f2t">442</span><span>Hz</span><span style="margin-left:auto;font-size:15px">맥놀이 진동수 <b id="beat">2</b> Hz</span></div>
+      <input type="range" id="f2r" min="0" max="1000" step="1">
+      <div class="row">
+        <button class="b sm" data-d="-10">−10</button><button class="b sm" data-d="-1">−1</button><button class="b sm" data-d="1">+1</button><button class="b sm" data-d="10">+10</button>
+        <input class="num" id="f2n" type="number" inputmode="decimal" min="20" max="20000" step="0.1" aria-label="음 2 진동수(Hz)">
+      </div>
+      <div class="row seg" id="w2"></div>
+      <p class="note">두 음의 진동수 차이만큼 1초에 소리가 커졌다 작아졌다 해요(맥놀이 진동수 = |f₁ − f₂|).</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>파형 (스피커로 나가는 신호)</h2>
+    <canvas id="cv"></canvas>
+    <p class="note" id="cvInfo"></p>
+  </div>
+
+  <div class="card">
+    <p class="note" style="margin-top:0">활용 예: 사람이 들을 수 있는 가장 높은 진동수 찾기, 맥놀이, 기주 공명 장치의 음원, 두 휴대폰으로 같은 진동수를 내어 소리의 간섭 확인하기, 「주파수 분석」으로 다른 휴대폰의 소리 진동수 재기.</p>
+    <p class="note">휴대폰 스피커는 아주 낮은 소리(약 200 Hz 아래)를 잘 내지 못해요. 낮은 음은 이어폰이나 외부 스피커를 쓰세요.</p>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var FMIN = 20, FMAX = 20000, ac = null, master = null, osc = {}, gains = {}, playing = false;
+  var S = { f1: 440, f2: 442, w1: 'sine', w2: 'sine', on2: false };
+  var WAVES = [['sine', '사인파'], ['square', '사각파'], ['triangle', '삼각파'], ['sawtooth', '톱니파']];
+  var NOTES = [['도', 261.63], ['레', 293.66], ['미', 329.63], ['파', 349.23], ['솔', 392.00], ['라', 440.00], ['시', 493.88], ['높은 도', 523.25]];
+  // 슬라이더는 로그 눈금(20 Hz ~ 20000 Hz)
+  var toR = function (f) { return Math.round(Math.log(f / FMIN) / Math.log(FMAX / FMIN) * 1000); };
+  var fromR = function (r) { var f = FMIN * Math.pow(FMAX / FMIN, r / 1000); return f < 100 ? Math.round(f * 10) / 10 : Math.round(f); };
+  var clamp = function (f) { return Math.max(FMIN, Math.min(FMAX, f)); };
+  function fmt(f) { return (Math.round(f * 10) / 10).toString(); }
+
+  function setF(k, f, from) {
+    f = clamp(+f || 0); S['f' + k] = f; var n = k === 1 ? 1 : 2;
+    $('f' + n + 't').textContent = fmt(f); if (from !== 'r') $('f' + n + 'r').value = toR(f); if (from !== 'n') $('f' + n + 'n').value = fmt(f);
+    if (osc[k] && ac) osc[k].frequency.setTargetAtTime(f, ac.currentTime, 0.01);
+    $('beat').textContent = fmt(Math.abs(S.f1 - S.f2)); draw();
+  }
+  [1, 2].forEach(function (k) {
+    $('f' + k + 'r').addEventListener('input', function () { setF(k, fromR(+this.value), 'r'); });
+    $('f' + k + 'n').addEventListener('change', function () { setF(k, this.value, 'n'); });
+    $('c' + k).querySelectorAll('button[data-d]').forEach(function (b) { b.addEventListener('click', function () { setF(k, S['f' + k] + (+b.dataset.d)); }); });
+    var seg = $('w' + k);
+    WAVES.forEach(function (w) { var b = document.createElement('button'); b.className = 'b' + (S['w' + k] === w[0] ? ' on' : ''); b.textContent = w[1]; b.type = 'button';
+      b.addEventListener('click', function () { S['w' + k] = w[0]; seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); if (osc[k]) osc[k].type = w[0]; draw(); }); seg.appendChild(b); });
+  });
+  NOTES.forEach(function (n) { var b = document.createElement('button'); b.className = 'b sm'; b.type = 'button'; b.textContent = n[0]; b.title = n[1] + ' Hz'; b.addEventListener('click', function () { setF(1, n[1]); }); $('notes').appendChild(b); });
+  $('on2').addEventListener('change', function () { S.on2 = this.checked; $('b2').classList.toggle('off', !S.on2); if (gains[2]) gains[2].gain.setTargetAtTime(S.on2 ? 1 : 0, ac.currentTime, 0.02); draw(); });
+
+  function vol() { return Math.pow(+$('vol').value / 100, 2) * 0.5; }
+  $('vol').addEventListener('input', function () { if (master) master.gain.setTargetAtTime(vol() / (S.on2 ? 1 : 1), ac.currentTime, 0.02); });
+  function start() {
+    if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (!C) { alert('이 브라우저는 소리를 만들 수 없어요. 크롬이나 사파리에서 열어 주세요.'); return; } ac = new C(); }
+    if (ac.state === 'suspended') ac.resume();
+    master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+    [1, 2].forEach(function (k) { var o = ac.createOscillator(), g = ac.createGain(); o.type = S['w' + k]; o.frequency.value = S['f' + k]; g.gain.value = k === 1 || S.on2 ? 1 : 0; o.connect(g); g.connect(master); o.start(); osc[k] = o; gains[k] = g; });
+    master.gain.setTargetAtTime(vol(), ac.currentTime, 0.03);   // 딱 소리가 나지 않도록 천천히 켠다
+    playing = true; $('playB').textContent = '■ 소리 멈추기'; $('playB').className = 'b stop';
+  }
+  function stop() {
+    if (!ac) return; var m = master, os = [osc[1], osc[2]]; m.gain.setTargetAtTime(0, ac.currentTime, 0.03);
+    setTimeout(function () { os.forEach(function (o) { try { o.stop(); } catch (e) {} }); m.disconnect(); }, 200);
+    osc = {}; gains = {}; master = null; playing = false; $('playB').textContent = '▶ 소리 내기'; $('playB').className = 'b primary';
+  }
+  $('playB').addEventListener('click', function () { playing ? stop() : start(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && playing) stop(); });
+
+  // 파형 그림: 음 1 (+ 음 2)을 계산해서 그린다. 맥놀이가 보이도록 시간 폭을 맞춘다.
+  var cv = $('cv'), ctx, W, H;
+  function fit() { var d = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = W * d; cv.height = H * d; ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); draw(); }
+  function wave(type, ph) { ph = ph - Math.floor(ph); if (type === 'sine') return Math.sin(2 * Math.PI * ph); if (type === 'square') return ph < 0.5 ? 1 : -1; if (type === 'triangle') return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph; return 2 * ph - 1; }
+  function draw() {
+    if (!ctx) return; var beat = Math.abs(S.f1 - S.f2), span;
+    if (S.on2 && beat > 0 && beat < S.f1 / 4) span = Math.min(2 / beat, 2); else span = 4 / S.f1;
+    var n = Math.min(4000, Math.max(400, Math.round(W * 2))), L = 6, ph = H - 24, mid = 6 + ph / 2, amp = S.on2 ? ph / 4.4 : ph / 2.2;
+    ctx.clearRect(0, 0, W, H); ctx.strokeStyle = '#e3e7ee'; ctx.beginPath(); ctx.moveTo(L, mid); ctx.lineTo(W - 6, mid); ctx.stroke();
+    ctx.strokeStyle = '#2f6fdf'; ctx.lineWidth = 1.3; ctx.beginPath();
+    for (var i = 0; i <= n; i++) { var t = span * i / n, v = wave(S.w1, S.f1 * t) + (S.on2 ? wave(S.w2, S.f2 * t) : 0), x = L + (W - 12) * i / n, y = mid - v * amp; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+    ctx.fillStyle = '#5b6475'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right'; ctx.fillText('가로: 시간 (전체 ' + (span >= 0.1 ? span.toFixed(2) + ' s' : (span * 1000).toFixed(span < 0.001 ? 3 : 1) + ' ms') + ')', W - 6, H - 6);
+    $('cvInfo').textContent = S.on2 ? '두 음을 더한 파형이에요. 진폭이 커졌다 작아졌다 하는 간격이 맥놀이 주기(' + (beat ? (1 / beat).toFixed(3) + ' s' : '없음') + ')예요.' : '음 1의 파형 네 주기예요. 주기 T = 1/f = ' + (1000 / S.f1).toFixed(3) + ' ms';
+  }
+  window.addEventListener('resize', fit);
+  setF(1, 440); setF(2, 442); fit();
+})();
+</script>
+</body>
+</html>

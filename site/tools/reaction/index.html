@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>반응 속도 측정</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  #pad{height:300px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:800;font-size:26px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;padding:16px;line-height:1.4}
+  #pad small{display:block;font-size:15px;font-weight:600;opacity:.9;margin-top:8px}
+  .idle{background:#2f6fdf}.wait{background:#d64541}.go{background:#2e9e6a}.early{background:#d68a00}.res{background:#3a4252}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  .seg{display:flex;gap:6px;flex:1 1 260px}.seg button{flex:1}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .dots{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.dots span{background:var(--bg);border-radius:6px;padding:4px 8px;font-size:14px;font-variant-numeric:tabular-nums}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  @media (max-width:420px){ .stats{grid-template-columns:repeat(2,1fr)} }
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>반응 속도 측정</h1>
+  <p class="hint">신호가 바뀐 순간부터 화면을 누를 때까지 걸린 시간(반응 시간)을 재요. 여러 번 재서 평균을 구해 보세요.</p>
+
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <div class="seg" id="sigS"></div>
+      <select id="nS" aria-label="측정 횟수"><option value="5" selected>5회</option><option value="10">10회</option><option value="20">20회</option></select>
+    </div>
+    <div id="pad" class="idle" style="margin-top:10px" role="button" tabindex="0">눌러서 시작<small>빨간 화면이 초록으로 바뀌면 바로 누르세요</small></div>
+    <div class="stats">
+      <div class="stat"><div class="k">이번</div><div class="val" id="sNow">–</div></div>
+      <div class="stat"><div class="k">평균</div><div class="val" id="sAvg">–</div></div>
+      <div class="stat"><div class="k">가장 빠름</div><div class="val" id="sMin">–</div></div>
+      <div class="stat"><div class="k">횟수</div><div class="val" id="sCnt">0</div></div>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="row"><button class="b" id="resetB">처음부터 다시</button></div>
+    <p class="note" id="drop"></p>
+  </div>
+  <div class="card">
+    <p class="note" style="margin-top:0">‘소리’는 화면은 그대로 두고 삐 소리가 나면 누르는 방법이에요(시각과 청각의 반응 시간 비교). 소리를 켜 두세요.</p>
+    <p class="note">자로 재는 반응 시간: 친구가 자를 놓으면 잡는 실험에서, 자가 떨어진 거리 d와 반응 시간 t는 d = ½gt² 의 관계예요. 이 측정의 평균으로 자가 몇 cm 떨어질지 계산해 보여 줘요.</p>
+    <p class="note">화면과 터치 센서의 지연 때문에 실제보다 수십 ms 길게 나올 수 있어요. 같은 기기로 비교하세요.</p>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = $('pad'), st = 'idle', tGo = 0, timer = null, list = [], sig = 'see', ac = null;
+  [['see', '화면 색 (시각)'], ['hear', '소리 (청각)']].forEach(function (m) { var b = document.createElement('button'); b.className = 'b' + (m[0] === sig ? ' on' : ''); b.type = 'button'; b.textContent = m[1];
+    b.addEventListener('click', function () { sig = m[0]; $('sigS').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); reset(); }); $('sigS').appendChild(b); });
+  function show(cls, html) { pad.className = cls; pad.innerHTML = html; }
+  function beep() {
+    if (!ac) return; var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 1000; g.gain.value = 0.3; o.connect(g); g.connect(ac.destination); var t = ac.currentTime; o.start(t); o.stop(t + 0.15);
+  }
+  function arm() {
+    st = 'wait'; show('wait', sig === 'see' ? '기다리세요…<small>초록으로 바뀌면 누르세요</small>' : '기다리세요…<small>삐 소리가 나면 누르세요</small>');
+    timer = setTimeout(function () { st = 'go'; if (sig === 'see') show('go', '지금!'); else beep(); tGo = performance.now(); }, 1500 + Math.random() * 3000);
+  }
+  function hit(e) {
+    if (e) e.preventDefault(); var now = (e && e.timeStamp && e.timeStamp > 1e3 && e.timeStamp < now0() + 1) ? e.timeStamp : performance.now();
+    if (!ac && sig === 'hear') { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+    if (ac && ac.state === 'suspended') ac.resume();
+    var N = +$('nS').value;
+    if (st === 'idle' || st === 'res' || st === 'early') { if (list.length >= N) reset(); arm(); return; }
+    if (st === 'wait') { clearTimeout(timer); st = 'early'; show('early', '너무 일찍 눌렀어요!<small>다시 누르면 이번 회를 다시 해요</small>'); return; }
+    if (st === 'go') {
+      var ms = now - tGo; list.push(ms); st = 'res'; upd();
+      show('res', Math.round(ms) + ' ms<small>' + (list.length >= N ? N + '회 끝! 평균 ' + Math.round(avg()) + ' ms · 다시 누르면 새로 시작' : '눌러서 다음 회 (' + (list.length + 1) + '/' + N + ')') + '</small>');
+    }
+  }
+  function now0() { return performance.now(); }
+  function avg() { return list.reduce(function (a, b) { return a + b; }, 0) / list.length; }
+  function upd() {
+    $('sNow').textContent = list.length ? Math.round(list[list.length - 1]) + ' ms' : '–'; $('sAvg').textContent = list.length ? Math.round(avg()) + ' ms' : '–';
+    $('sMin').textContent = list.length ? Math.round(Math.min.apply(null, list)) + ' ms' : '–'; $('sCnt').textContent = list.length;
+    $('dots').innerHTML = list.map(function (v, i) { return '<span>' + (i + 1) + '회 ' + Math.round(v) + '</span>'; }).join('');
+    if (list.length) { var t = avg() / 1000; $('drop').textContent = '평균 반응 시간 ' + t.toFixed(3) + ' s 동안 자유 낙하하는 자는 ½gt² = ' + (0.5 * 9.8 * t * t * 100).toFixed(1) + ' cm 떨어져요.'; } else $('drop').textContent = '';
+  }
+  function reset() { clearTimeout(timer); list = []; st = 'idle'; upd(); show('idle', '눌러서 시작<small>' + (sig === 'see' ? '빨간 화면이 초록으로 바뀌면 바로 누르세요' : '삐 소리가 나면 바로 누르세요') + '</small>'); }
+  pad.addEventListener('pointerdown', hit);
+  pad.addEventListener('keydown', function (e) { if (e.key === ' ' || e.key === 'Enter') hit(e); });
+  $('resetB').addEventListener('click', reset);
+  $('nS').addEventListener('change', reset);
+})();
+</script>
+</body>
+</html>

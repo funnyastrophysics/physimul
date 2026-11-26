@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>주파수 분석</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;height:240px;touch-action:pan-y}
+  #wv{height:110px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .seg{display:flex;gap:6px}.seg button{flex:1}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  .warn{background:#fff6e5;border:1px solid #f0d49a;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;margin-bottom:12px}
+  .hide{display:none!important}
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>주파수 분석</h1>
+  <p class="hint">마이크로 들어온 소리를 진동수별로 나누어(스펙트럼) 보여 주고, 가장 센 진동수를 찾아요.</p>
+
+  <div class="card" id="startCard">
+    <button class="b primary" id="startB" style="width:100%">마이크 사용 허용하고 시작</button>
+    <p class="note">나오는 창에서 <b>허용</b>을 누르세요. 소리는 기기 안에서만 분석하고 어디에도 저장하거나 보내지 않아요.</p>
+  </div>
+  <div class="warn hide" id="denied"><b>마이크를 쓸 수 없어요.</b> 브라우저 주소창 옆의 자물쇠(또는 설정)에서 마이크를 허용한 뒤 새로 고침해 주세요. 카카오톡 등 다른 앱 안에서 열었다면 사파리나 크롬에서 다시 열어 주세요.</div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><div class="k">가장 센 진동수</div><div class="val" id="pk">–</div></div>
+        <div class="stat"><div class="k">계이름(가까운 음)</div><div class="val" id="nt">–</div></div>
+        <div class="stat"><div class="k">고정한 값</div><div class="val" id="hd">–</div></div>
+      </div>
+      <canvas id="sp" style="margin-top:10px"></canvas>
+      <div class="row">
+        <div class="seg" style="flex:1 1 220px" id="viewS"></div>
+        <select id="rangeS" aria-label="보여 줄 진동수 범위"><option value="2000">0 ~ 2 kHz</option><option value="5000" selected>0 ~ 5 kHz</option><option value="10000">0 ~ 10 kHz</option><option value="20000">0 ~ 20 kHz</option></select>
+      </div>
+      <div class="row">
+        <button class="b" id="pauseB">화면 멈춤</button>
+        <button class="b" id="holdB">지금 값 고정</button>
+        <button class="b" id="saveB">CSV로 저장</button>
+      </div>
+      <p class="note" id="res"></p>
+      <p class="note">그래프를 손가락으로 누르면 그 위치의 진동수를 읽을 수 있어요.</p>
+    </div>
+    <div class="card">
+      <canvas id="wv"></canvas>
+      <p class="note">위: 마이크로 들어온 파형(약 20 ms). 가로는 시간, 세로는 소리의 압력 변화예요.</p>
+    </div>
+  </div>
+  <div class="card">
+    <p class="note" style="margin-top:0">활용 예: 소리굽쇠·악기·목소리의 진동수 재기, 배음(기본 진동수의 정수배) 보기, 「소리 발생기」로 낸 소리 확인, 관이나 병을 불 때의 공명 진동수, 도플러 효과(움직이는 음원의 진동수 변화).</p>
+    <p class="note">‘스펙트로그램’은 시간에 따라 진동수가 어떻게 변하는지 색으로 보여 줘요(위로 갈수록 높은 소리, 밝을수록 센 소리).</p>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var ac, an, fbuf, tbuf, sr = 48000, N = 16384, view = 'spec', paused = false, held = null, touchF = null, img = null;
+  var NAMES = ['도', '도♯', '레', '레♯', '미', '파', '파♯', '솔', '솔♯', '라', '라♯', '시'];
+  [['spec', '스펙트럼'], ['gram', '스펙트로그램']].forEach(function (v) { var b = document.createElement('button'); b.className = 'b' + (v[0] === view ? ' on' : ''); b.type = 'button'; b.textContent = v[1];
+    b.addEventListener('click', function () { view = v[0]; $('viewS').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); img = null; }); $('viewS').appendChild(b); });
+  $('startB').addEventListener('click', function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('denied').classList.remove('hide'); return; }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
+      var C = window.AudioContext || window.webkitAudioContext; ac = new C(); sr = ac.sampleRate;
+      var src = ac.createMediaStreamSource(st); an = ac.createAnalyser(); an.fftSize = N; an.smoothingTimeConstant = 0.5; an.minDecibels = -110; an.maxDecibels = -10; src.connect(an);
+      fbuf = new Float32Array(an.frequencyBinCount); tbuf = new Float32Array(N);
+      $('startCard').classList.add('hide'); $('denied').classList.add('hide'); $('main').classList.remove('hide'); fit(); requestAnimationFrame(loop);
+      $('res').textContent = '진동수 칸 간격(분해능)은 약 ' + (sr / N).toFixed(1) + ' Hz이고, 가장 센 칸 주변 값으로 더 정밀하게 계산해요. (표본 추출 ' + sr + ' Hz)';
+    }).catch(function () { $('denied').classList.remove('hide'); });
+  });
+  var sp = $('sp'), wv = $('wv'), c1, c2, W1, H1, W2, H2;
+  function fit() { var d = window.devicePixelRatio || 1; W1 = sp.clientWidth; H1 = sp.clientHeight; sp.width = W1 * d; sp.height = H1 * d; c1 = sp.getContext('2d'); c1.setTransform(d, 0, 0, d, 0, 0);
+    W2 = wv.clientWidth; H2 = wv.clientHeight; wv.width = W2 * d; wv.height = H2 * d; c2 = wv.getContext('2d'); c2.setTransform(d, 0, 0, d, 0, 0); img = null; }
+  window.addEventListener('resize', function () { if (an) fit(); });
+  function note(f) { if (!(f > 20)) return '–'; var m = 69 + 12 * Math.log2(f / 440), r = Math.round(m), c = Math.round((m - r) * 100), o = Math.floor(r / 12) - 1; return NAMES[(r % 12 + 12) % 12] + o + ' ' + (c >= 0 ? '+' : '−') + Math.abs(c); }
+  function peak(fmax) {   // 가장 센 칸과 양옆 칸으로 포물선 보간
+    var hz = sr / N, i1 = Math.min(fbuf.length - 2, Math.floor(fmax / hz)), bi = -1, bv = -1e9;
+    for (var i = Math.ceil(30 / hz); i <= i1; i++) if (fbuf[i] > bv) { bv = fbuf[i]; bi = i; }
+    if (bi < 1 || bv < -85) return null;
+    var a = fbuf[bi - 1], b = fbuf[bi], c = fbuf[bi + 1], p = 0.5 * (a - c) / (a - 2 * b + c); if (!isFinite(p)) p = 0;
+    return { f: (bi + p) * hz, db: bv };
+  }
+  var cur = null, L = 44, R = 8, T = 8, B = 22;
+  function loop() {
+    requestAnimationFrame(loop); if (!an) return;
+    var fmax = +$('rangeS').value;
+    if (!paused) { an.getFloatFrequencyData(fbuf); an.getFloatTimeDomainData(tbuf); cur = peak(fmax); }
+    var fs = function (f) { return f >= 1000 ? (f / 1000).toFixed(3) + ' kHz' : f.toFixed(1) + ' Hz'; };
+    $('pk').textContent = cur ? fs(cur.f) : '–'; $('nt').textContent = cur ? note(cur.f) : '–';
+    var pw = W1 - L - R, ph = H1 - T - B, hz = sr / N, xx = function (f) { return L + f / fmax * pw; };
+    if (view === 'spec') {
+      c1.clearRect(0, 0, W1, H1); c1.font = '11px sans-serif'; c1.fillStyle = '#5b6475'; c1.strokeStyle = '#eef0f4';
+      for (var db = -100; db <= -20; db += 20) { var y = T + (-20 - db) / 80 * ph; c1.beginPath(); c1.moveTo(L, y); c1.lineTo(L + pw, y); c1.stroke(); c1.textAlign = 'right'; c1.textBaseline = 'middle'; c1.fillText(db + ' dB', L - 4, y); }
+      var st = fmax / (fmax >= 10000 ? 4 : 5); c1.textAlign = 'center'; c1.textBaseline = 'top';
+      for (var f = 0; f <= fmax + 1; f += st) { var x = xx(f); c1.beginPath(); c1.moveTo(x, T); c1.lineTo(x, T + ph); c1.stroke(); c1.fillText(f >= 1000 ? f / 1000 + 'k' : f, x, T + ph + 4); }
+      c1.textAlign = 'right'; c1.fillText('Hz', W1 - 2, T + ph + 4);
+      c1.strokeStyle = '#2f6fdf'; c1.lineWidth = 1.4; c1.beginPath(); var n = Math.min(fbuf.length, Math.ceil(fmax / hz));
+      for (var i = 0; i < n; i++) { var y = T + Math.max(0, Math.min(1, (-20 - fbuf[i]) / 80)) * ph, x = xx(i * hz); i ? c1.lineTo(x, y) : c1.moveTo(x, y); } c1.stroke();
+      if (cur) { var x = xx(cur.f); c1.strokeStyle = '#d64541'; c1.setLineDash([4, 3]); c1.beginPath(); c1.moveTo(x, T); c1.lineTo(x, T + ph); c1.stroke(); c1.setLineDash([]); }
+    } else {   // 스펙트로그램: 한 줄씩 오른쪽에서 왼쪽으로 흘러간다
+      if (!paused) {
+        if (!img) { c1.fillStyle = '#000'; c1.fillRect(0, 0, W1, H1); }
+        var d = window.devicePixelRatio || 1; c1.save(); c1.setTransform(1, 0, 0, 1, 0, 0); c1.drawImage(sp, 2 * d, 0, sp.width - 2 * d, sp.height, 0, 0, sp.width - 2 * d, sp.height); c1.restore();
+        for (var y = 0; y < H1; y++) { var f = (1 - y / H1) * fmax, v = fbuf[Math.round(f / hz)], k = Math.max(0, Math.min(1, (v + 100) / 75));
+          c1.fillStyle = 'hsl(' + (240 - 240 * k) + ',90%,' + (8 + 52 * k) + '%)'; c1.fillRect(W1 - 2, y, 2, 1); }
+        img = 1; c1.fillStyle = 'rgba(255,255,255,.85)'; c1.font = '11px sans-serif'; c1.textAlign = 'left'; c1.textBaseline = 'top'; c1.fillText((fmax / 1000) + ' kHz', 4, 2); c1.textBaseline = 'bottom'; c1.fillText('0', 4, H1 - 2);
+      }
+    }
+    if (touchF != null && view === 'spec') { var x = xx(touchF); c1.strokeStyle = '#2e9e6a'; c1.beginPath(); c1.moveTo(x, T); c1.lineTo(x, T + ph); c1.stroke(); c1.fillStyle = '#2e9e6a'; c1.font = 'bold 12px sans-serif'; c1.textAlign = x > W1 / 2 ? 'right' : 'left'; c1.textBaseline = 'top'; c1.fillText(' ' + fs(touchF) + ' ', x, T + 2); }
+    // 파형(약 20 ms)
+    c2.clearRect(0, 0, W2, H2); var m = Math.min(tbuf.length, Math.round(sr * 0.02)), mx = 0.02;
+    for (var i = 0; i < m; i++) mx = Math.max(mx, Math.abs(tbuf[i])); c2.strokeStyle = '#e3e7ee'; c2.beginPath(); c2.moveTo(0, H2 / 2); c2.lineTo(W2, H2 / 2); c2.stroke();
+    c2.strokeStyle = '#2e9e6a'; c2.lineWidth = 1.2; c2.beginPath(); for (var i = 0; i < m; i++) { var x = i / m * W2, y = H2 / 2 - tbuf[i] / mx * H2 * 0.45; i ? c2.lineTo(x, y) : c2.moveTo(x, y); } c2.stroke();
+  }
+  function touch(e) { var r = sp.getBoundingClientRect(), p = e.touches ? e.touches[0] : e, f = (p.clientX - r.left - L) / (r.width - L - R) * +$('rangeS').value; touchF = f > 0 ? f : null; }
+  sp.addEventListener('pointerdown', touch); sp.addEventListener('pointermove', function (e) { if (e.buttons || e.pointerType === 'touch') touch(e); });
+  $('pauseB').addEventListener('click', function () { paused = !paused; this.textContent = paused ? '다시 움직이기' : '화면 멈춤'; });
+  $('holdB').addEventListener('click', function () { if (cur) { held = cur.f; $('hd').textContent = held >= 1000 ? (held / 1000).toFixed(3) + ' kHz' : held.toFixed(1) + ' Hz'; } });
+  $('rangeS').addEventListener('change', function () { img = null; });
+  $('saveB').addEventListener('click', function () {
+    if (!fbuf) return; var hz = sr / N, lines = ['진동수(Hz),세기(dB)'], n = Math.min(fbuf.length, Math.ceil(+$('rangeS').value / hz));
+    for (var i = 0; i < n; i++) lines.push((i * hz).toFixed(2) + ',' + fbuf[i].toFixed(2));
+    var d = new Date(), z = function (v) { return (v < 10 ? '0' : '') + v; }, name = 'spectrum_' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + '.csv';
+    var url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    $('res').textContent = name + ' 파일(지금 화면의 스펙트럼)을 저장했어요.';
+  });
+})();
+</script>
+</body>
+</html>

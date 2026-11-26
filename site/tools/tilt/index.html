@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>기울기 측정</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;height:280px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .seg{display:flex;gap:6px}.seg button{flex:1}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .big{font-size:44px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0 0}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  .warn{background:#fff6e5;border:1px solid #f0d49a;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;margin-bottom:12px}
+  .hide{display:none!important}
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>기울기 측정</h1>
+  <p class="hint">가속도 센서로 중력의 방향을 재서, 휴대폰이 수평면에서 몇 도 기울어졌는지 알려 줘요. 빗면의 경사각을 재는 각도기로 쓸 수 있어요.</p>
+
+  <div class="card" id="startCard">
+    <button class="b primary" id="startB" style="width:100%">센서 사용 허용하고 시작</button>
+    <p class="note">아이폰과 아이패드는 이 버튼을 누른 뒤 나오는 창에서 <b>허용</b>을 눌러야 센서를 쓸 수 있어요.</p>
+  </div>
+  <div class="warn hide" id="denied"><b>센서 사용이 허용되지 않았어요.</b> 사파리를 완전히 종료한 뒤 다시 열고, 시작 버튼을 눌러 <b>허용</b>을 눌러 주세요. 카카오톡 등 다른 앱 안에서 열었다면 사파리나 크롬에서 다시 열어 주세요.</div>
+  <div class="warn hide" id="nosensor"><b>센서의 값을 받지 못했어요.</b> 컴퓨터에는 대부분 센서가 없어요. 휴대폰이나 태블릿에서 열어 주세요.</div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <div class="seg" id="modeS"></div>
+      <div class="big" id="ang">–</div>
+      <canvas id="cv"></canvas>
+      <div class="stats">
+        <div class="stat"><div class="k" id="k1">앞뒤 기울기</div><div class="val" id="v1">–</div></div>
+        <div class="stat"><div class="k" id="k2">좌우 기울기</div><div class="val" id="v2">–</div></div>
+        <div class="stat"><div class="k">고정한 값</div><div class="val" id="hv">–</div></div>
+      </div>
+      <div class="row">
+        <button class="b" id="holdB">지금 값 고정</button>
+        <button class="b" id="zeroB">영점 맞추기</button>
+        <button class="b" id="unzeroB">영점 되돌리기</button>
+      </div>
+      <p class="note" id="how"></p>
+    </div>
+    <div class="card">
+      <p class="note" style="margin-top:0">원리: 가만히 있는 휴대폰의 가속도 센서는 중력과 반대 방향(위쪽)으로 9.8 m/s²를 가리켜요. 이 방향이 화면에 대해 얼마나 기울었는지로 각도를 계산해요(가속하는 중에는 정확하지 않아요).</p>
+      <p class="note">활용 예: 빗면의 경사각 재기, 마찰각(물체가 미끄러지기 시작하는 각도) 측정, 경사각과 가속도(g sinθ) 비교, 책상이 수평인지 확인하기.</p>
+      <p class="note">‘영점 맞추기’: 휴대폰 케이스나 카메라 때문에 바닥에 놓아도 0°가 아닐 때, 수평인 곳에 놓고 누르면 그 상태를 0°로 삼아요.</p>
+    </div>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var g = { x: 0, y: 0, z: 0 }, got = false, mode = 'flat', zero = { flat: [0, 0], edge: 0 }, held = null;
+  var DEG = 180 / Math.PI;
+  [['flat', '눕혀서 재기'], ['edge', '세워서 재기']].forEach(function (m) { var b = document.createElement('button'); b.className = 'b' + (m[0] === mode ? ' on' : ''); b.type = 'button'; b.textContent = m[1];
+    b.addEventListener('click', function () { mode = m[0]; $('modeS').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); held = null; $('hv').textContent = '–'; }); $('modeS').appendChild(b); });
+  function onMotion(e) {
+    var a = e.accelerationIncludingGravity; if (!a || a.x == null) return; var k = isIOS ? -1 : 1;
+    if (!got) { got = true; $('nosensor').classList.add('hide'); }
+    var f = 0.15; g.x += (a.x * k - g.x) * f; g.y += (a.y * k - g.y) * f; g.z += (a.z * k - g.z) * f;   // 손떨림을 줄이려고 조금 평균
+  }
+  function begin() { $('startCard').classList.add('hide'); $('main').classList.remove('hide'); window.addEventListener('devicemotion', onMotion); fit(); requestAnimationFrame(draw); setTimeout(function () { if (!got) $('nosensor').classList.remove('hide'); }, 2500); }
+  $('startB').addEventListener('click', function () {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
+      DeviceMotionEvent.requestPermission().then(function (r) { r === 'granted' ? begin() : $('denied').classList.remove('hide'); }).catch(function () { $('denied').classList.remove('hide'); });
+    else begin();
+  });
+  // flat: 화면이 위를 보게 눕혔을 때. 앞뒤(pitch) = 위쪽 가장자리가 올라간 각, 좌우(roll), 전체 기울기 = 화면과 수평면 사이의 각
+  // edge: 휴대폰을 세워 긴 옆면(또는 아랫면)을 빗면에 댈 때. 화면 안에서 '아래쪽'이 중력과 이루는 각
+  function vals() {
+    var m = Math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z) || 1;
+    if (mode === 'flat') { var p = Math.atan2(g.y, Math.sqrt(g.x * g.x + g.z * g.z)) * DEG - zero.flat[0], r = Math.atan2(-g.x, Math.sqrt(g.y * g.y + g.z * g.z)) * DEG - zero.flat[1];
+      var tot = Math.acos(Math.max(-1, Math.min(1, Math.cos(p / DEG) * Math.cos(r / DEG)))) * DEG; return { main: tot, a: p, b: r }; }
+    // 가로로 세워 긴 옆면을 대면 atan2 값이 ±90°. 그 차이가 빗면의 경사각(0~90°)
+    var raw = Math.atan2(g.x, g.y) * DEG, sl = Math.abs(Math.abs(raw) - 90) - zero.edge, sgn = (Math.abs(raw) - 90) * raw >= 0 ? 1 : -1, e = sgn * sl, ae = Math.abs(sl);
+    var flat = Math.asin(Math.max(-1, Math.min(1, g.z / m))) * DEG; return { main: ae, a: e, b: flat };
+  }
+  $('zeroB').addEventListener('click', function () { var m = Math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z) || 1;
+    if (mode === 'flat') zero.flat = [Math.atan2(g.y, Math.sqrt(g.x * g.x + g.z * g.z)) * DEG, Math.atan2(-g.x, Math.sqrt(g.y * g.y + g.z * g.z)) * DEG]; else zero.edge = Math.abs(Math.abs(Math.atan2(g.x, g.y) * DEG) - 90); });
+  $('unzeroB').addEventListener('click', function () { zero = { flat: [0, 0], edge: 0 }; });
+  $('holdB').addEventListener('click', function () { held = vals().main; $('hv').textContent = held.toFixed(1) + '°'; });
+  var cv = $('cv'), ctx, W, H;
+  function fit() { var d = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = W * d; cv.height = H * d; ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); }
+  window.addEventListener('resize', function () { if (ctx) fit(); });
+  function draw() {
+    requestAnimationFrame(draw); if (!ctx || !got) return; var v = vals(), f1 = function (x) { return (x >= 0 ? '' : '−') + Math.abs(x).toFixed(1) + '°'; };
+    $('ang').textContent = v.main.toFixed(1) + '°'; ctx.clearRect(0, 0, W, H); var cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.42;
+    if (mode === 'flat') {
+      $('k1').textContent = '앞뒤 기울기'; $('k2').textContent = '좌우 기울기'; $('v1').textContent = f1(v.a); $('v2').textContent = f1(v.b);
+      $('how').textContent = '화면이 위를 보게 휴대폰을 빗면 위에 올려놓으세요. 큰 숫자가 빗면의 경사각이에요. 가운데 원 안에 거품이 들어오면 수평이에요.';
+      ctx.fillStyle = '#eef3fb'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill(); ctx.strokeStyle = '#c3cbd8';
+      [R, R * 2 / 3, R / 3].forEach(function (r) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); });
+      ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+      ctx.fillStyle = '#5b6475'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('10°', cx + R / 3 + 2, cy - 3); ctx.fillText('20°', cx + R * 2 / 3 + 2, cy - 3); ctx.fillText('30°', cx + R + 2 > W - 20 ? cx + R - 22 : cx + R + 2, cy - 3);
+      var bx = cx - Math.max(-30, Math.min(30, v.b)) / 30 * R, by = cy + Math.max(-30, Math.min(30, v.a)) / 30 * R; var ok = v.main < 1;
+      ctx.fillStyle = ok ? 'rgba(46,158,106,.85)' : 'rgba(47,111,223,.85)'; ctx.beginPath(); ctx.arc(bx, by, 16, 0, 7); ctx.fill();
+      ctx.strokeStyle = ok ? '#2e9e6a' : '#9aa3b2'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 19, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
+    } else {
+      $('k1').textContent = '회전각'; $('k2').textContent = '화면 기울기'; $('v1').textContent = f1(v.a); $('v2').textContent = f1(v.b);
+      $('how').textContent = '휴대폰을 가로로 세워서 긴 옆면을 빗면에 대세요(화면이 옆을 보게, 빗면과 수직으로). ‘화면 기울기’가 0°에 가까울수록 정확해요.';
+      var th = v.a / DEG * (v.a === 0 ? 1 : 1), L = R * 1.1; ctx.save(); ctx.translate(cx, cy + R * 0.3);
+      ctx.strokeStyle = '#c3cbd8'; ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L, 0); ctx.stroke();
+      ctx.save(); ctx.rotate(-th); ctx.fillStyle = '#e8eefb'; ctx.strokeStyle = '#2f6fdf'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L, 0); ctx.stroke(); ctx.restore();
+      ctx.strokeStyle = '#d64541'; ctx.lineWidth = 2; ctx.beginPath(); var a = Math.abs(th); ctx.arc(0, 0, R * 0.5, th > 0 ? -a : Math.PI, th > 0 ? 0 : Math.PI + a); ctx.stroke();
+      ctx.fillStyle = '#d64541'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(v.main.toFixed(1) + '°', th > 0 ? R * 0.68 : -R * 0.68, -10);
+      ctx.restore(); ctx.fillStyle = '#5b6475'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('회색: 수평선, 파란색: 휴대폰 옆면', 6, H - 6);
+    }
+  }
+})();
+</script>
+</body>
+</html>

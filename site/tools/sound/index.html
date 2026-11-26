@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>소리 세기와 음향 스톱워치</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  h2{font-size:16px;margin:0 0 8px}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;height:200px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b,select{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  button.b.stop{background:#d64541;color:#fff;border-color:#d64541;font-weight:700}
+  .big{font-size:40px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+  .state{text-align:center;font-weight:700;margin:4px 0 0}
+  input[type=range]{flex:1;min-width:140px}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;font-variant-numeric:tabular-nums}
+  td,th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:right}th{color:var(--sub);font-weight:600}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  .warn{background:#fff6e5;border:1px solid #f0d49a;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;margin-bottom:12px}
+  .hide{display:none!important}
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>소리 세기와 음향 스톱워치</h1>
+  <p class="hint">마이크로 소리의 세기를 그래프로 보고, 큰 소리(박수, 물체가 부딪히는 소리)가 날 때 저절로 시작·정지하는 스톱워치로 짧은 시간을 정확하게 재요.</p>
+
+  <div class="card" id="startCard">
+    <button class="b primary" id="startB" style="width:100%">마이크 사용 허용하고 시작</button>
+    <p class="note">나오는 창에서 <b>허용</b>을 누르세요. 소리는 기기 안에서만 분석하고 어디에도 저장하거나 보내지 않아요.</p>
+  </div>
+  <div class="warn hide" id="denied"><b>마이크를 쓸 수 없어요.</b> 브라우저 설정에서 마이크를 허용한 뒤 새로 고침해 주세요. 카카오톡 등 다른 앱 안에서 열었다면 사파리나 크롬에서 다시 열어 주세요.</div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <h2>소리 세기</h2>
+      <div class="big"><span id="lv">–</span> <span style="font-size:18px">dB</span></div>
+      <canvas id="cv"></canvas>
+      <div class="row">
+        <span style="font-size:14px">시작·정지 기준</span>
+        <input type="range" id="thr" min="-60" max="-5" value="-25" aria-label="스톱워치 기준 세기">
+        <b id="thrT" style="min-width:64px;text-align:right">−25 dB</b>
+      </div>
+      <p class="note">빨간 점선이 기준이에요. 그래프가 이 선을 넘으면 ‘큰 소리’로 봐요. 주변이 시끄러우면 기준을 올리세요. dB 값은 이 기기 마이크의 최대 입력을 0으로 한 상대값이라, 소음계의 dB와는 달라요.</p>
+    </div>
+
+    <div class="card">
+      <h2>음향 스톱워치</h2>
+      <div class="big" id="sw">0.000 s</div>
+      <p class="state" id="st">준비 버튼을 누르세요.</p>
+      <div class="row">
+        <button class="b primary" id="armB">준비</button>
+        <select id="gapS" aria-label="두 소리 사이 최소 간격"><option value="0.05">두 소리 간격 0.05초 이상</option><option value="0.1" selected>0.1초 이상</option><option value="0.3">0.3초 이상</option><option value="1">1초 이상</option></select>
+        <button class="b" id="clrB">기록 지우기</button>
+      </div>
+      <table><thead><tr><th style="text-align:left">회</th><th>시간 (s)</th><th>자유 낙하 높이 ½gt² (m)</th></tr></thead><tbody id="tb"></tbody></table>
+      <p class="note" id="avg"></p>
+      <p class="note">‘준비’를 누른 뒤 첫 번째 큰 소리에서 시작하고, 두 번째 큰 소리에서 멈춰요. 같은 소리의 울림 때문에 바로 멈추지 않도록 ‘두 소리 간격’ 안의 소리는 무시해요.</p>
+    </div>
+    <div class="card">
+      <p class="note" style="margin-top:0">활용 예: 공을 놓는 순간 손뼉을 치고 바닥에 닿는 소리까지 재서 자유 낙하 시간 구하기, 공이 바닥에서 여러 번 튈 때 튀는 간격(반발 계수), 진자가 벽에 부딪히는 주기, 두 사람이 멀리 떨어져 소리의 왕복 시간으로 음속 재기.</p>
+    </div>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var ac, proc, sr, hist = [], cur = -100, quiet = false, state = 'idle', tStart = 0, tLast = 0, runs = [], clock = 0;
+  // 오디오 처리 단위(256개 표본)마다 세기와 '큰 소리 시각'을 판단해서, 화면 갱신 간격(약 16 ms)보다 정확한 시각을 얻는다.
+  $('startB').addEventListener('click', function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('denied').classList.remove('hide'); return; }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (stm) {
+      var C = window.AudioContext || window.webkitAudioContext; ac = new C(); sr = ac.sampleRate;
+      var src = ac.createMediaStreamSource(stm); proc = ac.createScriptProcessor(256, 1, 1); var mute = ac.createGain(); mute.gain.value = 0;
+      src.connect(proc); proc.connect(mute); mute.connect(ac.destination);
+      proc.onaudioprocess = onAudio;
+      $('startCard').classList.add('hide'); $('main').classList.remove('hide'); fit(); requestAnimationFrame(draw);
+    }).catch(function () { $('denied').classList.remove('hide'); });
+  });
+  function onAudio(e) {
+    var d = e.inputBuffer.getChannelData(0), n = d.length, t0 = e.playbackTime || ac.currentTime, thr = Math.pow(10, +$('thr').value / 20), sum = 0, hitAt = -1, gap = +$('gapS').value;
+    for (var i = 0; i < n; i++) { var v = d[i]; sum += v * v; if (hitAt < 0 && Math.abs(v) > thr) hitAt = i; }
+    var rms = Math.sqrt(sum / n), db = 20 * Math.log10(rms + 1e-9), pk = 0; for (var i = 0; i < n; i++) pk = Math.max(pk, Math.abs(d[i]));
+    var pdb = 20 * Math.log10(pk + 1e-9); clock = t0 + n / sr;
+    hist.push({ t: t0, db: Math.max(-100, pdb) }); while (hist.length && hist[0].t < clock - 6) hist.shift(); cur = db;
+    // 첫 소리가 잦아든 뒤(기준의 절반 아래로 내려간 뒤)에 다시 커져야 두 번째 소리로 본다. 길게 울리는 소리 하나로 멈추지 않게.
+    if (state === 'run' && pk < thr / 2 && t0 - tStart >= 0.02) quiet = true;
+    if (hitAt >= 0 && (state === 'armed' || state === 'run')) {
+      var t = t0 + hitAt / sr;
+      if (state === 'armed') { state = 'run'; tStart = t; tLast = t; quiet = false; }
+      else if (quiet && t - tStart >= gap) { state = 'done'; runs.push(t - tStart); tLast = t; setTimeout(showRuns, 0); }
+    }
+  }
+  function showRuns() {
+    var tb = $('tb'); tb.innerHTML = '';
+    runs.forEach(function (t, i) { var tr = document.createElement('tr'); tr.innerHTML = '<td style="text-align:left">' + (i + 1) + '</td><td>' + t.toFixed(3) + '</td><td>' + (0.5 * 9.8 * t * t).toFixed(3) + '</td>'; tb.appendChild(tr); });
+    if (runs.length > 1) { var m = runs.reduce(function (a, b) { return a + b; }, 0) / runs.length; $('avg').textContent = '평균 ' + m.toFixed(3) + ' s (' + runs.length + '회)'; } else $('avg').textContent = '';
+    $('armB').textContent = '다시 준비'; $('armB').className = 'b primary';
+  }
+  $('armB').addEventListener('click', function () { if (state === 'armed' || state === 'run') { state = 'idle'; this.textContent = '준비'; this.className = 'b primary'; return; } state = 'armed'; this.textContent = '취소'; this.className = 'b stop'; });
+  $('clrB').addEventListener('click', function () { runs = []; showRuns(); $('armB').textContent = '준비'; });
+  $('thr').addEventListener('input', function () { $('thrT').textContent = String(this.value).replace('-', '−') + ' dB'; });
+  var cv = $('cv'), ctx, W, H;
+  function fit() { var dp = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dp; cv.height = H * dp; ctx = cv.getContext('2d'); ctx.setTransform(dp, 0, 0, dp, 0, 0); }
+  window.addEventListener('resize', function () { if (ctx) fit(); });
+  function draw() {
+    requestAnimationFrame(draw); if (!ctx) return;
+    var rec = hist.filter(function (h) { return h.t > clock - 0.3; }).reduce(function (m, h) { return Math.max(m, h.db); }, -100); $('lv').textContent = rec > -99 ? rec.toFixed(0).replace('-', '−') : '–';
+    var now = ac.currentTime;
+    $('sw').textContent = (state === 'run' ? Math.max(0, now - tStart) : state === 'done' ? runs[runs.length - 1] : 0).toFixed(3) + ' s';
+    $('st').textContent = state === 'armed' ? '첫 번째 큰 소리를 기다려요…' : state === 'run' ? '재는 중… 두 번째 큰 소리에서 멈춰요.' : state === 'done' ? '측정 완료!' : '준비 버튼을 누르세요.';
+    $('st').style.color = state === 'armed' ? '#d68a00' : state === 'run' ? '#d64541' : state === 'done' ? '#2e9e6a' : '#5b6475';
+    var L = 40, R = 8, T = 8, B = 20, pw = W - L - R, ph = H - T - B, yy = function (db) { return T + (-db) / 80 * ph; }, xx = function (t) { return L + (t - (clock - 5)) / 5 * pw; };
+    ctx.clearRect(0, 0, W, H); ctx.font = '11px sans-serif'; ctx.fillStyle = '#5b6475'; ctx.strokeStyle = '#eef0f4'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (var db = 0; db >= -80; db -= 20) { var y = yy(db); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillText(String(db).replace('-', '−'), L - 4, y); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (var s = 0; s <= 5; s++) ctx.fillText((s - 5) + ' s', L + s / 5 * pw, T + ph + 4);
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip(); ctx.strokeStyle = '#2f6fdf'; ctx.lineWidth = 1.2; ctx.beginPath();
+    hist.forEach(function (p, i) { var x = xx(p.t), y = yy(Math.max(-80, p.db)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    var ty = yy(+$('thr').value); ctx.strokeStyle = '#d64541'; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L, ty); ctx.lineTo(L + pw, ty); ctx.stroke(); ctx.setLineDash([]);
+    if (state === 'run' || state === 'done') { ctx.fillStyle = 'rgba(214,69,65,.12)'; var a = xx(tStart), b = xx(state === 'run' ? now : tLast); ctx.fillRect(a, T, Math.max(2, b - a), ph); }
+    ctx.restore();
+  }
+})();
+</script>
+</body>
+</html>

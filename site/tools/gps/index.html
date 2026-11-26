@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>GPS 속력과 이동 거리</title>
+<style>
+  :root{ --bg:#f4f6f9; --panel:#fff; --ink:#1d2330; --sub:#5b6475; --line:#d9dde4; --accent:#2f6fdf; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px}
+  .back{display:inline-block;color:var(--accent);text-decoration:none;font-size:15px;padding:6px 0}
+  h1{font-size:22px;margin:4px 0}
+  .hint{color:var(--sub);font-size:14px;margin:0 0 12px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  canvas{display:block;width:100%;height:220px}
+  #map{height:260px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  button.b{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button.b.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  button.b.stop{background:#d64541;color:#fff;border-color:#d64541;font-weight:700}
+  button.b:disabled{opacity:.45}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .stat .k{font-size:12px;color:var(--sub)}
+  .stat .val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+  .note{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.55}
+  .warn{background:#fff6e5;border:1px solid #f0d49a;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;margin-bottom:12px}
+  .hide{display:none!important}
+  .copy{color:#5b6475;font-size:12px;text-align:center;margin:20px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../#tools">← 처음으로</a>
+  <h1>GPS 속력과 이동 거리</h1>
+  <p class="hint">GPS로 위치를 받아 지금의 속력, 이동 거리, 걸린 시간을 재고 속력-시간 그래프와 이동 경로를 그려요. 실외에서 써야 정확해요.</p>
+
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <button class="b primary" id="recB" style="flex:1">측정 시작</button>
+      <button class="b" id="saveB" disabled>CSV로 저장</button>
+    </div>
+    <p class="note" id="info">‘측정 시작’을 누르고, 위치 사용을 묻는 창에서 <b>허용</b>을 누르세요. 위치는 이 기기 화면에만 쓰고 어디에도 보내지 않아요.</p>
+  </div>
+  <div class="warn hide" id="denied"><b>위치를 받을 수 없어요.</b> 휴대폰 설정에서 위치 서비스를 켜고, 브라우저(사파리·크롬)에 위치 권한을 허용해 주세요(정확한 위치 켜기). 카카오톡 등 다른 앱 안에서 열었다면 사파리나 크롬에서 다시 열어 주세요.</div>
+
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="k">속력 (m/s)</div><div class="val" id="v1">–</div></div>
+      <div class="stat"><div class="k">속력 (km/h)</div><div class="val" id="v2">–</div></div>
+      <div class="stat"><div class="k">걸린 시간</div><div class="val" id="v3">–</div></div>
+      <div class="stat"><div class="k">이동 거리 (m)</div><div class="val" id="v4">–</div></div>
+      <div class="stat"><div class="k">평균 속력 (m/s)</div><div class="val" id="v5">–</div></div>
+      <div class="stat"><div class="k">위치 오차 (m)</div><div class="val" id="v6">–</div></div>
+    </div>
+    <canvas id="vt" style="margin-top:10px"></canvas>
+    <p class="note">속력-시간 그래프. 아래 넓이가 이동 거리예요.</p>
+  </div>
+  <div class="card">
+    <canvas id="map"></canvas>
+    <p class="note" id="mapInfo">이동 경로 (위쪽이 북쪽). 출발점은 초록, 지금 위치는 빨간 점이에요.</p>
+  </div>
+  <div class="card">
+    <p class="note" style="margin-top:0">활용 예: 걷기·달리기·자전거의 평균 속력, 버스나 지하철 밖 구간의 가속과 감속(속력-시간 그래프의 기울기 = 가속도), 운동장 한 바퀴의 거리 재기.</p>
+    <p class="note">GPS는 1초에 한 번쯤 위치를 주고, 오차가 보통 3~10 m예요. 건물 안이나 높은 건물 사이에서는 오차가 커지므로, 오차가 25 m보다 큰 위치는 거리 계산에서 빼요. 측정하는 동안 화면을 켜 두세요(꺼지면 측정이 멈출 수 있어요).</p>
+  </div>
+  <p class="copy">© 2026 이정태. All Rights Reserved.</p>
+</div>
+<script>
+(function(){
+  var $ = function (id) { return document.getElementById(id); };
+  var wid = null, pts = [], dist = 0, t0 = 0, last = null, lock = null, timer = null, R = 6371000;
+  function hav(a, b) { var r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r, s = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) * Math.sin(dn / 2); return 2 * R * Math.asin(Math.sqrt(s)); }
+  function mmss(s) { s = Math.max(0, Math.round(s)); var m = Math.floor(s / 60); return m + ':' + ('0' + s % 60).slice(-2); }
+  function onPos(p) {
+    var c = p.coords, t = p.timestamp / 1000; if (!t0) t0 = t;
+    var q = { t: t - t0, lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, v: c.speed };
+    if (last && q.acc <= 25 && last.acc <= 25) { var d = hav(last, q); if (d > Math.max(1, q.acc * 0.3)) { dist += d; q.dd = d; } else { q = Object.assign({}, q); q.lat = last.lat; q.lon = last.lon; } }
+    if (q.v == null || isNaN(q.v)) q.v = last && q.dd && q.t > last.t ? q.dd / (q.t - last.t) : (last ? 0 : 0);   // 기기가 속력을 주지 않으면 위치 변화로 계산
+    q.dist = dist; pts.push(q); if (!last || q.acc <= 25) last = q;
+    $('v1').textContent = q.v.toFixed(1); $('v2').textContent = (q.v * 3.6).toFixed(1); $('v4').textContent = dist.toFixed(0); $('v6').textContent = '±' + Math.round(q.acc);
+    $('v5').textContent = q.t > 0 ? (dist / q.t).toFixed(2) : '–'; $('saveB').disabled = pts.length < 2;
+    $('info').textContent = '측정 중 · 받은 위치 ' + pts.length + '개' + (q.acc > 25 ? ' · 위치 오차가 커요. 실외로 나가 하늘이 트인 곳에서 써 보세요.' : '');
+    draw();
+  }
+  function onErr(e) { if (e.code === 1) { $('denied').classList.remove('hide'); stop(); } else $('info').textContent = '위치를 받는 중이에요… (실내에서는 오래 걸리거나 받지 못할 수 있어요)'; }
+  function start() {
+    if (!navigator.geolocation) { $('denied').classList.remove('hide'); return; }
+    pts = []; dist = 0; t0 = 0; last = null; $('denied').classList.add('hide');
+    wid = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+    $('recB').textContent = '측정 정지'; $('recB').className = 'b stop'; $('info').textContent = '위치를 받는 중이에요…';
+    timer = setInterval(function () { if (t0) $('v3').textContent = mmss(Date.now() / 1000 - t0); }, 500);
+    if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(function (l) { lock = l; }).catch(function () {});
+  }
+  function stop() {
+    if (wid != null) navigator.geolocation.clearWatch(wid); wid = null; clearInterval(timer);
+    $('recB').textContent = '측정 시작'; $('recB').className = 'b primary'; if (lock) { try { lock.release(); } catch (e) {} lock = null; }
+    if (pts.length) { var T = pts[pts.length - 1].t; $('v3').textContent = mmss(T); $('info').textContent = '측정을 마쳤어요. ' + mmss(T) + ' 동안 ' + dist.toFixed(0) + ' m, 평균 ' + (T ? (dist / T).toFixed(2) : '–') + ' m/s. ‘측정 시작’을 누르면 새로 재요.'; }
+  }
+  $('recB').addEventListener('click', function () { wid == null ? start() : stop(); });
+  $('saveB').addEventListener('click', function () {
+    var lines = ['시간(s),위도,경도,속력(m/s),누적 거리(m),위치 오차(m),고도(m)'];
+    pts.forEach(function (p) { lines.push(p.t.toFixed(1) + ',' + p.lat.toFixed(6) + ',' + p.lon.toFixed(6) + ',' + p.v.toFixed(2) + ',' + p.dist.toFixed(1) + ',' + Math.round(p.acc) + ',' + (p.alt == null ? '' : p.alt.toFixed(1))); });
+    var d = new Date(), z = function (v) { return (v < 10 ? '0' : '') + v; }, name = 'gps_' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()) + '.csv';
+    var url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    $('info').textContent = name + ' 파일을 저장했어요. 위도·경도가 들어 있으니 다른 사람에게 보낼 때는 조심하세요.';
+  });
+  function cvs(id) { var c = $(id), d = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight; c.width = W * d; c.height = H * d; var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { x: x, W: W, H: H }; }
+  function nice(v) { var p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 5, 10].map(function (k) { return k * p; }).filter(function (k) { return k >= v; })[0]; }
+  function draw() {
+    var g = cvs('vt'), c = g.x, W = g.W, H = g.H, L = 38, Rr = 8, T = 8, B = 22, pw = W - L - Rr, ph = H - T - B;
+    var tm = Math.max(10, pts.length ? pts[pts.length - 1].t : 10), vm = nice(Math.max(2, Math.max.apply(null, pts.map(function (p) { return p.v; }).concat([0])) * 1.1));
+    c.font = '11px sans-serif'; c.fillStyle = '#5b6475'; c.strokeStyle = '#eef0f4'; c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (var i = 0; i <= 4; i++) { var v = vm * i / 4, y = T + ph - v / vm * ph; c.beginPath(); c.moveTo(L, y); c.lineTo(L + pw, y); c.stroke(); c.fillText(+v.toFixed(2), L - 4, y); }
+    c.textAlign = 'center'; c.textBaseline = 'top'; var st = nice(tm / 5); for (var s = 0; s <= tm; s += st) { var x = L + s / tm * pw; c.fillText(s, x, T + ph + 4); }
+    c.textAlign = 'right'; c.fillText('s', W - 2, T + ph + 4); c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText('m/s', L + 4, T + 2);
+    c.strokeStyle = '#2f6fdf'; c.lineWidth = 1.8; c.beginPath(); pts.forEach(function (p, i) { var x = L + p.t / tm * pw, y = T + ph - p.v / vm * ph; i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+    // 경로: 출발점 기준 동서(x), 남북(y) 미터
+    var m = cvs('map'), mc = m.x, MW = m.W, MH = m.H, good = pts.filter(function (p) { return p.acc <= 25; });
+    mc.fillStyle = '#f7f9fc'; mc.fillRect(0, 0, MW, MH); if (!good.length) return;
+    var o = good[0], k = Math.PI / 180, xy = good.map(function (p) { return [(p.lon - o.lon) * k * R * Math.cos(o.lat * k), (p.lat - o.lat) * k * R]; });
+    var ext = 20; xy.forEach(function (q) { ext = Math.max(ext, Math.abs(q[0]), Math.abs(q[1])); }); ext = nice(ext * 1.15); var sc = Math.min(MW, MH) / 2 / ext, cx = MW / 2, cy = MH / 2;
+    mc.strokeStyle = '#e3e7ee'; mc.beginPath(); mc.moveTo(0, cy); mc.lineTo(MW, cy); mc.moveTo(cx, 0); mc.lineTo(cx, MH); mc.stroke();
+    mc.strokeStyle = '#2f6fdf'; mc.lineWidth = 2.5; mc.lineJoin = 'round'; mc.beginPath(); xy.forEach(function (q, i) { var x = cx + q[0] * sc, y = cy - q[1] * sc; i ? mc.lineTo(x, y) : mc.moveTo(x, y); }); mc.stroke();
+    var e = xy[xy.length - 1]; mc.fillStyle = '#2e9e6a'; mc.beginPath(); mc.arc(cx, cy, 6, 0, 7); mc.fill(); mc.fillStyle = '#d64541'; mc.beginPath(); mc.arc(cx + e[0] * sc, cy - e[1] * sc, 6, 0, 7); mc.fill();
+    mc.fillStyle = '#5b6475'; mc.font = '11px sans-serif'; mc.textAlign = 'left'; mc.fillText('N ↑', 6, 14); mc.textAlign = 'right'; mc.fillText('가로·세로 끝까지 ' + ext + ' m', MW - 6, MH - 6);
+    var dx = e[0], dy = e[1]; $('mapInfo').textContent = '이동 경로 (위쪽이 북쪽). 출발점(초록)에서 지금 위치(빨강)까지 직선거리, 곧 변위의 크기는 ' + Math.sqrt(dx * dx + dy * dy).toFixed(0) + ' m예요. 이동 거리와 비교해 보세요.';
+  }
+  window.addEventListener('resize', draw); draw();
+})();
+</script>
+</body>
+</html>
