@@ -37,7 +37,9 @@ function seal(plain) {   // 내용이 같으면 결과도 같도록 iv를 내용
 }
 const subject = (sub, year) => (year >= 2021 ? '물리학' : '물리') + (sub === 'p1' ? 'Ⅰ' : 'Ⅱ');
 // 학력평가(교육청, 4·5·7·10월): "2025학년도 10월 학력평가(2024년 10월 시행)"
-const exam_name = (mm, year) => ({ '06': '6월 모의평가', '09': '9월 모의평가', '11': '수능' })[mm] || `${+mm}월 학력평가(${year - 1}년 ${+mm}월 시행)`;
+// 파일 이름의 달과 문제지의 달이 다른 회차(4월 시험을 5월에 치르는 등): 문제지에 적힌 이름과 실제 시행 달
+const EXAM_FIX = { 'p2_2021_05': [4, 5], 'p2_2024_05': [4, 4] };
+const exam_name = (mm, year, exam) => ({ '06': '6월 모의평가', '09': '9월 모의평가', '11': '수능' })[mm] || (([a, b]) => `${a}월 학력평가(${year - 1}년 ${b}월 시행)`)(EXAM_FIX[exam] || [+mm, +mm]);
 function open_(buf) { const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12)); d.setAuthTag(buf.subarray(buf.length - 16)); return Buffer.concat([d.update(buf.subarray(12, buf.length - 16)), d.final()]); }
 // 이미 올라가 있는 문항: 원본 그림(cut 폴더)이 없는 회차는 암호화된 파일과 정답을 그대로 다시 쓴다(기존 문항은 바뀌지 않음).
 // 동시에 수업 코드 확인: 지금 코드로 기존 목록이 열리지 않으면 멈춘다(다른 코드로 전부 다시 잠그는 사고 방지).
@@ -71,7 +73,7 @@ for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}_\d{2}$/.test(k)).s
       if (!fs.existsSync(file) || !fs.readFileSync(file).equals(buf)) fs.writeFileSync(file, buf);
     }
     wanted.add(id + '.bin');
-    const item = { id, src: `${year}학년도 ${exam_name(mm, year)} ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
+    const item = { id, src: `${year}학년도 ${exam_name(mm, year, exam)} ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
     const cc = CODES[id] || {}, c = cc.new, unit = c && unitOf(c);
     if (!unit || !U.codes[c]) { console.error('성취기준이 없습니다(classify.py를 먼저 실행하세요): ' + id); process.exit(1); }
     Object.assign(item, { c, t: cc.topic || '', e: cc.era || '', o: cc.old || '', p: cc['배점'], r: cc['정답률'] });

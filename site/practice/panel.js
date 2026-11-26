@@ -140,7 +140,7 @@
         ch.dataset.done = '1'; var ok = picked === it.a; mark(it.id, ok); if (num) setTag(ok);
         btns.forEach(function (x, k) { x.classList.remove('on'); if (k + 1 === it.a) x.classList.add('ok'); else if (k + 1 === picked) x.classList.add('no'); });
         res.textContent = ok ? '정답입니다.' : '정답은 ' + marks[it.a - 1] + '입니다.'; res.style.color = ok ? '#2e9e6a' : '#d64541';
-        if (data && data.e.size) { exp.appendChild(el('b', '', '해설 (EBS)')); exp.appendChild(pic(data.e, '해설')); exp.style.display = 'block'; }
+        if (data && data.e.size) { exp.appendChild(el('b', '', /_(0[3457]|10)_\d\d$/.test(it.id) ? '해설 (교육청)' : '해설 (EBS)')); exp.appendChild(pic(data.e, '해설')); exp.style.display = 'block'; }
         chk.disabled = true; });
       wrap.appendChild(res); wrap.appendChild(exp); wrap.appendChild(row);
       return { el: wrap, row: row };
@@ -188,7 +188,7 @@
       var out = el('a', 'pq-link', '수업 코드 지우기'); out.href = '#';
       out.addEventListener('click', function (e) { e.preventDefault(); setCode(''); keyP = {}; key = null; all = list = null; cache = {}; freeUrls(); start(); });
       function tail() {
-        box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제의 저작권은 한국교육과정평가원에, 해설의 저작권은 EBS에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
+        box.appendChild(el('p', 'pq-copy', '학습 기록은 이 기기의 이 브라우저에만 저장돼요. 다른 기기에서는 보이지 않고, 인터넷 사용 기록을 지우면 함께 지워져요.')); box.appendChild(el('p', 'pq-copy', '문제와 해설의 저작권은 한국교육과정평가원과 EBS, 해당 시·도 교육청에 있습니다. 수업을 듣는 학생의 학습을 위해서만 제공하므로 다른 곳에 올리거나 나누어 주지 마세요.'));
       }
       if (!it) { box.appendChild(el('p', 'pq-load', !sc.length ? '이 조건에 맞는 문제가 없어요. 난이도나 주제를 바꿔 보세요.' : mode === 'wrong' ? '틀린 문제가 없어요.' : '안 푼 문제가 없어요. 모두 풀었어요!')); return; }
       if (view === 'all') {
