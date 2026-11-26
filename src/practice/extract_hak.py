@@ -1,6 +1,7 @@
 # 학력평가(교육청) 물리Ⅱ 문제지·해설 PDF에서 문항별 그림을 잘라냅니다.
 # 사용: python3 src/practice/extract_hak.py <원본 폴더> <출력 폴더> [회차 ...]
 #   원본 폴더: p2/d1(문제) p2/d2(정답, pdf·png·jpg) p2/d3(해설). 파일 이름은 p2_2025_10.pdf 형식(학년도_월).
+#   물리Ⅰ은 SUB=p1 python3 … (원본 폴더 p1/d1·d2·d3)
 #   출력 폴더: p2_<학년도>_<월>/q01.webp, e01.webp, info.json
 # extract.py와 다른 점
 #   - 글자가 없는 쪽(스캔)은 tesseract(kor+eng)로 글자 위치를 읽는다. 결과는 <출력 폴더>/_ocr 에 저장해 다시 쓰지 않는다.
@@ -14,6 +15,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from extract import trim, strip_footer, render, save, CIRC, DPI
 
 OCR_DIR = None
+SUB = os.environ.get('SUB', 'p2')
+RN = r'(Ⅱ|II|∥|棰)' if SUB == 'p2' else r'(Ⅰ|I(?!I)|ㅣ|ǀ)(?!\s*[IⅠ])'
+RW = ('Ⅱ', 'II', 'Ⅱ]') if SUB == 'p2' else ('Ⅰ', 'I', 'Ⅰ]', 'ㅣ')
 ALT = {'➀': '①', '➁': '②', '➂': '③', '➃': '④', '➄': '⑤'}
 
 def norm(s):
@@ -322,12 +326,12 @@ def answer_list_near(doc, name, seq):
     for pi in range(len(doc)):
         ws = page_words(doc, name, pi)
         for h in ws:
-            if not (re.search(r'물리\s*(학)?\s*(Ⅱ|II|∥)', h[4]) or (h[4] in ('Ⅱ', 'II', 'Ⅱ]') and any('물리' in v[4] and abs(v[1] - h[1]) < 6 and 0 < h[0] - v[0] < 70 for v in ws))): continue
+            if not (re.search(r'물리\s*(학)?\s*' + RN, h[4]) or (h[4] in RW and any('물리' in v[4] and abs(v[1] - h[1]) < 6 and 0 < h[0] - v[0] < 70 for v in ws))): continue
             box = [w for w in ws if h[0] - 160 < w[0] < h[0] + 320 and h[1] - 5 < w[1] < h[3] + 260]
             found = dict((int(n), CIRC.index(ch) + 1) for n, ch in re.findall(r'(?<!\d)(\d{1,2}) ?([①②③④⑤])', text_of(box)))
             if all(i in found for i in range(1, 21)): return [found[i] for i in range(1, 21)]
     ls = answer_lists(doc)
-    two = [l for l in ls if re.search(r'물리\s*학?[^가-힣]{0,6}(Ⅱ|II|∥|棰)[^가-힣]{0,3}(정답)?\s*$', l[2])]
+    two = [l for l in ls if re.search(r'물리\s*학?[^가-힣]{0,6}' + RN + r'[^가-힣]{0,3}(정답)?\s*$', l[2])]
     if two: return two[-1][3] if len(set(tuple(l[3]) for l in two)) == 1 else None
     # 과목 이름을 못 읽었으면: 묶음 1번과 같은 쪽이거나 그 앞 가장 가까운 목록
     before = [l for l in ls if l[0] <= seq[0][1] and not re.search(r'Ⅰ|I(?!I)', l[2])]
@@ -343,7 +347,7 @@ def cut_explanations(doc, name, outdir, qtexts):
         # 문제 글을 못 읽었으면 '물리Ⅱ' 머리가 앞에 있는 묶음을 고른다
         hd = 0
         ws = page_words(doc, name, seq[0][1])
-        if any(re.search(r'물리\s*(학)?\s*(Ⅱ|II|∥)', w[4]) and w[1] < seq[0][3] for w in ws): hd = 0.001
+        if any(re.search(r'물리\s*(학)?\s*' + RN, w[4]) and w[1] < seq[0][3] for w in ws): hd = 0.001
         if best is None or s + hd > best[0]: best = (s + hd, seq, regs, etexts)
     if not best: return 0, {}, {}, None, 0
     s, seq, regs, etexts = best
@@ -393,12 +397,12 @@ def head_year(doc, name):
 if __name__ == '__main__':
     src, out = sys.argv[1], sys.argv[2]; only = sys.argv[3:]
     OCR_DIR = os.path.join(out, '_ocr'); os.makedirs(OCR_DIR, exist_ok=True)
-    for q in sorted(glob.glob(f'{src}/p2/d1/*.pdf')):
+    for q in sorted(glob.glob(f'{src}/{SUB}/d1/*.pdf')):
         name = os.path.basename(q)[:-4]
         if only and name not in only and name[3:] not in only: continue
         od = os.path.join(out, name); os.makedirs(od, exist_ok=True)
-        qd = upright(pymupdf.open(q), 'q_' + name); ed = upright(pymupdf.open(f'{src}/p2/d3/{name}.pdf'), 'e_' + name)
-        af = (glob.glob(f'{src}/p2/d2/{name}.*') or [None])[0]
+        qd = upright(pymupdf.open(q), 'q_' + name); ed = upright(pymupdf.open(f'{src}/{SUB}/d3/{name}.pdf'), 'e_' + name)
+        af = (glob.glob(f'{src}/{SUB}/d2/{name}.*') or [None])[0]
         MARKS = json.load(open(os.path.join(os.path.dirname(__file__), 'marks_hak.json')))
         if 'q_' + name in MARKS: nq, texts = cut_manual(qd, 'q_' + name, MARKS['q_' + name], od, 'q')
         else: nq, texts = cut_questions(qd, 'q_' + name, od)
