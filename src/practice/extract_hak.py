@@ -16,7 +16,7 @@ from extract import trim, strip_footer, render, save, CIRC, DPI
 
 OCR_DIR = None
 SUB = os.environ.get('SUB', 'p2')
-RN = r'(Ⅱ|II|∥|棰)' if SUB == 'p2' else r'(Ⅰ|I(?!I)|ㅣ|ǀ)(?!\s*[IⅠ])'
+RN = r'(Ⅱ|II|∥|棰)' if SUB == 'p2' else r'(?<![IⅠ])(Ⅰ|I|ㅣ|ǀ)(?!\s*[IⅠ])'
 RW = ('Ⅱ', 'II', 'Ⅱ]') if SUB == 'p2' else ('Ⅰ', 'I', 'Ⅰ]', 'ㅣ')
 ALT = {'➀': '①', '➁': '②', '➂': '③', '➃': '④', '➄': '⑤'}
 
@@ -152,6 +152,19 @@ def cut_questions(doc, name, outdir):
         elif not nxt or nxt[1] != pi or nxt[2] != c:
             img = strip_footer(img)
         img = trim(img); t = text_of(ws)
+        if nxt and (nxt[1], nxt[2]) != (pi, c) and nxt[1] > 0 and nxt[0] not in heads:
+            # 다음 단(또는 다음 쪽) 맨 위로 이어지는 문항: 쪽 머리글 아래부터 다음 번호 앞까지를 붙인다
+            np_ = doc[nxt[1]]; NW, NH = np_.rect.width, np_.rect.height
+            cr = col_rect(np_, nxt[2], nxt[5] if nxt[2] else NW / 2, NH * 0.06, nxt[3] - 3)
+            cw = clip_words(page_words(doc, name, nxt[1]), cr)
+            hd = [w[3] for w in cw if re.search(r'영역|탐구|고3|물리|^\d+$', w[4]) and w[1] < NH * 0.16]
+            top = max(hd) + 4 if hd else NH * 0.1
+            body = [w for w in cw if w[1] > top]
+            if len(body) > 3:
+                cr.y0 = min(w[1] for w in body) - 4
+                ci = trim(render(np_, cr)); img = trim(drop_tail(img, maxh=45))
+                cv = Image.new('L', (max(ci.width, img.width), img.height + ci.height + 6), 255); cv.paste(img, (0, 0)); cv.paste(ci, (0, img.height + 6)); img = cv
+                t += ' ' + text_of(body)
         if n in stems:   # 함께 쓰는 글을 위에 붙인다
             sp, sr = stems[n]; st = trim(strip_footer(render(doc[sp], sr)))
             cv = Image.new('L', (max(st.width, img.width), st.height + img.height + 10), 255); cv.paste(st, (0, 0)); cv.paste(img, (0, st.height + 10)); img = cv
@@ -263,7 +276,7 @@ def sim(a, b):
 
 def region_rect(doc, m, lefts, to=None):
     page = doc[m[1]]; W, H = page.rect.width, page.rect.height; c = m[2]
-    x0 = lefts[c] - 4; x1 = (lefts[c + 1] - 6) if c + 1 < len(lefts) else W - max(20, lefts[0] - 10)
+    x0 = lefts[c] - 4; x1 = (lefts[c + 1] - 6) if c + 1 < len(lefts) else min(W - 30, lefts[c] + (lefts[c] - lefts[c - 1]) - 6) if c > 0 else W - 30
     return pymupdf.Rect(x0, m[3] - 4, x1, to if to else H * 0.94)
 
 def seq_regions(doc, name, seq, mk):
@@ -355,7 +368,7 @@ def cut_explanations(doc, name, outdir, qtexts):
     for n in range(20):
         ims = []
         for p, r in regs[n]:
-            if r.height < 6: continue
+            if r.height < 6 or r.width < 6 or r.y0 >= doc[p].rect.height: continue
             im = trim(strip_footer(render(doc[p], r)) if r.y1 > doc[p].rect.height * 0.9 else render(doc[p], r))
             if im.height > 12: ims.append(im)
         if not ims: continue
