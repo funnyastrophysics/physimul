@@ -36,14 +36,24 @@ function seal(plain) {   // 내용이 같으면 결과도 같도록 iv를 내용
   return Buffer.concat([iv, c.update(plain), c.final(), c.getAuthTag()]);
 }
 const subject = (sub, year) => (year >= 2021 ? '물리학' : '물리') + (sub === 'p1' ? 'Ⅰ' : 'Ⅱ');
-const exam_name = mm => ({ '06': '6월 모의평가', '09': '9월 모의평가', '11': '수능' })[mm] || mm + '월';
+// 학력평가(교육청, 4·5·7·10월): "2025학년도 10월 학력평가(2024년 10월 시행)"
+const exam_name = (mm, year) => ({ '06': '6월 모의평가', '09': '9월 모의평가', '11': '수능' })[mm] || `${+mm}월 학력평가(${year - 1}년 ${+mm}월 시행)`;
+function open_(buf) { const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12)); d.setAuthTag(buf.subarray(buf.length - 16)); return Buffer.concat([d.update(buf.subarray(12, buf.length - 16)), d.final()]); }
+// 이미 올라가 있는 문항: 원본 그림(cut 폴더)이 없는 회차는 암호화된 파일과 정답을 그대로 다시 쓴다(기존 문항은 바뀌지 않음).
+// 동시에 수업 코드 확인: 지금 코드로 기존 목록이 열리지 않으면 멈춘다(다른 코드로 전부 다시 잠그는 사고 방지).
+const PREV = {};
+for (const f of fs.existsSync(outDir) ? fs.readdirSync(outDir) : []) if (/^u_.*\.bin$/.test(f)) {
+  let list; try { list = JSON.parse(open_(fs.readFileSync(path.join(outDir, f))).toString('utf8')); } catch (e) { console.error('수업 코드가 기존 문제와 다릅니다. 멈춥니다: ' + f); process.exit(1); }
+  list.forEach(x => { PREV[x.id] = x; });
+}
 const unitOf = c => c === '미분류' ? 'x' : U.prefix[c.slice(0, 6)];
 
 const sims = {}, units = {}, wanted = new Set(); let skipped = 0;
 for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}_\d{2}$/.test(k)).sort()) {
-  const dir = path.join(cutDir, exam); if (!fs.existsSync(dir)) { console.error('없는 회차: ' + exam); process.exit(1); }
-  const info = JSON.parse(fs.readFileSync(path.join(dir, 'info.json'), 'utf8'));
-  const ans = info.official || info.answers || manual[exam];
+  const dir = path.join(cutDir, exam), keep = !fs.existsSync(dir);
+  if (keep && !Object.keys(PREV).some(id => id.startsWith(exam + '_'))) { console.error('없는 회차: ' + exam); process.exit(1); }
+  const info = keep ? {} : JSON.parse(fs.readFileSync(path.join(dir, 'info.json'), 'utf8'));
+  const ans = keep ? Array.from({ length: 20 }, (_, i) => (PREV[`${exam}_${String(i + 1).padStart(2, '0')}`] || {}).a) : info.official || info.answers || manual[exam];
   if (!ans) { console.error('정답이 없습니다: ' + exam); process.exit(1); }
   const [sub, ys, mm] = exam.split('_'), year = +ys;
   map[exam].forEach((sim, i) => {
@@ -51,13 +61,17 @@ for (const exam of Object.keys(map).filter(k => /^p[12]_\d{4}_\d{2}$/.test(k)).s
     if (!(a >= 1 && a <= 5)) { skipped++; return; }   // 전원 정답 처리된 문항 등
     if (sim && !fs.existsSync(path.join(root, 'site', 'sim', sim))) { console.error('시뮬레이션 이름이 틀렸습니다: ' + sim); process.exit(1); }
     const nn = String(n).padStart(2, '0'), id = `${exam}_${nn}`;
-    const q = fs.readFileSync(path.join(dir, `q${nn}.webp`)), e = fs.readFileSync(path.join(dir, `e${nn}.webp`));
-    const head = Buffer.alloc(4); head.writeUInt32BE(q.length);
-    fs.mkdirSync(path.join(outDir, 'q'), { recursive: true });
-    const file = path.join(outDir, 'q', id + '.bin'), buf = seal(Buffer.concat([head, q, e]));
-    if (!fs.existsSync(file) || !fs.readFileSync(file).equals(buf)) fs.writeFileSync(file, buf);
+    const file = path.join(outDir, 'q', id + '.bin');
+    if (keep){ if (!fs.existsSync(file)) { console.error('기존 문항 파일이 없습니다: ' + id); process.exit(1); } }
+    else {
+      const q = fs.readFileSync(path.join(dir, `q${nn}.webp`)), e = fs.readFileSync(path.join(dir, `e${nn}.webp`));
+      const head = Buffer.alloc(4); head.writeUInt32BE(q.length);
+      fs.mkdirSync(path.join(outDir, 'q'), { recursive: true });
+      const buf = seal(Buffer.concat([head, q, e]));
+      if (!fs.existsSync(file) || !fs.readFileSync(file).equals(buf)) fs.writeFileSync(file, buf);
+    }
     wanted.add(id + '.bin');
-    const item = { id, src: `${year}학년도 ${exam_name(mm)} ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
+    const item = { id, src: `${year}학년도 ${exam_name(mm, year)} ${subject(sub, year)} ${n}번`, a, year, sub, s: sim };
     const cc = CODES[id] || {}, c = cc.new, unit = c && unitOf(c);
     if (!unit || !U.codes[c]) { console.error('성취기준이 없습니다(classify.py를 먼저 실행하세요): ' + id); process.exit(1); }
     Object.assign(item, { c, t: cc.topic || '', e: cc.era || '', o: cc.old || '', p: cc['배점'], r: cc['정답률'] });
