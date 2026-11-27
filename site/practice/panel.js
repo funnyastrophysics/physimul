@@ -312,11 +312,21 @@
       });
     }
     function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    // 같은 묶음(key)끼리 모은 뒤 묶음을 무작위 순서로 돌아가며 하나씩 꺼내 한 줄로 늘어놓는다.
+    function spread(a, key, inner) {
+      var gs = {}, ks = []; a.forEach(function (x) { var k = key(x); if (!gs[k]) { gs[k] = []; ks.push(k); } gs[k].push(x); });
+      var q = shuffle(ks).map(function (k) { return inner ? inner(gs[k]) : shuffle(gs[k]); }), out = [], left = a.length;
+      for (var i = 0; left; i++) { var c = q[i % q.length]; if (c.length) { out.push(c.shift()); left--; } }
+      return out;
+    }
+    // 단원 안: 성취기준(c)을 돌아가며, 같은 성취기준 안에서는 주제(t)를 돌아가며 늘어놓아 한쪽에 몰리지 않게 한다.
+    function order(c) { return spread(c, function (x) { return x.c || ''; }, function (g) { return spread(g, function (x) { return x.t || ''; }); }); }
     // 단원마다 고르게(돌아가며) 뽑는다. 쉬운 문제(2점, 정답률 높은 문제)가 앞에 오도록 늘어놓는다.
     function make(ls, n, org, fresh, us) {
       var seen = {}, g = getLog(), per = ls.map(function (l) {
         var c = l.filter(function (x) { if (seen[x.id]) return false; seen[x.id] = 1; return org === 'both' || isEdu(x) === (org === 'edu'); });
-        c = shuffle(c); if (fresh) c.sort(function (a, b) { return (g[a.id] ? 1 : 0) - (g[b.id] ? 1 : 0); }); return c; });
+        if (!fresh) return order(c);
+        return order(c.filter(function (x) { return !g[x.id]; })).concat(order(c.filter(function (x) { return g[x.id]; }))); });
       var pick = [], k = 0; while (pick.length < n && per.some(function (c) { return c.length; })) { var c = per[k % per.length]; if (c.length) pick.push(c.shift()); k++; }
       if (!pick.length) { settings('고른 조건에 맞는 문제가 없어요. 출처나 단원을 바꿔 보세요.'); return; }
       var w = function (x) { return (x.p || 2) * 1000 - (x.r != null ? +x.r : 60); }; pick.sort(function (a, b) { return w(a) - w(b); });
