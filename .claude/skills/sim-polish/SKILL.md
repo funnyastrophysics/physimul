@@ -11,7 +11,7 @@ description: 물리 수업 사이트의 시뮬레이션을 고치거나 새로 �
 1. 고칠 시뮬레이션의 원본을 찾는다.
    - `src/<이름>.src`가 있으면 그것을 고치고 `cd src && python3 build.py <이름>`.
    - 없으면(shm, energy, collision, projectile, capacitor, circuit, efield, induction, optics, slit, gas) `site/sim/<이름>/index.html`을 직접 고친다.
-   - `src/common.js`나 `common.css`를 고쳤으면 29개 모두 다시 만든다: `cd src && python3 build.py $(ls *.src | sed 's/\.src$//')`
+   - `src/common.js`나 `common.css`를 고쳤으면 30개 모두 다시 만든다: `cd src && python3 build.py $(ls *.src | sed 's/\.src$//')`
 2. 새 시뮬레이션이면 `src/<이름>.src`로 만들고, `site/index.html`의 알맞은 분류에 카드를 넣고 분류 옆 개수를 고친다. README의 시뮬레이션 표도 고친다.
 3. 기출문제 사진을 받았다면, 그 조건을 넣었을 때 정답과 같은 값이 나오는지 직접 확인한다.
 4. 확인: Playwright로 아이폰 13 크기에서 열어 JS 오류, 가로 넘침, 글자 겹침을 본다. 스크린숏은 꼭 필요한 한두 장만.

@@ -1,0 +1,148 @@
+알파 입자 산란 실험
+  <h1>알파 입자 산란 실험</h1>
+  <p class="hint" id="hintTxt"></p>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-m="one">한 개씩 쏘기</button>
+      <button data-m="foil">금박에 쏘기</button>
+    </div>
+    <canvas id="sim" style="height:320px;border-radius:8px;background:#141a28"></canvas>
+    <div class="row m-one"><button class="b primary" id="shotB">쏘기</button><button class="b" id="fanB">여러 개 한꺼번에</button><button class="b" id="clrB">지우기</button></div>
+    <div class="row m-foil"><button class="b primary" id="runB">계속 쏘기</button><button class="b" id="manyB">1000개 쏘기</button><button class="b" id="clr2B">지우기</button></div>
+    <div class="row m-foil"><select id="modelS"><option value="ruth">러더퍼드 모형 (원자핵이 있음)</option><option value="thom">톰슨 모형 (양전하가 원자 전체에 퍼짐)</option></select></div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card m-foil"><canvas id="graph" style="height:220px"></canvas></div>
+  <div class="card">
+    <div class="sl m-one"><div class="top"><span>충돌 변수 b (원자핵을 비껴가는 거리)</span><b id="bV"></b></div>
+      <input type="range" id="bS" min="0" max="150" step="1" value="40"><div class="range"><span>0 (정면)</span><span>150 fm</span></div></div>
+    <div class="sl"><div class="top"><span>알파 입자의 운동 에너지</span><b id="kV"></b></div>
+      <input type="range" id="kS" min="1" max="10" step="0.1" value="5"><div class="range"><span>1 MeV</span><span>10 MeV</span></div></div>
+    <div class="sl" style="margin-top:14px"><div class="top"><span>얇은 막(원자핵)의 종류</span><b id="zV"></b></div>
+      <select id="zS"><option value="79,197">금 (Z = 79)</option><option value="47,108">은 (Z = 47)</option><option value="29,64">구리 (Z = 29)</option><option value="13,27">알루미늄 (Z = 13)</option></select></div>
+    <p class="note" id="noteTxt"></p>
+  </div>
+---SCRIPT---
+const S = $('sim'), G = $('graph'); let s, gr; const rs = () => { s = fitCanvas(S); if (G.clientWidth) gr = fitCanvas(G); }; window.addEventListener('resize', rs);
+const PALE = '#c9d2e3', DIM = '#8d97aa', AL = '#ffd166', NUC = '#ff7a6b', KE2 = 1.44;   // ke² = 1.44 MeV·fm
+let mode, paths = [], flying = [];
+bindLabels({ bS: ['bV', v => v + ' fm'], kS: ['kV', v => fmt(v, 1) + ' MeV'], zS: ['zV', (v, e) => e.options[e.selectedIndex].text.split(' ')[0]] });
+const nuc = () => { const [Z, A] = $('zS').value.split(',').map(Number); return { Z, A, R: 1.2 * Math.cbrt(A) }; };
+// 정면으로 다가갈 때 가장 가까이 가는 거리 d = 2kZe²/K (알파 입자 전하 2e)
+const dHead = () => 2 * KE2 * nuc().Z / +$('kS').value;
+const theta = (b, d) => 2 * Math.atan2(d, 2 * b);                    // 산란각: tan(θ/2) = d/(2b)
+const rMin = (b, d) => d / 2 * (1 + Math.sqrt(1 + 4 * b * b / (d * d)));
+const deg = r => r * 180 / Math.PI;
+
+// ── 한 개씩 쏘기: 원자핵 근처 (단위 fm) ──
+const HALF = 200;   // 그림의 가로 절반 = 200 fm
+const view = () => { const { W, H } = s, k = W / (2 * HALF); return { k, cx: W / 2, cy: H / 2, X: x => W / 2 + x * k, Y: y => H / 2 - y * k }; };
+// 쿨롱 척력 아래 운동을 RK4로 계산. 속력 v0 = 1, 가속도 = d/(2r²) (K = ½mv0², F = Kd/r²)
+function trace(b, d){
+  let x = -HALF - 30, y = b, vx = 1, vy = 0, t = 0; const pts = [[x, y, 0]], acc = (x, y) => { const r = Math.hypot(x, y), a = d / (2 * r * r * r); return [a * x, a * y]; };
+  for (let i = 0; i < 20000; i++){
+    const r = Math.hypot(x, y), h = Math.max(0.05, Math.min(2, 0.02 * r));
+    const f = (x, y, vx, vy) => { const [ax, ay] = acc(x, y); return [vx, vy, ax, ay]; };
+    const k1 = f(x, y, vx, vy), k2 = f(x + h / 2 * k1[0], y + h / 2 * k1[1], vx + h / 2 * k1[2], vy + h / 2 * k1[3]);
+    const k3 = f(x + h / 2 * k2[0], y + h / 2 * k2[1], vx + h / 2 * k2[2], vy + h / 2 * k2[3]), k4 = f(x + h * k3[0], y + h * k3[1], vx + h * k3[2], vy + h * k3[3]);
+    x += h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]); y += h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+    vx += h / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]); vy += h / 6 * (k1[3] + 2 * k2[3] + 2 * k3[3] + k4[3]); t += h;
+    pts.push([x, y, t]); if (Math.hypot(x, y) > HALF * 1.5 && x * vx + y * vy > 0) break;
+  }
+  return pts;
+}
+function shoot(b){ const d = dHead(); flying.push({ b, d, pts: trace(b, d), t: 0, th: theta(Math.abs(b), d), rm: rMin(Math.abs(b), d), v: 160 * Math.sqrt(+$('kS').value / 5) }); if (flying.length > 14) flying.shift(); }
+function drawOne(dt){
+  const { ctx, W, H } = s, v = view(), n = nuc(), d = dHead(), b = +$('bS').value;
+  // 가장 가까이 다가갈 수 있는 거리(정면)를 점선 원으로
+  ctx.strokeStyle = 'rgba(255,122,107,0.35)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(v.cx, v.cy, d * v.k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  if (d * v.k > 24 && d * v.k < W / 2) T(ctx, '정면일 때 가장 가까운 거리', v.cx, v.cy - d * v.k - 9, { color: 'rgba(255,150,140,0.85)', size: 11 });
+  ctx.fillStyle = NUC; ctx.beginPath(); ctx.arc(v.cx, v.cy, Math.max(2.5, n.R * v.k), 0, 7); ctx.fill(); T(ctx, '+', v.cx, v.cy, { color: '#fff', size: 10, bold: true });
+  // 겨누는 선
+  line(ctx, [[0, v.Y(b)], [v.X(-HALF * 0.55), v.Y(b)]], 'rgba(255,209,102,0.45)', 1.2, true);
+  line(ctx, [[14, v.cy], [14, v.Y(b)]], PALE, 1); if (b * v.k > 16) T(ctx, 'b', 22, (v.cy + v.Y(b)) / 2, { color: PALE, size: 12, align: 'left', bold: true });
+  line(ctx, [[0, v.cy], [W, v.cy]], 'rgba(141,151,170,0.25)', 1);
+  flying.forEach((p, idx) => {
+    p.t += dt * p.v / v.k; const last = idx === flying.length - 1, a = last ? 1 : 0.35;
+    const pts = []; let head = null; for (const q of p.pts){ if (q[2] > p.t) break; pts.push([v.X(q[0]), v.Y(q[1])]); head = q; }
+    if (pts.length > 1) line(ctx, pts, `rgba(255,209,102,${a})`, last ? 2 : 1.3);
+    if (head && p.t < p.pts[p.pts.length - 1][2]){
+      const hx = v.X(head[0]), hy = v.Y(head[1]), r = Math.hypot(head[0], head[1]), f = Math.min(40, 1800 * p.d / (r * r) * v.k);
+      ctx.fillStyle = AL; ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, 7); ctx.fill();
+      if (last && f > 4) arrow(ctx, hx, hy, hx + head[0] / r * f, hy - head[1] / r * f, '#ff9e8f', 2, 7);
+    } else if (last && p.th > 0.02){
+      // 끝난 경로에 산란각 표시: 들어오는 방향의 연장선과 나가는 방향(점근선)이 만나는 곳
+      const q = p.pts[p.pts.length - 1], ang = Math.atan2(q[1] - p.pts[p.pts.length - 2][1], q[0] - p.pts[p.pts.length - 2][0]);
+      if (Math.abs(Math.sin(ang)) > 0.08){ const u = (p.b - q[1]) / Math.sin(ang), Px = v.X(q[0] + u * Math.cos(ang)), Py = v.Y(p.b);
+        line(ctx, [[Px, Py], [Px + 56, Py]], 'rgba(201,210,227,0.6)', 1, true);
+        ctx.strokeStyle = PALE; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(Px, Py, 24, Math.min(0, -ang), Math.max(0, -ang)); ctx.stroke();
+        T(ctx, 'θ', Px + 34 * Math.cos(ang / 2), Py - 34 * Math.sin(ang / 2), { color: PALE, size: 12, bold: true }); }
+    }
+  });
+  T(ctx, '원자핵 근처 (가로 ' + 2 * HALF + ' fm, 1 fm = 10⁻¹⁵ m)', W / 2, H - 10, { color: DIM, size: 11 });
+  const p = flying[flying.length - 1], touch = p && p.rm < n.R + 1.7;
+  setStats(p ? [['충돌 변수 b', fmt(Math.abs(p.b), 0) + ' fm'], ['산란각 θ', fmt(deg(p.th), 1) + '°', ORANGE], ['가장 가까이 다가간 거리', fmt(p.rm, 1) + ' fm', BLUE],
+    ['원자핵 반지름(대략)', fmt(n.R, 1) + ' fm' + (touch ? ' · 닿을 만큼 가까움' : '')]]
+    : [['충돌 변수 b', b + ' fm'], ['산란각 θ', '쏘기를 누르세요', ORANGE], ['정면일 때 가장 가까운 거리', fmt(d, 1) + ' fm', BLUE], ['원자핵 반지름(대략)', fmt(n.R, 1) + ' fm']]);
+}
+pointer(S, (x, y) => { if (mode !== 'one' || x > s.W * 0.4) return false; setB(y); }, (x, y) => setB(y));
+function setB(y){ const v = view(); $('bS').value = Math.max(0, Math.min(150, Math.round((v.cy - y) / v.k))); $('bS').dispatchEvent(new Event('input')); }
+$('shotB').addEventListener('click', () => shoot(+$('bS').value));
+$('fanB').addEventListener('click', () => { flying = []; for (let b = -150; b <= 150; b += 25) shoot(b === 0 ? 0.5 : b); });
+$('clrB').addEventListener('click', () => { flying = []; });
+
+// ── 금박에 쏘기: 원자 크기 (원자핵은 실제보다 훨씬 크게 그림) ──
+const BINS = 18; let hits = [], counts = new Array(BINS).fill(0), total = 0, running = true, acc = 0, beams = [];
+const FMPX = 126;   // 그림 1 px = 126 fm 로 보고 비껴가는 거리를 계산 (금, 5 MeV에서 약 1%가 90°보다 크게 튕김)
+const foil = () => { const { W, H } = s, ra = 16, cx = W / 2, cy = H / 2, Rd = Math.min(W, H) * 0.42, rows = []; for (let y = cy - 6 * ra; y <= cy + 6 * ra + 0.1; y += 2 * ra) rows.push(y); return { ra, cx, cy, Rd, rows }; };
+function fire(anim){
+  const f = foil(), y = f.cy + (Math.random() * 2 - 1) * 6 * f.ra; let yn = f.rows[0]; f.rows.forEach(r => { if (Math.abs(r - y) < Math.abs(yn - y)) yn = r; });
+  const bpx = yn - y, d = dHead();   // bpx > 0: 원자핵보다 위로 지나감
+  let th; if ($('modelS').value === 'ruth') th = theta(Math.abs(bpx) * FMPX, d) * (bpx >= 0 ? 1 : -1);
+  else { const u = Math.min(1, Math.abs(bpx) / f.ra); th = 0.0006 * d / 45 * u * Math.sqrt(1 - u * u) * (bpx >= 0 ? 1 : -1); }   // 톰슨: 아주 조금만 휨
+  const a = Math.abs(th), k = Math.min(BINS - 1, Math.floor(deg(a) / (180 / BINS))); counts[k]++; total++;
+  // 금박 위치(f.cx, y)에서 θ 방향으로 나간 선이 형광막(원)과 만나는 곳. 화면 위쪽으로 지나간 입자는 위로 휜다
+  const dx = Math.cos(th), dy = -Math.sin(th), oy = y - f.cy, B = oy * dy, C = oy * oy - f.Rd * f.Rd, tt = -B + Math.sqrt(B * B - C);
+  hits.push([f.cx + dx * tt, y + dy * tt, a > Math.PI / 2 ? 1 : 0]); if (hits.length > 3000) hits.shift();
+  if (anim) beams.push({ y, th, t: 0, tt, x0: 28 });
+}
+function drawFoil(dt){
+  const { ctx, W, H } = s, f = foil(), thom = $('modelS').value === 'thom';
+  ctx.strokeStyle = 'rgba(141,151,170,0.6)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(f.cx, f.cy, f.Rd, 0, 7); ctx.stroke();
+  T(ctx, '형광막', f.cx + f.Rd * 0.72 + 6, f.cy - f.Rd * 0.72 - 6, { color: DIM, size: 11, align: 'left' });
+  ctx.fillStyle = '#3a4252'; ctx.fillRect(0, f.cy - 9, 12, 18); arrow(ctx, 16, f.cy - 6 * f.ra - 14, 52, f.cy - 6 * f.ra - 14, AL, 1.5, 6); T(ctx, '알파 입자', 16, f.cy - 6 * f.ra - 28, { color: AL, size: 11, align: 'left' });
+  f.rows.forEach(y => {
+    if (thom){ ctx.fillStyle = 'rgba(255,122,107,0.28)'; ctx.beginPath(); ctx.arc(f.cx, y, f.ra - 1, 0, 7); ctx.fill(); ctx.fillStyle = '#6fb1ff'; for (let k = 0; k < 5; k++){ const a = k * 1.26 + y; ctx.beginPath(); ctx.arc(f.cx + Math.cos(a) * f.ra * 0.55, y + Math.sin(a) * f.ra * 0.55, 1.6, 0, 7); ctx.fill(); } }
+    else { ctx.strokeStyle = 'rgba(201,210,227,0.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(f.cx, y, f.ra - 1, 0, 7); ctx.stroke(); ctx.fillStyle = NUC; ctx.beginPath(); ctx.arc(f.cx, y, 2.2, 0, 7); ctx.fill(); }
+  });
+  hits.forEach(h => { ctx.fillStyle = h[2] ? 'rgba(255,120,100,0.95)' : 'rgba(255,209,102,0.35)'; ctx.beginPath(); ctx.arc(h[0], h[1], h[2] ? 3 : 1.8, 0, 7); ctx.fill(); });
+  if (running){ acc += dt * 25; while (acc >= 1){ fire(true); acc--; } }
+  const sp = 320; beams = beams.filter(bm => { bm.t += dt * sp; const L1 = f.cx - bm.x0;
+    let pts; if (bm.t < L1) pts = [[bm.x0 + bm.t, bm.y]]; else { const u = Math.min(bm.tt, bm.t - L1); pts = [[f.cx + Math.cos(bm.th) * u, bm.y - Math.sin(bm.th) * u]]; }
+    ctx.fillStyle = AL; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], 2.4, 0, 7); ctx.fill(); return bm.t < L1 + bm.tt; });
+  T(ctx, thom ? '톰슨 모형: 양전하가 원자 전체에 고르게 퍼져 있음' : '원자핵(빨간 점)은 실제보다 수만 배 크게 그림', W / 2, H - 10, { color: DIM, size: 11 });
+  const small = counts[0], big = counts.slice(BINS / 2).reduce((a, b) => a + b, 0);
+  setStats([['쏜 알파 입자', total + '개'], ['거의 그대로 통과 (10° 미만)', total ? fmt(small / total * 100, 1) + '%' : '—', BLUE], ['90°보다 크게 튕겨 나옴', total ? big + '개 (' + fmt(big / total * 100, 2) + '%)' : '—', ORANGE]]);
+  if (!gr) return; const g = gr.ctx; g.clearRect(0, 0, gr.W, gr.H);
+  const top = Math.max(1, Math.ceil(Math.log10(Math.max(10, ...counts))));
+  const A = axes(g, gr.W, gr.H, { x0: 0, x1: 180, y0: 0, y1: top, xt: [0, 30, 60, 90, 120, 150, 180], yt: Array.from({ length: top + 1 }, (_, i) => i), xl: '산란각 θ (°)', yl: '개수 (10의 몇 제곱)', top: 22 });
+  counts.forEach((c, k) => { if (!c) return; const h = Math.log10(c) + (c === 1 ? 0.15 : 0); g.fillStyle = k >= BINS / 2 ? 'rgba(214,69,65,0.7)' : 'rgba(47,111,223,0.6)';
+    g.fillRect(A.X(k * 10) + 1, A.Y(h), A.pw / BINS - 2, A.Y(0) - A.Y(h)); if (A.pw / BINS > 14) T(g, String(c), A.X(k * 10 + 5), A.Y(h) - 7, { size: 9 }); });
+  T(g, '세로축은 10배마다 한 칸 (1, 10, 100, …)', A.L + A.pw - 4, A.top + 9, { size: 11, align: 'right' });
+}
+const reset2 = () => { hits = []; counts = new Array(BINS).fill(0); total = 0; beams = []; };
+$('runB').addEventListener('click', () => { running = !running; $('runB').textContent = running ? '멈추기' : '계속 쏘기'; });
+$('manyB').addEventListener('click', () => { for (let i = 0; i < 1000; i++) fire(false); });
+$('clr2B').addEventListener('click', reset2);
+['modelS', 'kS', 'zS'].forEach(id => $(id).addEventListener('input', () => { reset2(); }));
+$('zS').addEventListener('change', reset2); $('modelS').addEventListener('change', reset2);
+
+function draw(dt){ const { ctx, W, H } = s; ctx.clearRect(0, 0, W, H); if (mode === 'one') drawOne(dt); else drawFoil(dt); }
+const TEXT = {
+  one: ['원자핵을 향해 알파 입자를 쏩니다. 왼쪽 그림을 위아래로 밀거나 슬라이더로 충돌 변수 b를 정하고 쏘기를 누르세요. 에너지와 원자핵의 종류도 바꿔 보세요.',
+    '알파 입자(헬륨 원자핵, 전하 +2e)와 원자핵(전하 +Ze)은 모두 양전하라 서로 밀어내는 전기력(쿨롱 힘)을 받습니다. 원자핵에 가깝게 지나갈수록(b가 작을수록) 힘을 크게 받아 많이 휘고, 정면으로 다가가면 거꾸로 튕겨 나옵니다(산란각 180°). 산란각은 tan(θ/2) = d/(2b)를 따르며, d = 2kZe²/K는 정면으로 다가갈 때 가장 가까이 가는 거리입니다. 운동 에너지가 클수록, 원자핵의 전하량이 작을수록 덜 휩니다. 노란 경로 위의 빨간 화살표는 알파 입자가 받는 힘입니다. 가장 가까이 다가간 거리가 원자핵 반지름만큼 작아지면 핵력도 작용해 이 식이 맞지 않게 됩니다.'],
+  foil: ['얇은 금박에 알파 입자를 계속 쏘아 형광막에 부딪힌 위치를 모읍니다. 원자 모형을 톰슨 모형으로 바꿔 결과를 비교하세요.',
+    '러더퍼드의 실험에서 알파 입자는 대부분 금박을 거의 그대로 통과했지만, 아주 드물게 90°보다 크게 튕겨 나오는 입자가 있었습니다. 원자의 양전하가 원자 전체에 퍼져 있다면(톰슨 모형) 전기력이 약해 크게 튕겨 나올 수 없습니다. 따라서 원자의 질량 대부분과 양전하는 원자 중심의 아주 작은 공간(원자핵)에 모여 있고, 원자의 대부분은 빈 공간이라는 결론을 얻었습니다(러더퍼드 원자 모형). 원자핵의 반지름은 원자 반지름의 약 10만분의 1입니다. 이 그림은 금박 한 층만 나타냈고, 원자핵은 보이도록 크게 그렸습니다.'] };
+setupTabs(m => { mode = m; $('hintTxt').textContent = TEXT[m][0]; $('noteTxt').textContent = TEXT[m][1]; rs(); });
+$('runB').textContent = '멈추기';
+loop(draw);

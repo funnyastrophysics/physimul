@@ -31,7 +31,7 @@
 ```
 site/                 공개되는 웹사이트
   index.html          첫 화면 (탭: 시뮬레이션 / 측정 도구 / 연습문제)
-  sim/<이름>/         시뮬레이션 40개
+  sim/<이름>/         시뮬레이션 41개
   tools/accel/        측정 도구: 가속도 기록
   practice/           단원별 기출문제 (index.html, panel.js, data/)
 src/                  시뮬레이션 원본과 만드는 도구
@@ -43,18 +43,18 @@ practice-src/         기출문제 원본 그림 (GitHub에 올리지 않음, �
 .github/workflows/pages.yml   site 폴더를 GitHub Pages로 내보내는 설정
 ```
 
-### 시뮬레이션 40개
+### 시뮬레이션 41개
 
 | 첫 화면 분류 | 이름 |
 |---|---|
 | 역학과 열역학 13 | accel, pulley, forces, torque, projectile, circular, orbit, collision, energy, shm, heating, gas, engine |
 | 전자기학 10 | charging, efield, circuit, capacitor, magnet, bfield, lorentz, motor, generator, induction |
 | 빛과 파동 8 | wave, superposition, standing, doppler, soundinterf, optics, slit, polarization |
-| 현대물리 9 | photoelectric, laser, spectrum, atom, diode, qubit, tunnel, relativity, equivalence |
+| 현대물리 10 | photoelectric, laser, spectrum, rutherford, atom, diode, qubit, tunnel, relativity, equivalence |
 
 **원본이 두 종류입니다.**
 
-- `src/<이름>.src`가 있는 29개: `.src`나 `common.*`를 고치고 `python3 build.py`로 다시 만듭니다. `common.*`를 고쳤으면 29개를 모두 다시 만듭니다.
+- `src/<이름>.src`가 있는 30개: `.src`나 `common.*`를 고치고 `python3 build.py`로 다시 만듭니다. `common.*`를 고쳤으면 30개를 모두 다시 만듭니다.
   `cd src && python3 build.py $(ls *.src | sed 's/\.src$//')`
 - 처음 받은 11개(shm, energy, collision, projectile, capacitor, circuit, efield, induction, optics, slit, gas): `site/sim/<이름>/index.html` 자체가 원본이라 직접 고칩니다.
 
@@ -77,7 +77,8 @@ practice-src/         기출문제 원본 그림 (GitHub에 올리지 않음, �
 
 ## 3. 지금까지 한 일
 
-- 시뮬레이션 40개 (처음 30개 + 3차 7개 + pulley, superposition, generator)
+- 시뮬레이션 41개 (처음 30개 + 3차 7개 + pulley, superposition, generator, rutherford)
+  - rutherford(알파 입자 산란 실험, 2026-11-27): 한 개씩 쏘기(쿨롱 척력으로 RK4 계산, 충돌 변수·산란각·가장 가까운 거리) / 금박에 쏘기(러더퍼드·톰슨 모형 비교, 산란각 개수 그래프). 금박 탭은 1 px = 126 fm로 보고 계산(금·5 MeV에서 약 1%가 90° 넘게 튕김)
 - 첫 화면 탭 구조, 분류 이름: 역학과 열역학 / 전자기학 / 빛과 파동 / 현대물리
 - 단원별 기출문제 3,439문항(물리Ⅱ 학력평가 1,200문항 포함, 물리Ⅰ 학력평가 1,600문항은 승인 대기)
   - 분류표(codes_detail·codes_mock)에 배점·정답률·난이도 칸이 있음. 학생 화면에는 "배점 3점, 정답률 47%"만 보이고(정답률은 2016학년도부터), 난이도는 출제·변형용
@@ -91,7 +92,7 @@ practice-src/         기출문제 원본 그림 (GitHub에 올리지 않음, �
   - 문항 id는 `p1_2024_11_05`(과목_학년도_월_번호). 2026년 11월에 이 형식으로 바꾸면서 학생 학습 기록이 한 번 초기화됨
   - 시뮬레이션 화면 아래 '연결된 기출문제', 첫 화면 연습문제 탭의 '단원별 기출문제'
   - 수업 코드로 암호화, 정답 확인 뒤 해설(EBS) 표시, 그림 확대, 학습 기록(기기에 저장)
-  - `panel.js`를 고치면 `panel.js?v=날짜`의 날짜를 바꿉니다(practice/index.html, 시뮬레이션 40개, build.py). 안 바꾸면 휴대폰이 옛 파일을 계속 씁니다
+  - `panel.js`를 고치면 `panel.js?v=날짜`의 날짜를 바꿉니다(practice/index.html, 시뮬레이션 41개, build.py). 안 바꾸면 휴대폰이 옛 파일을 계속 씁니다
   - 그림을 누르면 화면 전체를 덮는 창으로 크게 보기(−/+ 100~400%, 맞춤, 닫기·휴대폰 뒤로 버튼)
   - 난이도별 보기: 화면에서 정답률로 계산(최상 <30%, 상 30~49, 중상 50~59, 중 60~79, 중하 80~89, 하 ≥90, 정답률 없음). 문항 위에 '(난이도 상)' 표시
   - 모의고사 만들기(`site/practice/exam.html`, panel.js의 `PQ.exam`): 문제 수 10·15·20, 단원 여러 개, 출처(평가원·교육청·모두), '안 푼 문제 먼저'를 골라 무작위로 뽑음(단원마다 돌아가며, 단원 안에서는 성취기준→주제를 돌아가며 고르게, 2점→3점·정답률 높은 순으로 배열). 한꺼번에 풀고 채점하면 점수·걸린 시간·문항별 정답·해설. 푸는 중인 시험은 기기에 저장(`pq-exam`)되어 새로 고침해도 이어짐. 채점 결과는 학습 기록에도 남음
@@ -208,6 +209,9 @@ PRACTICE_CODE=수업코드 node src/practice/encrypt.js practice-src/cut_hak  # 
 - **도메인**: 선생님이 `jetphysics.kr`(jet = 이정태 이니셜 + physics)을 유력 후보로 고려 중. 사면 GitHub Pages 연결(DNS 안내, `site/CNAME`, 사이트 안 주소). 주소가 바뀌면 학습 기록·모의고사 진행이 초기화되므로 학기 바뀔 때 연결 권장
 - 측정 도구 7개는 실제 휴대폰으로 아직 확인하지 않음(가짜 신호로만 시험). 선생님 확인 결과 반영
 - 학평 그림 일부에 쪽 번호 상자가 남아 있음, 스캔 회차 일부 [3점] 표시를 못 읽어 2점으로 나올 수 있음(물리Ⅱ 2008_10·2011_07·2021_05, 물리Ⅰ 스캔 회차는 미확인)
+
+- **알파 입자 산란 기출문제 연결**: `map.json`에 주제 「원자 모형의 발전(톰슨·러더퍼드)」 12문항(물리Ⅱ)을 `rutherford`로 넣어 둠. 수업 코드로 ③ 암호화만 다시 하면 화면에 나타남. 원본 그림이 없어도 됨(빈 폴더를 주면 기존 문항 파일을 그대로 씀):
+  `mkdir -p /tmp/empty && PRACTICE_CODE=수업코드 node src/practice/encrypt.js /tmp/empty`
 
 ### 그 밖에 남은 일
 

@@ -57,7 +57,7 @@ def new_code(sim, one, t):
     if sim == 'engine': return '12역학02-04'
     return {'shm': '12역학03-01', 'wave': '12역학03-02', 'doppler': '12역학03-03', 'soundinterf': '12역학03-04', 'standing': '12역학03-05',
             'efield': '12전자01-01', 'charging': '12전자01-02', 'bfield': '12전자01-03', 'lorentz': '12전자01-04',
-            'polarization': '12전자02-03', 'laser': '12전자02-05', 'tunnel': '12전자03-03', 'atom': '12전자03-04', 'qubit': '12전자03-02'}[sim]
+            'polarization': '12전자02-03', 'laser': '12전자02-05', 'tunnel': '12전자03-03', 'atom': '12전자03-04', 'rutherford': '12물리03-04', 'qubit': '12전자03-02'}[sim]
 
 def old_code(sim, one, year, t):
     """출제 당시 교육과정의 성취기준. 2013학년도까지(7차)는 받은 자료가 없어 비워 둔다."""
@@ -73,7 +73,7 @@ def old_code(sim, one, year, t):
             if sim == 'slit': c = '03-06' if wp else '03-04'
             return '12물리Ⅰ' + c if c else ''
         c = {'forces': '01-01', 'torque': '01-02', 'circular': '01-05', 'orbit': '01-06', 'shm': '01-10', 'efield': '02-01', 'circuit': '02-03', 'diode': '02-04',
-             'bfield': '02-06', 'induction': '02-07', 'doppler': '03-02', 'optics': '03-04', 'photoelectric': '03-06', 'atom': '03-08', 'spectrum': '03-08'}.get(sim)
+             'bfield': '02-06', 'induction': '02-07', 'doppler': '03-02', 'optics': '03-04', 'photoelectric': '03-06', 'atom': '03-08', 'rutherford': '03-08', 'spectrum': '03-08'}.get(sim)
         if sim == 'projectile': c = '01-04' if has(t, '포물선') else '01-03'
         if sim == 'equivalence': c = '01-08' if has(t, '블랙홀', '중력 렌즈', '에딩턴', '일식') else '01-07'
         if sim == 'energy': c = '01-11' if has(t, '열과 일', '줄의 실험') else '01-09'
@@ -90,7 +90,7 @@ def old_code(sim, one, year, t):
             return '물리Ⅰ ' + c if c else ''
         c = {'accel': '(1)(가)①', 'forces': '(1)(가)②', 'projectile': '(1)(가)③', 'circular': '(1)(가)③', 'shm': '(1)(가)⑥', 'heating': '(1)(나)①', 'efield': '(2)(가)①',
              'capacitor': '(2)(나)⑦', 'bfield': '(2)(나)①', 'induction': '(2)(나)③', 'wave': '(3)(가)①', 'soundinterf': '(3)(가)③', 'standing': '(3)(가)③', 'doppler': '(3)(가)④',
-             'optics': '(3)(나)①', 'laser': '(3)(나)③', 'photoelectric': '(4)(가)②', 'atom': '(4)(나)①', 'tunnel': '(4)(나)④', 'spectrum': '(4)(나)②'}.get(sim)
+             'optics': '(3)(나)①', 'laser': '(3)(나)③', 'photoelectric': '(4)(가)②', 'atom': '(4)(나)①', 'rutherford': '(4)(나)①', 'tunnel': '(4)(나)④', 'spectrum': '(4)(나)②'}.get(sim)
         if sim == 'gas': c = '(1)(나)③' if has(t, '상태 방정식', '상태방정식') else '(1)(나)②' if has(t, '분자', '열과 온도') else '(1)(나)④'
         if sim == 'lorentz': c = '(2)(나)②' if has(t, '도선') else '(2)(나)④'
         if sim == 'slit': c = '(4)(가)③' if wp else '(3)(가)③'
