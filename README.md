@@ -78,7 +78,7 @@ practice-src/         기출문제 원본 그림 (GitHub에 올리지 않음, �
 ## 3. 지금까지 한 일
 
 - 시뮬레이션 41개 (처음 30개 + 3차 7개 + pulley, superposition, generator, rutherford)
-  - rutherford(알파 입자 산란 실험, 2026-11-27): 한 개씩 쏘기(쿨롱 척력으로 RK4 계산, 충돌 변수·산란각·가장 가까운 거리) / 금박에 쏘기(러더퍼드·톰슨 모형 비교, 산란각 개수 그래프). 금박 탭은 1 px = 126 fm로 보고 계산(금·5 MeV에서 약 1%가 90° 넘게 튕김)
+  - rutherford(알파 입자 산란 실험, 2026-11-27, 연결된 기출 12문항): 한 개씩 쏘기(쿨롱 척력으로 RK4 계산, 충돌 변수·산란각·가장 가까운 거리) / 금박에 쏘기(러더퍼드·톰슨 모형 비교, 산란각 개수 그래프). 금박 탭은 1 px = 126 fm로 보고 계산(금·5 MeV에서 약 1%가 90° 넘게 튕김)
 - 첫 화면 탭 구조, 분류 이름: 역학과 열역학 / 전자기학 / 빛과 파동 / 현대물리
 - 단원별 기출문제 3,439문항(물리Ⅱ 학력평가 1,200문항 포함, 물리Ⅰ 학력평가 1,600문항은 승인 대기)
   - 분류표(codes_detail·codes_mock)에 배점·정답률·난이도 칸이 있음. 학생 화면에는 "배점 3점, 정답률 47%"만 보이고(정답률은 2016학년도부터), 난이도는 출제·변형용
@@ -121,6 +121,8 @@ pip install pymupdf pillow
 python3 src/practice/extract.py <원본 폴더> practice-src/cut   # ① 문제·해설을 문항별 그림으로 자름
 python3 src/practice/classify.py                               # ② codes_detail.json(+규칙, codes_fix.json)으로 분류 → codes.json
 PRACTICE_CODE=수업코드 node src/practice/encrypt.js             # ③ 암호화해서 site/practice/data 에 생성
+# 그림은 그대로 두고 연결(map.json)·분류만 바꿨을 때: 빈 폴더를 주면 기존 문항 파일을 그대로 씀
+# mkdir -p /tmp/empty && PRACTICE_CODE=수업코드 node src/practice/encrypt.js /tmp/empty
 ```
 
 | 파일 | 내용 |
@@ -210,8 +212,6 @@ PRACTICE_CODE=수업코드 node src/practice/encrypt.js practice-src/cut_hak  # 
 - 측정 도구 7개는 실제 휴대폰으로 아직 확인하지 않음(가짜 신호로만 시험). 선생님 확인 결과 반영
 - 학평 그림 일부에 쪽 번호 상자가 남아 있음, 스캔 회차 일부 [3점] 표시를 못 읽어 2점으로 나올 수 있음(물리Ⅱ 2008_10·2011_07·2021_05, 물리Ⅰ 스캔 회차는 미확인)
 
-- **알파 입자 산란 기출문제 연결**: `map.json`에 주제 「원자 모형의 발전(톰슨·러더퍼드)」 12문항(물리Ⅱ)을 `rutherford`로 넣어 둠. 수업 코드로 ③ 암호화만 다시 하면 화면에 나타남. 원본 그림이 없어도 됨(빈 폴더를 주면 기존 문항 파일을 그대로 씀):
-  `mkdir -p /tmp/empty && PRACTICE_CODE=수업코드 node src/practice/encrypt.js /tmp/empty`
 
 ### 그 밖에 남은 일
 
